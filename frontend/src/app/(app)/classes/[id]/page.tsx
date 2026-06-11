@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
 import type { Class, Section } from '@/types/api';
 import { getClass } from '@/lib/api/classes';
+import { listSectionSessions } from '@/lib/api/sections';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import CreateSectionForm from '../components/CreateSectionForm';
 import { BackButton } from '@/components/ui/BackButton';
@@ -32,6 +33,9 @@ export default function ClassDetailsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [instructorNames, setInstructorNames] = useState<Record<string, string>>({});
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  // sectionId -> true when that section has an active session
+  const [liveSectionIds, setLiveSectionIds] = useState<Set<string>>(new Set());
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -43,8 +47,27 @@ export default function ClassDetailsPage() {
     try {
       const data = await getClass(class_id);
       setClassData(data.class);
-      setSections(data.sections || []);
+      const loadedSections: Section[] = data.sections || [];
+      setSections(loadedSections);
       setInstructorNames(data.instructorNames || {});
+
+      // Fan out active-session checks per section (bounded by section count).
+      // Per-section failure degrades only that entry; others still render correctly.
+      if (loadedSections.length > 0) {
+        const results = await Promise.allSettled(
+          loadedSections.map(async (s) => {
+            const activeSessions = await listSectionSessions(s.id, 'active');
+            return { id: s.id, live: activeSessions.length > 0 };
+          })
+        );
+        const liveIds = new Set<string>();
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value.live) {
+            liveIds.add(result.value.id);
+          }
+        }
+        setLiveSectionIds(liveIds);
+      }
     } catch (error) {
       console.error('Failed to load class:', error);
     } finally {
@@ -60,11 +83,15 @@ export default function ClassDetailsPage() {
 
   const handleRegenerateCode = async (section_id: string) => {
     setRegeneratingId(section_id);
+    setRegenerateError(null);
     try {
       const updatedSection = await regenerateJoinCode(section_id);
       setSections(prev => prev.map(s =>
         s.id === section_id ? updatedSection : s
       ));
+    } catch (err) {
+      console.error('Failed to regenerate join code:', err);
+      setRegenerateError(err instanceof Error ? err.message : 'Failed to regenerate join code');
     } finally {
       setRegeneratingId(null);
     }
@@ -122,6 +149,12 @@ export default function ClassDetailsPage() {
         />
       )}
 
+      {regenerateError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700" data-testid="regenerate-error">
+          {regenerateError}
+        </div>
+      )}
+
       {/* Main 2-column layout: sections table + right rail */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
         {/* Sections table */}
@@ -171,9 +204,14 @@ export default function ClassDetailsPage() {
                       </Table.Cell>
                       <Table.Cell className="text-gray-500">—</Table.Cell>
                       <Table.Cell>
-                        <Pill tone={section.active ? 'ok' : 'neutral'} dot={section.active}>
-                          {section.active ? 'Active' : 'Idle'}
-                        </Pill>
+                        {(() => {
+                          const isLive = liveSectionIds.has(section.id);
+                          return (
+                            <Pill tone={isLive ? 'ok' : 'neutral'} dot={isLive} data-testid={`status-pill-${section.id}`}>
+                              {isLive ? 'Live' : 'Idle'}
+                            </Pill>
+                          );
+                        })()}
                       </Table.Cell>
                       <Table.Cell align="right">
                         <Link

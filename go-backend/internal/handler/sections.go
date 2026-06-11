@@ -332,6 +332,10 @@ func (h *SectionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	filters := store.SessionFilters{SectionID: &id}
 	if s := r.URL.Query().Get("status"); s != "" {
+		if s != "active" && s != "completed" {
+			httputil.WriteError(w, http.StatusBadRequest, "invalid status: must be 'active' or 'completed'")
+			return
+		}
 		filters.Status = &s
 	}
 

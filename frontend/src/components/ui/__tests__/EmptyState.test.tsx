@@ -13,18 +13,37 @@ describe('EmptyState', () => {
     expect(screen.getByText('No items yet')).toBeInTheDocument();
   });
 
-  it('renders the blurb when provided', () => {
-    render(<EmptyState title="No items" blurb="Get started by creating one." />);
+  // v4 vocabulary: body prop
+  it('renders body text when provided', () => {
+    render(<EmptyState title="No items" body="Get started by creating one." />);
     expect(screen.getByText('Get started by creating one.')).toBeInTheDocument();
   });
 
-  it('does not render blurb when not provided', () => {
+  // Backward-compat alias: blurb still works
+  it('renders body text from deprecated blurb prop', () => {
+    render(<EmptyState title="No items" blurb="Blurb text here." />);
+    expect(screen.getByText('Blurb text here.')).toBeInTheDocument();
+  });
+
+  it('does not render body text when neither body nor blurb provided', () => {
     render(<EmptyState title="No items" />);
-    // no <p> sibling with blurb text
+    // no <p> sibling with body text
     expect(screen.queryByRole('paragraph')).toBeNull();
   });
 
-  it('renders the action when provided', () => {
+  // v4 vocabulary: primary prop
+  it('renders primary action when provided via primary prop', () => {
+    render(
+      <EmptyState
+        title="No items"
+        primary={<button>Create one</button>}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Create one' })).toBeInTheDocument();
+  });
+
+  // Backward-compat alias: action still works
+  it('renders primary action from deprecated action prop', () => {
     render(
       <EmptyState
         title="No items"
@@ -32,6 +51,18 @@ describe('EmptyState', () => {
       />
     );
     expect(screen.getByRole('button', { name: 'Create one' })).toBeInTheDocument();
+  });
+
+  it('renders secondary action when provided', () => {
+    render(
+      <EmptyState
+        title="No items"
+        primary={<button>Primary</button>}
+        secondary={<button>Secondary</button>}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Primary' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Secondary' })).toBeInTheDocument();
   });
 
   it('applies additional className', () => {
@@ -45,5 +76,37 @@ describe('EmptyState', () => {
     const { container } = render(<EmptyState title="No items" icon="book" />);
     // Icon renders an SVG
     expect(container.querySelector('svg')).toBeInTheDocument();
+  });
+
+  describe('tone prop', () => {
+    it('defaults to neutral tone (gray icon circle)', () => {
+      const { container } = render(<EmptyState title="No items" />);
+      const circle = container.querySelector('.bg-gray-100');
+      expect(circle).toBeInTheDocument();
+    });
+
+    it('applies info tone (blue icon circle)', () => {
+      const { container } = render(<EmptyState title="No items" tone="info" />);
+      const circle = container.querySelector('.bg-blue-100');
+      expect(circle).toBeInTheDocument();
+    });
+
+    it('applies ok tone (green icon circle)', () => {
+      const { container } = render(<EmptyState title="No items" tone="ok" />);
+      const circle = container.querySelector('.bg-green-100');
+      expect(circle).toBeInTheDocument();
+    });
+
+    it('applies warn tone (yellow icon circle)', () => {
+      const { container } = render(<EmptyState title="No items" tone="warn" />);
+      const circle = container.querySelector('.bg-yellow-100');
+      expect(circle).toBeInTheDocument();
+    });
+
+    it('applies danger tone (red icon circle)', () => {
+      const { container } = render(<EmptyState title="No items" tone="danger" />);
+      const circle = container.querySelector('.bg-red-100');
+      expect(circle).toBeInTheDocument();
+    });
   });
 });

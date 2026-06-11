@@ -218,6 +218,27 @@ describe('MySectionsPage', () => {
   });
 
   /**
+   * TC2b: "Jump in" link href routes to the correct section.
+   * Catches: live CTA pointing to a wrong section or missing the section ID.
+   */
+  it('"Jump in" link href routes to /sections/{sectionId}', async () => {
+    mockListMySections.mockReturnValue([
+      buildSection('s-live', 'CS A · Period 3', 'Lincoln HS'),
+    ]);
+    mockListSectionProblems.mockResolvedValue([]);
+    mockGetActiveSessions.mockResolvedValue([buildActiveSession('s-live')]);
+
+    render(<MySectionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /jump in/i })).toBeInTheDocument();
+    });
+
+    const jumpInLink = screen.getByRole('link', { name: /jump in/i });
+    expect(jumpInLink).toHaveAttribute('href', '/sections/s-live');
+  });
+
+  /**
    * TC3: Per-section fetch failure degrades gracefully.
    * When problems/sessions fetch rejects for one section, the card still renders
    * the section name and Practice link. The failure must not blank the page.

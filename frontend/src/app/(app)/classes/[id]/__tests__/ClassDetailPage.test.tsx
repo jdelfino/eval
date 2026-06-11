@@ -34,6 +34,7 @@ jest.mock('next/link', () => {
 // --- API mocks ---
 const mockGetClass = jest.fn();
 const mockApiRegenerateJoinCode = jest.fn();
+const mockListSectionSessions = jest.fn();
 jest.mock('@/lib/api/classes', () => ({
   getClass: (...args: unknown[]) => mockGetClass(...args),
   regenerateJoinCode: (...args: unknown[]) => mockApiRegenerateJoinCode(...args),
@@ -46,6 +47,11 @@ jest.mock('@/lib/api/classes', () => ({
   updateSection: jest.fn(),
   addCoInstructor: jest.fn(),
   removeCoInstructor: jest.fn(),
+}));
+
+jest.mock('@/lib/api/sections', () => ({
+  listSectionSessions: (...args: unknown[]) => mockListSectionSessions(...args),
+  getActiveSessions: jest.fn().mockResolvedValue([]),
 }));
 
 // --- join-code mock ---
@@ -111,6 +117,8 @@ describe('ClassDetailPage (ClassDetailG)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetClass.mockResolvedValue(defaultApiResponse);
+    // Default: no active sessions for any section
+    mockListSectionSessions.mockResolvedValue([]);
   });
 
   it('sections table has Section, Code, Students, Status, and Open columns — no "Last met"', async () => {
@@ -231,5 +239,50 @@ describe('ClassDetailPage (ClassDetailG)', () => {
     await waitFor(() => {
       expect(screen.getByText('NEW123')).toBeInTheDocument();
     });
+  });
+
+  it('regenerate-join-code button surfaces error message on failure', async () => {
+    /**
+     * Contract: when regenerateJoinCode rejects, the error message is shown in the UI
+     * and no navigation occurs. Catches: silent swallowing of network errors.
+     */
+    mockApiRegenerateJoinCode.mockRejectedValue(new Error('Network error'));
+
+    render(<ClassDetailsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('regenerate-code-sec-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('regenerate-code-sec-1'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('regenerate-error')).toHaveTextContent('Network error');
+    });
+  });
+
+  it('Status pill shows Live for sections with active sessions, Idle for others', async () => {
+    /**
+     * Contract (eval-cq4): Status is derived from SESSION state, not section.active flag.
+     * sec-1 has an active session → Live pill; sec-2 has no active session → Idle pill.
+     * Catches: the bug where section.active (enrollment flag) drove the pill instead of
+     * real session state.
+     */
+    // sec-1 has an active session, sec-2 does not
+    mockListSectionSessions.mockImplementation((sectionId: string, status?: string) => {
+      if (sectionId === 'sec-1' && status === 'active') {
+        return Promise.resolve([{ id: 'sess-1', status: 'active' }]);
+      }
+      return Promise.resolve([]);
+    });
+
+    render(<ClassDetailsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status-pill-sec-1')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('status-pill-sec-1')).toHaveTextContent('Live');
+    expect(screen.getByTestId('status-pill-sec-2')).toHaveTextContent('Idle');
   });
 });

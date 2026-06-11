@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jdelfino/eval/go-backend/internal/auth"
@@ -601,7 +602,7 @@ func TestIntegration_ListStudentSessionStats(t *testing.T) {
 	}
 
 	testCases := json.RawMessage(`[]`)
-	problemJSON := json.RawMessage(`{"id": "` + problemID.String() + `"}`)
+	problemJSON := json.RawMessage(`{"id": "` + problemID.String() + `", "title": "Test Problem"}`)
 	_, err = db.pool.Exec(ctx,
 		`INSERT INTO problems (id, namespace_id, title, test_cases, author_id)
 		VALUES ($1, $2, 'Test Problem', $3, $4)`,
@@ -737,6 +738,113 @@ func TestIntegration_ListStudentSessionStats(t *testing.T) {
 		}
 		if len(stats) != 0 {
 			t.Fatalf("expected 0 stats, got %d", len(stats))
+		}
+	})
+
+	t.Run("ProblemTitleAndIDFromSessionJSONB", func(t *testing.T) {
+		// Verifies: ProblemID and ProblemTitle are read from sess.problem JSONB,
+		// not from section_problems JOIN. Values must match what was stored in the session.
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		stats, err := s.ListStudentSessionStats(ctx, sectionID, studentID)
+		if err != nil {
+			t.Fatalf("ListStudentSessionStats failed: %v", err)
+		}
+		if len(stats) == 0 {
+			t.Fatalf("expected at least 1 stat, got 0")
+		}
+
+		// All sessions were created with problemJSON containing a known ID and title.
+		for _, stat := range stats {
+			if stat.ProblemID == nil {
+				t.Errorf("session %s: expected non-nil ProblemID", stat.SessionID)
+				continue
+			}
+			if *stat.ProblemID != problemID {
+				t.Errorf("session %s: expected ProblemID %s, got %s", stat.SessionID, problemID, *stat.ProblemID)
+			}
+			if stat.ProblemTitle == nil {
+				t.Errorf("session %s: expected non-nil ProblemTitle", stat.SessionID)
+				continue
+			}
+			if *stat.ProblemTitle != "Test Problem" {
+				t.Errorf("session %s: expected ProblemTitle 'Test Problem', got %q", stat.SessionID, *stat.ProblemTitle)
+			}
+		}
+	})
+
+	t.Run("BlankSessionYieldsNullProblemFields", func(t *testing.T) {
+		// Verifies: a session created without a problem (blank JSONB {}) returns
+		// nil ProblemID and nil ProblemTitle cleanly — no panic, no error.
+		blankSessionID := uuid.New()
+		blankProblemJSON := json.RawMessage(`{}`)
+		_, err := db.pool.Exec(ctx,
+			`INSERT INTO sessions (id, namespace_id, section_id, section_name, problem, creator_id)
+			VALUES ($1, $2, $3, 'Section A', $4, $5)`,
+			blankSessionID, db.nsID, sectionID, blankProblemJSON, instructorID)
+		if err != nil {
+			t.Fatalf("create blank session: %v", err)
+		}
+
+		// Add a revision for the blank session so it appears in results
+		_, err = db.pool.Exec(ctx,
+			`INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, full_code, student_work_id)
+			VALUES ($1, $2, $3, false, 'blank-session-code', $4)`,
+			db.nsID, blankSessionID, studentID, workID)
+		if err != nil {
+			t.Fatalf("create revision for blank session: %v", err)
+		}
+
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		stats, err := s.ListStudentSessionStats(ctx, sectionID, studentID)
+		if err != nil {
+			t.Fatalf("ListStudentSessionStats failed: %v", err)
+		}
+
+		// Find the blank session stat
+		var blankStat *StudentSessionStat
+		for i := range stats {
+			if stats[i].SessionID == blankSessionID {
+				blankStat = &stats[i]
+				break
+			}
+		}
+		if blankStat == nil {
+			t.Fatalf("blank session %s not found in results", blankSessionID)
+		}
+		if blankStat.ProblemID != nil {
+			t.Errorf("blank session: expected nil ProblemID, got %v", blankStat.ProblemID)
+		}
+		if blankStat.ProblemTitle != nil {
+			t.Errorf("blank session: expected nil ProblemTitle, got %q", *blankStat.ProblemTitle)
+		}
+		if blankStat.RevisionCount != 1 {
+			t.Errorf("blank session: expected RevisionCount 1, got %d", blankStat.RevisionCount)
+		}
+	})
+
+	t.Run("ResultsOrderedByCreatedAtDesc", func(t *testing.T) {
+		// Verifies: results come back with the most recently created session first.
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		stats, err := s.ListStudentSessionStats(ctx, sectionID, studentID)
+		if err != nil {
+			t.Fatalf("ListStudentSessionStats failed: %v", err)
+		}
+		if len(stats) < 2 {
+			t.Skipf("need at least 2 sessions to verify ordering, got %d", len(stats))
+		}
+
+		for i := 1; i < len(stats); i++ {
+			if stats[i-1].SessionCreatedAt.Before(stats[i].SessionCreatedAt) {
+				t.Errorf("results not ordered DESC: stats[%d].CreatedAt (%s) is before stats[%d].CreatedAt (%s)",
+					i-1, stats[i-1].SessionCreatedAt.Format(time.RFC3339),
+					i, stats[i].SessionCreatedAt.Format(time.RFC3339))
+			}
 		}
 	})
 }

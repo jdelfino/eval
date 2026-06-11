@@ -446,6 +446,27 @@ describe('StudentDetailPage', () => {
       expect(await screen.findByText('No code yet')).toBeInTheDocument();
     });
 
+    it('renders last_update via formatShortDateTime in the problem card', async () => {
+      /**
+       * Contract: the per-problem table shows the last-update timestamp for
+       * started problems, formatted by formatShortDateTime. Catches regressions
+       * where the date is missing, raw ISO, or formatted differently.
+       */
+      mockUser('instructor');
+      mockApiSuccess();
+
+      render(<StudentDetailPage />);
+
+      // prob-1 (FizzBuzz) has last_update: '2026-02-20T10:00:00Z'
+      await screen.findByTestId('problem-card-prob-1');
+
+      // formatShortDateTime('2026-02-20T10:00:00Z') produces a locale string
+      // containing the month and day. We match partially to avoid locale variance.
+      const { formatShortDateTime } = await import('@/lib/format');
+      const expectedText = formatShortDateTime('2026-02-20T10:00:00Z');
+      expect(screen.getByText(expectedText)).toBeInTheDocument();
+    });
+
     it('does not expand "Not started" problems when clicked', async () => {
       mockUser('instructor');
       mockApiSuccess();

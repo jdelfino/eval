@@ -291,23 +291,21 @@ func (s *Store) SetStudentWorkRunResult(ctx context.Context, id uuid.UUID, allPa
 
 // ListStudentSessionStats returns per-session revision stats for a student in a section.
 // Only sessions in which the student has at least one revision are included.
-// Revisions with nil session_id (practice mode) are excluded from session rows.
+// Problem title and ID are read directly from the session's own JSONB (sess.problem),
+// so results remain accurate even after a problem is unpublished from the section.
 // Results are ordered by session created_at descending.
 func (s *Store) ListStudentSessionStats(ctx context.Context, sectionID, studentUserID uuid.UUID) ([]StudentSessionStat, error) {
 	query := `SELECT
 		sess.id AS session_id,
 		sess.created_at AS session_created_at,
-		sp.problem_id,
-		p.title AS problem_title,
+		(sess.problem->>'id')::uuid AS problem_id,
+		sess.problem->>'title' AS problem_title,
 		COUNT(r.id) AS revision_count
 		FROM revisions r
 		JOIN sessions sess ON sess.id = r.session_id
-		LEFT JOIN section_problems sp ON sp.section_id = $1 AND sp.problem_id = (sess.problem->>'id')::uuid
-		LEFT JOIN problems p ON p.id = sp.problem_id
-		WHERE r.session_id IS NOT NULL
-		  AND r.user_id = $2
+		WHERE r.user_id = $2
 		  AND sess.section_id = $1
-		GROUP BY sess.id, sess.created_at, sp.problem_id, p.title
+		GROUP BY sess.id, sess.created_at
 		ORDER BY sess.created_at DESC`
 
 	rows, err := s.q.Query(ctx, query, sectionID, studentUserID)

@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSections } from '@/hooks/useSections';
 import { listSectionProblems } from '@/lib/api/section-problems';
 import { getActiveSessions } from '@/lib/api/sections';
+import { useParallelEnrichment } from '@/hooks/useParallelEnrichment';
 import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,7 +21,8 @@ interface SectionEnrichment {
 
 // Fetch problems + sessions in parallel for one section; degrade on failure.
 // getActiveSessions already passes ?status=active so no client-side filtering needed.
-async function fetchSectionEnrichment(sectionId: string): Promise<SectionEnrichment> {
+async function fetchSectionEnrichment(info: MySectionInfo): Promise<SectionEnrichment> {
+  const sectionId = info.section.id;
   const [problemsResult, sessionsResult] = await Promise.allSettled([
     listSectionProblems(sectionId),
     getActiveSessions(sectionId),
@@ -45,7 +47,6 @@ async function fetchSectionEnrichment(sectionId: string): Promise<SectionEnrichm
 export default function MySectionsPage() {
   const { user } = useAuth();
   const { sections, loading, error, fetchMySections } = useSections();
-  const [enrichments, setEnrichments] = useState<Record<string, SectionEnrichment>>({});
 
   useEffect(() => {
     if (user) {
@@ -53,31 +54,14 @@ export default function MySectionsPage() {
     }
   }, [user, fetchMySections]);
 
-  // Once sections list loads, fan out per-section enrichment fetches in parallel.
-  // fetchSectionEnrichment already degrades gracefully (never rejects), so
-  // Promise.all is safe — no settled wrapping needed.
-  useEffect(() => {
-    if (loading || sections.length === 0) return;
-
-    let cancelled = false;
-    Promise.all(
-      sections.map((info: MySectionInfo) =>
-        fetchSectionEnrichment(info.section.id).then((e) => ({
-          id: info.section.id,
-          enrichment: e,
-        }))
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      const map: Record<string, SectionEnrichment> = {};
-      for (const { id, enrichment } of results) {
-        map[id] = enrichment;
-      }
-      setEnrichments(map);
-    });
-
-    return () => { cancelled = true; };
-  }, [sections, loading]);
+  // Fan out per-section enrichment fetches using the shared hook.
+  // Built-in cancellation and real-identity change detection.
+  const { map: enrichmentsRaw } = useParallelEnrichment<MySectionInfo, string, SectionEnrichment>(
+    sections,
+    (info) => info.section.id,
+    fetchSectionEnrichment
+  );
+  const enrichments = enrichmentsRaw;
 
   if (loading) {
     return (

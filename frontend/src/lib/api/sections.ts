@@ -44,13 +44,24 @@ export async function leaveSection(sectionId: string): Promise<void> {
 }
 
 /**
+ * List sessions for a section, optionally filtered by status.
+ * @param sectionId - The section ID
+ * @param status - Optional status filter ('active' | 'completed'). Omit for all sessions.
+ * @returns Array of Session objects matching the filter (backend returns plain array)
+ */
+export async function listSectionSessions(sectionId: string, status?: 'active' | 'completed'): Promise<Session[]> {
+  const qs = status ? `?status=${status}` : '';
+  return apiGet<Session[]>(`/sections/${sectionId}/sessions${qs}`);
+}
+
+/**
  * Get active sessions for a section.
- * Passes ?status=active so the backend filters server-side.
+ * Delegates to listSectionSessions with status='active'.
  * @param sectionId - The section ID
  * @returns Array of active Session objects (backend returns plain array)
  */
 export async function getActiveSessions(sectionId: string): Promise<Session[]> {
-  return apiGet<Session[]>(`/sections/${sectionId}/sessions?status=active`);
+  return listSectionSessions(sectionId, 'active');
 }
 
 /**

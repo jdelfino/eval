@@ -1179,6 +1179,26 @@ func TestSectionListSessions_NoStatusFilter(t *testing.T) {
 	}
 }
 
+func TestSectionListSessions_InvalidStatus(t *testing.T) {
+	// Validates that an unrecognised ?status value returns 400 rather than
+	// being passed through to the store (matching the sessions.go:80-86 pattern).
+	sectionID := uuid.New()
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/?status=invalid", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListSessions(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // --- RegenerateCode tests ---
 
 func TestRegenerateCode_Success(t *testing.T) {

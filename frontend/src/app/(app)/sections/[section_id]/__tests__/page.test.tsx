@@ -25,7 +25,7 @@ import userEvent from '@testing-library/user-event';
 import { useRouter, useParams } from 'next/navigation';
 import SectionDetailPage from '../page';
 import { useAuth } from '@/contexts/AuthContext';
-import { getSection, getActiveSessions } from '@/lib/api/sections';
+import { getSection, listSectionSessions } from '@/lib/api/sections';
 import { getClass } from '@/lib/api/classes';
 import { listSectionProblems } from '@/lib/api/section-problems';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
@@ -52,6 +52,8 @@ jest.mock('@/contexts/PreviewContext', () => ({
 // Mock API modules
 jest.mock('@/lib/api/sections', () => ({
   getSection: jest.fn(),
+  listSectionSessions: jest.fn(),
+  // Keep getActiveSessions as a no-op in case any component imports it directly
   getActiveSessions: jest.fn(),
 }));
 
@@ -125,7 +127,7 @@ function mockSectionData(sessions: object[] = [], problems: object[] = []) {
     created_at: '2025-01-01T00:00:00Z',
     updated_at: '2025-01-01T00:00:00Z',
   });
-  (getActiveSessions as jest.Mock).mockResolvedValue(sessions);
+  (listSectionSessions as jest.Mock).mockResolvedValue(sessions);
   (listSectionProblems as jest.Mock).mockResolvedValue(problems);
   (getClass as jest.Mock).mockResolvedValue({
     class: {
@@ -248,7 +250,7 @@ describe('SectionDetailPage', () => {
   describe('error-state back button', () => {
     beforeEach(() => {
       (getSection as jest.Mock).mockRejectedValue(new Error('Not found'));
-      (getActiveSessions as jest.Mock).mockResolvedValue([]);
+      (listSectionSessions as jest.Mock).mockResolvedValue([]);
     });
 
     it('shows "Back to Classes" linking to /classes for instructor role on error', async () => {
@@ -924,6 +926,42 @@ describe('SectionDetailPage', () => {
     });
   });
 
+  describe('past sessions from mixed fixture (regression: bug 1)', () => {
+    /**
+     * Regression test for bug 1: listSectionSessions must be called unfiltered so
+     * past (completed/ended) sessions are not silently dropped.
+     * listSectionSessions() returns a mixed array; the page splits it client-side
+     * into active and past — both must render properly.
+     */
+    it('renders past sessions in the Sessions tab when listSectionSessions returns mixed statuses', async () => {
+      mockUser('instructor');
+      // Mixed fixture: one active + one completed — listSectionSessions returns both
+      mockSectionData([activeSession, pastSession]);
+
+      render(<SectionDetailPage />);
+
+      // Switch to Sessions tab to see past sessions
+      await screen.findByRole('tab', { name: /Sessions/i });
+      await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
+
+      // Past session problem title should be visible
+      expect(screen.getByText('Past Problem')).toBeInTheDocument();
+    });
+
+    it('listSectionSessions is called without a status filter (unfiltered)', async () => {
+      mockUser('instructor');
+      mockSectionData([]);
+
+      render(<SectionDetailPage />);
+
+      await waitFor(() => {
+        expect(listSectionSessions).toHaveBeenCalledWith(SECTION_ID);
+      });
+      // Must NOT be called with 'active' filter
+      expect(listSectionSessions).not.toHaveBeenCalledWith(SECTION_ID, 'active');
+    });
+  });
+
   describe('preview mode', () => {
     const publishedProblems = [
       {
@@ -1051,7 +1089,7 @@ describe('SectionDetailPage', () => {
     it('error-state back button calls exitPreview and navigates to section page when in preview', async () => {
       mockUser('instructor');
       (getSection as jest.Mock).mockRejectedValue(new Error('Network error'));
-      (getActiveSessions as jest.Mock).mockResolvedValue([]);
+      (listSectionSessions as jest.Mock).mockResolvedValue([]);
       (listSectionProblems as jest.Mock).mockResolvedValue([]);
       mockUsePreview.mockReturnValue({
         isPreview: true,

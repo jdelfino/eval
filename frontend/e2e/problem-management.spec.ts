@@ -172,17 +172,6 @@ test.describe('Problem Management', () => {
   });
 
   /**
-   * A4: Tag chip bar filtering + Start-session from table
-   *
-   * Verifies that the A4 LibraryTagBar works end-to-end:
-   * - Tag chips appear when problems have tags
-   * - Selecting a chip filters the table to problems bearing that tag (AND logic)
-   * - The 'clear' affordance resets the filter
-   * - The Start button in the table row opens the Start Session modal
-   *
-   * Catches: tag-chip wiring breakages invisible to jsdom, and A4 table Start CTA regression.
-   */
-  /**
    * A4: Tag chip bar filtering + Start-session from table (full flow)
    *
    * Verifies that the A4 LibraryTagBar works end-to-end:
@@ -202,10 +191,10 @@ test.describe('Problem Management', () => {
     const cls = await createClass(instructor.token, `Tag Filter Class ${testNamespace}`);
 
     // Create a section so the CreateSessionFromProblemModal has a section to select
-    const section = await createSection(instructor.token, cls.id, `Tag Filter Section ${testNamespace}`);
+    await createSection(instructor.token, cls.id, `Tag Filter Section ${testNamespace}`);
 
     // Create two problems: one tagged, one untagged
-    const taggedProblem = await createProblem(instructor.token, cls.id, {
+    await createProblem(instructor.token, cls.id, {
       title: `Tagged Problem ${testNamespace}`,
       description: 'Has tags',
       language: 'python',
@@ -276,9 +265,5 @@ test.describe('Problem Management', () => {
     // Verify redirect to the active session page
     await page.waitForURL(/\/instructor\/session\//, { timeout: 15000 });
     await expect(page.locator('[data-testid="active-session-header"]')).toBeVisible({ timeout: 15000 });
-
-    // Suppress unused variable warning
-    void taggedProblem;
-    void section;
   });
 });

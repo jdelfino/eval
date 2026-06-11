@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePreview } from '@/contexts/PreviewContext';
 import type { Session, PublishedProblemWithStatus, StudentProgress } from '@/types/api';
-import { getSection, getActiveSessions } from '@/lib/api/sections';
+import { getSection, listSectionSessions } from '@/lib/api/sections';
 import { getClass } from '@/lib/api/classes';
 import { listSectionProblems } from '@/lib/api/section-problems';
 import { listStudentProgress } from '@/lib/api/student-review';
@@ -54,12 +54,12 @@ export default function SectionDetailPage() {
       // For instructors, also fetch student progress (gated behind PermContentManage).
       const parallelFetches: [
         ReturnType<typeof getSection>,
-        ReturnType<typeof getActiveSessions>,
+        ReturnType<typeof listSectionSessions>,
         ReturnType<typeof listSectionProblems>,
         Promise<StudentProgress[]>,
       ] = [
         getSection(section_id),
-        getActiveSessions(section_id),
+        listSectionSessions(section_id),
         listSectionProblems(section_id),
         userIsInstructor ? listStudentProgress(section_id) : Promise.resolve([]),
       ];

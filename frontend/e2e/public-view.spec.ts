@@ -9,7 +9,7 @@
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs, navigateToDashboard } from './fixtures/auth';
-import { createClass, createSection, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem, registerStudent } from './fixtures/api-setup';
+import { createClass, createSection, getSectionByJoinCode, createProblem, publishProblem, startSessionFromProblem } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue } from './fixtures/monaco';
 
 test.describe('Public View Feature', () => {

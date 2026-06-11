@@ -26,6 +26,12 @@ import {
 } from '@/lib/api/section-problems';
 import { createProblem, deleteProblem } from '@/lib/api/problems';
 import {
+  createSession,
+  endSession,
+  createRevision,
+} from '@/lib/api/sessions';
+import { joinSessionAsStudent } from '@/lib/api/realtime';
+import {
   validateStudentProgressShape,
   validateStudentWorkSummaryShape,
   validateStudentSessionStatShape,
@@ -34,6 +40,7 @@ import {
 describe('Student Review API', () => {
   let createdProblemId: string | null = null;
   let studentUserId: string | null = null;
+  let createdSessionId: string | null = null;
 
   beforeAll(async () => {
     configureTestAuth(INSTRUCTOR_TOKEN);
@@ -57,6 +64,10 @@ describe('Student Review API', () => {
     createdProblemId = problem.id;
 
     await publishProblem(sectionId, createdProblemId);
+
+    // Create a session with the problem so the student can join and create revisions
+    const session = await createSession(sectionId, createdProblemId);
+    createdSessionId = session.id;
 
     // Create and enroll a student
     const studentEmail = `contract-sr-student-${Date.now()}@contract-test.local`;
@@ -82,6 +93,19 @@ describe('Student Review API', () => {
       if (status !== 409) throw err;
     }
 
+    // Student joins the session and creates a revision so the sessions[] loop runs
+    if (createdSessionId) {
+      try {
+        await joinSessionAsStudent(createdSessionId, 'Contract SR Test Student');
+        await createRevision(createdSessionId, {
+          full_code: 'print("contract test revision")',
+          is_diff: false,
+        });
+      } catch {
+        // Best-effort — session may have been auto-ended or student already joined
+      }
+    }
+
     // Switch back to instructor for the actual tests
     configureTestAuth(INSTRUCTOR_TOKEN);
 
@@ -96,8 +120,15 @@ describe('Student Review API', () => {
   });
 
   afterAll(async () => {
-    // Unpublish and delete the problem, then reset auth
+    // End the session and clean up the problem
     configureTestAuth(INSTRUCTOR_TOKEN);
+    if (createdSessionId) {
+      try {
+        await endSession(createdSessionId);
+      } catch {
+        // Best-effort
+      }
+    }
     const sectionId = state.sectionId;
     if (createdProblemId && sectionId) {
       try {
@@ -192,7 +223,10 @@ describe('Student Review API', () => {
       }
     });
 
-    it('sessions[] entries have correct StudentSessionStat shape', async () => {
+    it('sessions[] entries have correct StudentSessionStat shape and is non-empty', async () => {
+      // The beforeAll created a session + revision, so sessions[] must be non-empty.
+      // This catches the vacuous-loop bug: when no session/revision exists the loop
+      // never executes and shape errors are silently missed.
       const sectionId = state.sectionId;
       expect(sectionId).toBeTruthy();
       expect(studentUserId).toBeTruthy();
@@ -201,7 +235,10 @@ describe('Student Review API', () => {
 
       const response = await listStudentWorkForReview(sectionId, studentUserId!);
 
-      // Validate shape of each session stat entry (may be empty if student made no revisions)
+      // Must have at least one session stat (student created a revision in beforeAll)
+      expect(response.sessions.length).toBeGreaterThan(0);
+
+      // Validate shape of each session stat entry
       for (const item of response.sessions) {
         validateStudentSessionStatShape(item);
       }

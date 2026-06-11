@@ -88,21 +88,28 @@ export function InstructorDashboard({
   const canCreateClass = user && hasPermission(user, 'content.manage');
   const canCreateSession = user && hasPermission(user, 'session.manage');
 
-  const loadDashboardData = useCallback(async () => {
+  const loadDashboardData = useCallback(async (cancelled: { current: boolean }) => {
     try {
       setLoading(true);
       setError(null);
 
       const data = await getInstructorDashboard();
+      if (cancelled.current) return;
       const classes = data.classes || [];
 
       // Render the table immediately with classes data, then fill in connected counts.
       setClassesWithSections(classes);
       setLoading(false);
 
-      // Fetch connected student counts in the background — degradation path handles null.
-      fetchConnectedCounts(classes).then(setConnectedCounts);
+      // Fetch connected student counts in the background.
+      // Guard against stale updates if the component remounts or loadDashboardData
+      // is called again before this secondary fetch resolves.
+      fetchConnectedCounts(classes).then((counts) => {
+        if (cancelled.current) return;
+        setConnectedCounts(counts);
+      });
     } catch (err) {
+      if (cancelled.current) return;
       console.error('Error loading dashboard:', err);
       setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
       setLoading(false);
@@ -110,7 +117,9 @@ export function InstructorDashboard({
   }, []);
 
   useEffect(() => {
-    loadDashboardData();
+    const cancelled = { current: false };
+    loadDashboardData(cancelled);
+    return () => { cancelled.current = true; };
   }, [loadDashboardData]);
 
   if (loading) {
@@ -126,7 +135,7 @@ export function InstructorDashboard({
       <ErrorAlert
         error={error}
         title="Error loading dashboard"
-        onRetry={loadDashboardData}
+        onRetry={() => loadDashboardData({ current: false })}
         isRetrying={loading}
       />
     );
@@ -150,7 +159,7 @@ export function InstructorDashboard({
       onClose={() => setShowCreateClassModal(false)}
       onSuccess={() => {
         setShowCreateClassModal(false);
-        loadDashboardData();
+        loadDashboardData({ current: false });
       }}
     />
   ) : null;
