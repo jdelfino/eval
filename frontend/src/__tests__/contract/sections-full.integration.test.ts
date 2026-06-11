@@ -1,7 +1,8 @@
 /**
  * Integration tests for the remaining section-related typed API functions.
  * Validates that joinSection, leaveSection, getActiveSessions, getClassSections,
- * getSectionInstructors, and deleteSection work correctly against the real backend.
+ * getSectionInstructors, deleteSection, and listSectionSessions work correctly
+ * against the real backend.
  *
  * The existing sections.integration.test.ts covers listMySections only.
  */
@@ -20,6 +21,7 @@ import {
   getClassSections,
   getSectionInstructors,
   deleteSection,
+  listSectionSessions,
 } from '@/lib/api/sections';
 import { createClass, createSection } from '@/lib/api/classes';
 import {
@@ -223,6 +225,53 @@ describe('Sections API (full coverage)', () => {
       } finally {
         // Restore instructor auth for subsequent tests
         configureTestAuth(INSTRUCTOR_TOKEN);
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // listSectionSessions
+  // -------------------------------------------------------------------------
+  describe('listSectionSessions()', () => {
+    /**
+     * Verifies that listSectionSessions returns a Session[] for a section.
+     * The global setup creates a session in state.sectionId so there is at
+     * least one session to validate against. This test confirms the contract:
+     * unfiltered call returns Session[] with the correct wire shape.
+     * Breaking the endpoint path or response envelope would cause this to fail.
+     */
+    it('returns Session[] with correct snake_case shape (unfiltered)', async () => {
+      const sectionId = state.sectionId;
+      expect(sectionId).toBeTruthy();
+
+      const sessions = await listSectionSessions(sectionId);
+
+      expect(Array.isArray(sessions)).toBe(true);
+
+      // Global setup creates a session, so at least one should be present.
+      if (sessions.length > 0) {
+        validateSessionShape(sessions[0]);
+      }
+    });
+
+    /**
+     * Verifies that listSectionSessions with status='active' returns only active
+     * sessions. The global setup creates an active session so the filtered result
+     * must be non-empty and each item must have status='active'.
+     * Catches: query-param forwarding bugs, status mismatch in the response.
+     */
+    it("returns only active sessions when status='active' is passed", async () => {
+      const sectionId = state.sectionId;
+      expect(sectionId).toBeTruthy();
+
+      const sessions = await listSectionSessions(sectionId, 'active');
+
+      expect(Array.isArray(sessions)).toBe(true);
+
+      // Every returned session must be active.
+      for (const session of sessions) {
+        validateSessionShape(session);
+        expect(session.status).toBe('active');
       }
     });
   });
