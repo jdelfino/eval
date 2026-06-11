@@ -39,6 +39,8 @@ import {
 
 describe('Student Review API', () => {
   let createdProblemId: string | null = null;
+  // Second problem that the student never touches — used to assert null student_work
+  let untouchedProblemId: string | null = null;
   let studentUserId: string | null = null;
   let createdSessionId: string | null = null;
 
@@ -52,9 +54,11 @@ describe('Student Review API', () => {
     expect(classId).toBeTruthy();
     expect(joinCode).toBeTruthy();
 
-    // Create a problem and publish it to the section
+    const ts = Date.now();
+
+    // Create the primary problem (student will join a session for this one)
     const problem = await createProblem({
-      title: `contract-student-review-problem-${Date.now()}`,
+      title: `contract-student-review-problem-${ts}`,
       description: 'A contract test problem for student-review tests',
       class_id: classId,
       tags: ['contract-student-review-test'],
@@ -64,6 +68,20 @@ describe('Student Review API', () => {
     createdProblemId = problem.id;
 
     await publishProblem(sectionId, createdProblemId);
+
+    // Create a second problem that the student never touches — ensures at least one
+    // work entry with null student_work for the "not started" assertion.
+    const untouchedProblem = await createProblem({
+      title: `contract-student-review-untouched-${ts}`,
+      description: 'A contract test problem the student never starts',
+      class_id: classId,
+      tags: ['contract-student-review-test'],
+      starter_code: 'print("untouched")',
+      language: 'python',
+    });
+    untouchedProblemId = untouchedProblem.id;
+
+    await publishProblem(sectionId, untouchedProblemId);
 
     // Create a session with the problem so the student can join and create revisions
     const session = await createSession(sectionId, createdProblemId);
@@ -120,7 +138,7 @@ describe('Student Review API', () => {
   });
 
   afterAll(async () => {
-    // End the session and clean up the problem
+    // End the session and clean up both problems
     configureTestAuth(INSTRUCTOR_TOKEN);
     if (createdSessionId) {
       try {
@@ -138,6 +156,18 @@ describe('Student Review API', () => {
       }
       try {
         await deleteProblem(createdProblemId);
+      } catch {
+        // Best-effort
+      }
+    }
+    if (untouchedProblemId && sectionId) {
+      try {
+        await unpublishProblem(sectionId, untouchedProblemId);
+      } catch {
+        // Best-effort
+      }
+      try {
+        await deleteProblem(untouchedProblemId);
       } catch {
         // Best-effort
       }
@@ -272,14 +302,16 @@ describe('Student Review API', () => {
       const sectionId = state.sectionId;
       expect(sectionId).toBeTruthy();
       expect(studentUserId).toBeTruthy();
-      expect(createdProblemId).toBeTruthy();
+      // Use the untouched problem — student never joined a session for it, so
+      // student_work must be null regardless of what happened to createdProblemId.
+      expect(untouchedProblemId).toBeTruthy();
 
       configureTestAuth(INSTRUCTOR_TOKEN);
 
       const response = await listStudentWorkForReview(sectionId, studentUserId!);
 
-      // The newly published problem should have null student_work (student hasn't started it)
-      const notStarted = response.work.find((s) => s.problem.id === createdProblemId);
+      // untouchedProblemId was published but the student never started it
+      const notStarted = response.work.find((s) => s.problem.id === untouchedProblemId);
       expect(notStarted).toBeDefined();
 
       if (notStarted) {
