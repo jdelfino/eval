@@ -90,8 +90,17 @@ test.describe('Instructor reviews student progress and work in a section', () =>
     // Verify student name heading
     await expect(page.locator('h1').filter({ hasText: studentDisplayName })).toBeVisible({ timeout: 10000 });
 
-    // Verify progress summary
-    await expect(page.locator('p').filter({ hasText: /\d+ \/ \d+ problems started/ })).toBeVisible();
+    // B4 reskin: verify summary rail is present with expected stat fields.
+    // Replaces the old "N / M problems started" paragraph.
+    // The summary rail renders revision counts even when 0 — verifies the
+    // stat row is always present regardless of session activity.
+    const summaryRail = page.locator('[data-testid="summary-rail"]');
+    await expect(summaryRail).toBeVisible({ timeout: 5000 });
+    await expect(summaryRail.locator('text=Sessions attended')).toBeVisible();
+    await expect(summaryRail.locator('text=Solved')).toBeVisible();
+    await expect(summaryRail.locator('text=Total revisions')).toBeVisible();
+    // Revision count cell is always rendered (B4 contract: summary-revisions testid)
+    await expect(page.locator('[data-testid="summary-revisions"]')).toBeVisible();
 
     // ===== VERIFY PROBLEM CARD IS LISTED =====
     const problemCard = page.locator(`[data-testid="problem-card-${problem.id}"]`);
