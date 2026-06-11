@@ -20,9 +20,10 @@ import { createSession, completeSession as apiCompleteSession } from '../../src/
 import { createProblem as apiCreateProblem } from '../../src/lib/api/problems';
 import { publishProblem as apiPublishProblem } from '../../src/lib/api/section-problems';
 import { getOrCreateStudentWork as apiGetOrCreateStudentWork } from '../../src/lib/api/student-work';
+import { listStudentProgress as apiListStudentProgress } from '../../src/lib/api/student-review';
 import { bootstrapUser } from '../../src/lib/api/auth';
 import { createVerifiedTestUser, getTestToken, IS_EMULATOR, DEFAULT_PASSWORD } from './test-auth';
-import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo, IOTestCase } from '../../src/types/api';
+import type { User, Class, Section, Session, Problem, StudentWork, RegisterStudentInfo, IOTestCase, StudentProgress } from '../../src/types/api';
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8080';
 
@@ -195,4 +196,8 @@ export async function getOrCreateStudentWork(token: string, sectionId: string, p
 
 export async function completeSession(token: string, sessionId: string): Promise<void> {
   await withToken(token, () => apiCompleteSession(sessionId));
+}
+
+export async function listStudentProgress(token: string, sectionId: string): Promise<StudentProgress[]> {
+  return withToken(token, () => apiListStudentProgress(sectionId));
 }
