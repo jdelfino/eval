@@ -10,6 +10,11 @@ import { getClass } from '@/lib/api/classes';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import CreateSectionForm from '../components/CreateSectionForm';
 import { BackButton } from '@/components/ui/BackButton';
+import { Button } from '@/components/ui/Button';
+import { Pill } from '@/components/ui/Pill';
+import { Table } from '@/components/ui/Table';
+import { SectionLabel } from '@/components/ui/SectionLabel';
+import { Spinner } from '@/components/ui/Spinner';
 
 export default function ClassDetailsPage() {
   const params = useParams();
@@ -68,7 +73,7 @@ export default function ClassDetailsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
+        <Spinner size="lg" label="Loading class..." />
       </div>
     );
   }
@@ -87,29 +92,26 @@ export default function ClassDetailsPage() {
         <div className="mb-4">
           <BackButton href="/classes">Back to Classes</BackButton>
         </div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">
+        <SectionLabel className="mb-1">
           Class · {sections.length} section{sections.length !== 1 ? 's' : ''}
-        </p>
+        </SectionLabel>
         <h1 className="text-3xl font-bold text-gray-900">{classData.name}</h1>
         {classData.description && (
           <p className="mt-1 text-gray-600">{classData.description}</p>
         )}
       </div>
 
-      <div className="flex justify-between items-center">
-        <div />
-        {!showCreateForm && (
-          <button
+      {!showCreateForm && (
+        <div className="flex justify-end">
+          <Button
+            variant="accent"
+            size="sm"
             onClick={() => setShowCreateForm(true)}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            <svg className="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
             New Section
-          </button>
-        )}
-      </div>
+          </Button>
+        </div>
+      )}
 
       {showCreateForm && (
         <CreateSectionForm
@@ -124,41 +126,32 @@ export default function ClassDetailsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
         {/* Sections table */}
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
-            Sections
-          </div>
+          <SectionLabel className="mb-2">Sections</SectionLabel>
 
           {sections.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
               <p className="text-gray-500 mb-4">No sections yet</p>
-              <button
-                onClick={() => setShowCreateForm(true)}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
+              <Button variant="accent" size="sm" onClick={() => setShowCreateForm(true)}>
                 Create First Section
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full border-collapse text-sm" data-testid="sections-table">
-                <thead className="bg-gray-50">
-                  <tr>
-                    {['Section', 'Code', 'Students', 'Status', ''].map((h, i) => (
-                      <th
-                        key={h || `col-${i}`}
-                        className="text-left px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400"
-                        style={i === 4 ? { textAlign: 'right' } : {}}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
+              <Table data-testid="sections-table">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.HeaderCell>Section</Table.HeaderCell>
+                    <Table.HeaderCell>Code</Table.HeaderCell>
+                    <Table.HeaderCell>Students</Table.HeaderCell>
+                    <Table.HeaderCell>Status</Table.HeaderCell>
+                    <Table.HeaderCell align="right" />
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
                   {sections.map((section) => (
-                    <tr key={section.id} className="border-t border-gray-100">
-                      <td className="px-3 py-2.5 font-medium text-gray-900">{section.name}</td>
-                      <td className="px-3 py-2.5">
+                    <Table.Row key={section.id}>
+                      <Table.Cell className="font-medium text-gray-900">{section.name}</Table.Cell>
+                      <Table.Cell>
                         <div className="flex items-center gap-1">
                           <code className="font-mono text-xs text-gray-600">
                             {formatJoinCodeForDisplay(section.join_code)}
@@ -175,21 +168,14 @@ export default function ClassDetailsPage() {
                             </svg>
                           </button>
                         </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-gray-500">—</td>
-                      <td className="px-3 py-2.5">
-                        {section.active ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 rounded-full">
-                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">
-                            Idle
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
+                      </Table.Cell>
+                      <Table.Cell className="text-gray-500">—</Table.Cell>
+                      <Table.Cell>
+                        <Pill tone={section.active ? 'ok' : 'neutral'} dot={section.active}>
+                          {section.active ? 'Active' : 'Idle'}
+                        </Pill>
+                      </Table.Cell>
+                      <Table.Cell align="right">
                         <Link
                           href={`/sections/${section.id}`}
                           className="text-xs text-blue-600 hover:text-blue-800"
@@ -197,11 +183,11 @@ export default function ClassDetailsPage() {
                         >
                           Open →
                         </Link>
-                      </td>
-                    </tr>
+                      </Table.Cell>
+                    </Table.Row>
                   ))}
-                </tbody>
-              </table>
+                </Table.Body>
+              </Table>
             </div>
           )}
         </div>
@@ -210,7 +196,7 @@ export default function ClassDetailsPage() {
         <div className="flex flex-col gap-4">
           {/* About */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">About</h3>
+            <SectionLabel as="h2" className="mb-2">About</SectionLabel>
             <div className="text-xs text-gray-500 leading-relaxed" data-testid="about-section">
               {classData.description ? (
                 <p>{classData.description}</p>
@@ -222,7 +208,7 @@ export default function ClassDetailsPage() {
 
           {/* Co-instructors */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Co-instructors</h3>
+            <SectionLabel as="h2" className="mb-2">Co-instructors</SectionLabel>
             <div className="text-xs text-gray-500" data-testid="co-instructors-section">
               {coInstructorNames.length === 0 ? (
                 <p>None yet.</p>

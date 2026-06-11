@@ -323,14 +323,20 @@ func (h *SectionHandler) MySections(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListSessions handles GET /api/v1/sections/{id}/sessions — returns sessions for a section.
+// Optional query param: ?status=active|completed filters by session status.
 func (h *SectionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
 		return
 	}
 
+	filters := store.SessionFilters{SectionID: &id}
+	if s := r.URL.Query().Get("status"); s != "" {
+		filters.Status = &s
+	}
+
 	repos := store.ReposFromContext(r.Context())
-	sessions, err := repos.ListSessions(r.Context(), store.SessionFilters{SectionID: &id})
+	sessions, err := repos.ListSessions(r.Context(), filters)
 	if err != nil {
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return

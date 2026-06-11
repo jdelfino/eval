@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useClasses } from '@/hooks/useClasses';
-import { getClass } from '@/lib/api/classes';
+import { hasPermission } from '@/hooks/usePermissions';
+import { getClassSections } from '@/lib/api/sections';
 import ClassList from './components/ClassList';
 import CreateClassForm from './components/CreateClassForm';
 import CreateSectionForm from './components/CreateSectionForm';
+import { Spinner } from '@/components/ui/Spinner';
 import type { Section } from '@/types/api';
 
 export default function ClassesPage() {
@@ -19,41 +21,42 @@ export default function ClassesPage() {
   const [sectionsByClass, setSectionsByClass] = useState<Record<string, Section[]>>({});
 
   useEffect(() => {
-    // Allow instructor, namespace-admin, and system-admin roles
-    const teachingRoles = ['instructor', 'namespace-admin', 'system-admin'];
-    if (user && !teachingRoles.includes(user.role)) {
+    if (!user) return;
+    if (!hasPermission(user, 'content.manage')) {
       router.push('/');
       return;
     }
-
-    if (user) {
-      fetchClasses();
-    }
+    fetchClasses();
   }, [user, router, fetchClasses]);
 
   // Fetch sections for all classes in parallel whenever the classes list changes.
-  const fetchAllSections = useCallback(async () => {
-    if (classes.length === 0) return;
-    const results = await Promise.all(
+  // Use getClassSections (1 query each) instead of getClass (4 queries each).
+  // Keyed by classes.length to avoid refetch when the array identity changes
+  // but length is the same (common after re-renders without new data).
+  const classCount = classes.length;
+  useEffect(() => {
+    if (classCount === 0) return;
+    let cancelled = false;
+    Promise.all(
       classes.map(async (cls) => {
         try {
-          const detail = await getClass(cls.id);
-          return { classId: cls.id, sections: detail.sections };
+          const sections = await getClassSections(cls.id);
+          return { classId: cls.id, sections };
         } catch {
-          return { classId: cls.id, sections: [] };
+          return { classId: cls.id, sections: [] as Section[] };
         }
       })
-    );
-    const map: Record<string, Section[]> = {};
-    for (const { classId, sections } of results) {
-      map[classId] = sections;
-    }
-    setSectionsByClass(map);
-  }, [classes]);
-
-  useEffect(() => {
-    fetchAllSections();
-  }, [fetchAllSections]);
+    ).then((results) => {
+      if (cancelled) return;
+      const map: Record<string, Section[]> = {};
+      for (const { classId, sections } of results) {
+        map[classId] = sections;
+      }
+      setSectionsByClass(map);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classCount]);
 
   const handleCreateClass = async (name: string, description: string) => {
     await createClass(name, description);
@@ -81,12 +84,12 @@ export default function ClassesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
+        <Spinner size="lg" label="Loading classes..." />
       </div>
     );
   }
 
-  const canViewClasses = user && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
+  const canViewClasses = user && hasPermission(user, 'content.manage');
   if (!canViewClasses) {
     return null;
   }

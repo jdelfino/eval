@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { hasPermission } from '@/hooks/usePermissions';
 import { listStudentWorkForReview, listStudentProgress } from '@/lib/api';
 import type {
   StudentWorkSummary,
@@ -10,28 +11,10 @@ import type {
   StudentProgress,
 } from '@/types/api';
 import { BackButton } from '@/components/ui/BackButton';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatSessionDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function formatLastUpdate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+import { Pill } from '@/components/ui/Pill';
+import { SectionLabel } from '@/components/ui/SectionLabel';
+import { Spinner } from '@/components/ui/Spinner';
+import { formatShortDate, formatShortDateTime } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -50,21 +33,15 @@ function ResultPill({ solved }: ResultPillProps) {
   if (solved === null) return null;
   if (solved) {
     return (
-      <span
-        data-testid="result-pill-solved"
-        className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full"
-      >
+      <Pill tone="ok" data-testid="result-pill-solved">
         solved
-      </span>
+      </Pill>
     );
   }
   return (
-    <span
-      data-testid="result-pill-in-progress"
-      className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full"
-    >
+    <Pill tone="warn" data-testid="result-pill-in-progress">
       in progress
-    </span>
+    </Pill>
   );
 }
 
@@ -87,8 +64,7 @@ export default function StudentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  const isInstructor =
-    user != null && ['instructor', 'namespace-admin', 'system-admin'].includes(user.role);
+  const isInstructor = user != null && hasPermission(user, 'content.manage');
 
   useEffect(() => {
     if (!user) return;
@@ -138,7 +114,7 @@ export default function StudentDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-600">Loading...</div>
+        <Spinner size="lg" label="Loading student data..." />
       </div>
     );
   }
@@ -188,12 +164,9 @@ export default function StudentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
         {/* Left: Sessions table */}
         <div>
-          <div
-            className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2"
-            aria-label="Sessions heading"
-          >
+          <SectionLabel as="h2" className="mb-2">
             Sessions
-          </div>
+          </SectionLabel>
 
           {sessionStats.length === 0 ? (
             <div className="bg-white rounded-lg shadow p-8 text-center">
@@ -222,7 +195,7 @@ export default function StudentDetailPage() {
                   >
                     {/* Date */}
                     <span className="text-gray-400 font-mono text-xs">
-                      {formatSessionDate(session.session_created_at)}
+                      {formatShortDate(session.session_created_at)}
                     </span>
 
                     {/* Problem title */}
@@ -267,9 +240,7 @@ export default function StudentDetailPage() {
           {/* Per-problem work table (existing content, reskinned) */}
           {workSummaries.length > 0 && (
             <div className="mt-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">
-                All Problems
-              </div>
+              <SectionLabel as="h2" className="mb-2">All Problems</SectionLabel>
               <div className="space-y-2">
                 {workSummaries.map((item) => {
                   const hasWork = item.student_work !== null;
@@ -294,25 +265,19 @@ export default function StudentDetailPage() {
                             </span>
                             {hasWork ? (
                               solved === true ? (
-                                <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                                  Solved
-                                </span>
+                                <Pill tone="ok">Solved</Pill>
                               ) : (
-                                <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
-                                  Started
-                                </span>
+                                <Pill tone="warn">Started</Pill>
                               )
                             ) : (
-                              <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">
-                                Not started
-                              </span>
+                              <Pill tone="neutral">Not started</Pill>
                             )}
                           </div>
 
                           <div className="flex items-center gap-3 text-sm text-gray-400">
                             {item.student_work?.last_update && (
                               <span className="text-xs">
-                                {formatLastUpdate(item.student_work.last_update)}
+                                {formatShortDateTime(item.student_work.last_update)}
                               </span>
                             )}
                             {hasWork && (
@@ -360,9 +325,7 @@ export default function StudentDetailPage() {
         {/* Right: Summary rail */}
         <div>
           <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">
-              Summary
-            </div>
+            <SectionLabel className="mb-3">Summary</SectionLabel>
             <div
               data-testid="summary-rail"
               className="space-y-2 text-sm text-gray-500"

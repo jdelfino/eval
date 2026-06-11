@@ -1121,6 +1121,64 @@ func TestSectionListSessions_InvalidID(t *testing.T) {
 	}
 }
 
+func TestSectionListSessions_StatusFilter(t *testing.T) {
+	sectionID := uuid.New()
+	sess := testSession()
+	sessRepo := &mockSessionRepo{
+		listSessionsFn: func(_ context.Context, filters store.SessionFilters) ([]store.Session, error) {
+			if filters.Status == nil || *filters.Status != "active" {
+				t.Fatalf("expected status=active, got %v", filters.Status)
+			}
+			return []store.Session{*sess}, nil
+		},
+	}
+
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/?status=active", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, sessRepo, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListSessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSectionListSessions_NoStatusFilter(t *testing.T) {
+	sectionID := uuid.New()
+	sess := testSession()
+	sessRepo := &mockSessionRepo{
+		listSessionsFn: func(_ context.Context, filters store.SessionFilters) ([]store.Session, error) {
+			if filters.Status != nil {
+				t.Fatalf("expected no status filter, got %v", *filters.Status)
+			}
+			return []store.Session{*sess}, nil
+		},
+	}
+
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(&mockSectionRepo{}, sessRepo, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ListSessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 // --- RegenerateCode tests ---
 
 func TestRegenerateCode_Success(t *testing.T) {

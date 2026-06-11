@@ -302,9 +302,7 @@ func (s *Store) ListStudentSessionStats(ctx context.Context, sectionID, studentU
 		COUNT(r.id) AS revision_count
 		FROM revisions r
 		JOIN sessions sess ON sess.id = r.session_id
-		LEFT JOIN section_problems sp ON sp.section_id = $1 AND sp.problem_id = (
-			SELECT (problem->>'id')::uuid FROM sessions s2 WHERE s2.id = r.session_id
-		)
+		LEFT JOIN section_problems sp ON sp.section_id = $1 AND sp.problem_id = (sess.problem->>'id')::uuid
 		LEFT JOIN problems p ON p.id = sp.problem_id
 		WHERE r.session_id IS NOT NULL
 		  AND r.user_id = $2

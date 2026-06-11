@@ -44,12 +44,13 @@ export async function leaveSection(sectionId: string): Promise<void> {
 }
 
 /**
- * Get all sessions for a section.
+ * Get active sessions for a section.
+ * Passes ?status=active so the backend filters server-side.
  * @param sectionId - The section ID
- * @returns Array of Session objects (backend returns plain array)
+ * @returns Array of active Session objects (backend returns plain array)
  */
 export async function getActiveSessions(sectionId: string): Promise<Session[]> {
-  return apiGet<Session[]>(`/sections/${sectionId}/sessions`);
+  return apiGet<Session[]>(`/sections/${sectionId}/sessions?status=active`);
 }
 
 /**

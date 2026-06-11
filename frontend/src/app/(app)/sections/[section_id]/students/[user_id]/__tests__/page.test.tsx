@@ -185,9 +185,17 @@ const workApiResponse = {
   sessions: sessionStats,
 };
 
+const TEACHING_PERMISSIONS = ['content.manage', 'session.manage'];
+
 function mockUser(role: string) {
+  const isTeachingRole = ['instructor', 'namespace-admin', 'system-admin'].includes(role);
   (useAuth as jest.Mock).mockReturnValue({
-    user: { id: 'instructor-1', email: 'instructor@example.com', role },
+    user: {
+      id: 'instructor-1',
+      email: 'instructor@example.com',
+      role,
+      permissions: isTeachingRole ? TEACHING_PERMISSIONS : [],
+    },
     isLoading: false,
   });
 }
