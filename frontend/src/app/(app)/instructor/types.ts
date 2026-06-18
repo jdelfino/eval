@@ -38,7 +38,10 @@ export interface RealtimeStudent {
    * genuine activity time, never joined_at (see lib/studentStatus.ts).
    */
   last_update?: Date;
-  /** Most recent client-reported run-all summary (G4 F8); omitted when never run. */
+  /**
+   * Most recent client-reported run-all summary (G4 F8), or undefined if the
+   * student has not run-all this session. Classroom-grade — not server-verified.
+   */
   last_run_summary?: RunSummary;
 }
 
