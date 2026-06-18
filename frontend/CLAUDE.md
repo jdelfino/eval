@@ -103,3 +103,17 @@ Global mocks in `src/__mocks__/` (api-client, firebase, react-markdown) are auto
 - Warns on unused vars (ignores `_` prefix)
 - Warns on `console.log` (allows `.warn`, `.error`)
 - Standard Next.js rules
+
+## Design token application
+
+Apply design tokens via **mapped Tailwind utilities** — this is the standard. `tailwind.config.js`
+maps every token to a utility (`bg-bg-sunken`, `hover:bg-bg-sunken`, `text-fg-muted`,
+`border-border`, `bg-info-soft`, `text-warn`, `bg-danger-soft`, etc.). Verify exact utility names
+in `tailwind.config.js` before use.
+
+- **Mapped utilities (`bg-bg-sunken`)** are preferred — idiomatic Tailwind, support
+  `:hover`/`:focus`/responsive variants, and are already configured.
+- **Arbitrary values (`bg-[var(--bg-sunken)]`)** are the escape-hatch spelling of the same thing.
+  Prefer the clean mapped alias.
+- **Inline `style={{ background: 'var(--x)' }}`** is reserved for genuinely dynamic/computed values
+  only.

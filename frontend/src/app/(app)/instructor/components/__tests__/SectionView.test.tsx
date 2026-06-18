@@ -502,7 +502,7 @@ describe('SectionView', () => {
       fireEvent.click(newSectionButton);
 
       // Verify modal appears
-      expect(screen.getByText('Create New Section')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /new section/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/Section Name/)).toBeInTheDocument();
     });
 
@@ -520,7 +520,7 @@ describe('SectionView', () => {
       fireEvent.click(createSectionButton);
 
       // Verify modal appears
-      expect(screen.getByText('Create New Section')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /new section/i })).toBeInTheDocument();
     });
 
     it('should close modal when Cancel button is clicked', async () => {
@@ -534,7 +534,7 @@ describe('SectionView', () => {
 
       // Open the modal
       fireEvent.click(screen.getByRole('button', { name: /New Section/ }));
-      expect(screen.getByText('Create New Section')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /new section/i })).toBeInTheDocument();
 
       // Click Cancel
       const cancelButton = screen.getByRole('button', { name: /Cancel/ });
@@ -542,7 +542,7 @@ describe('SectionView', () => {
 
       // Verify modal is closed
       await waitFor(() => {
-        expect(screen.queryByText('Create New Section')).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: /new section/i })).not.toBeInTheDocument();
       });
     });
 
@@ -567,7 +567,7 @@ describe('SectionView', () => {
       fireEvent.change(nameInput, { target: { value: 'Test Section' } });
 
       // Submit the form - use the submit button inside the modal form
-      const modal = screen.getByText('Create New Section').closest('div[class*="bg-white rounded-xl"]');
+      const modal = screen.getByRole('dialog');
       const submitButton = modal!.querySelector('button[type="submit"]') as HTMLButtonElement;
       fireEvent.click(submitButton);
 
@@ -606,13 +606,13 @@ describe('SectionView', () => {
 
       // Fill and submit using the modal's submit button
       fireEvent.change(screen.getByLabelText(/Section Name/), { target: { value: 'Test Section' } });
-      const modal = screen.getByText('Create New Section').closest('div[class*="bg-white rounded-xl"]');
+      const modal = screen.getByRole('dialog');
       const submitButton = modal!.querySelector('button[type="submit"]') as HTMLButtonElement;
       fireEvent.click(submitButton);
 
       // Verify modal closes and new section appears
       await waitFor(() => {
-        expect(screen.queryByText('Create New Section')).not.toBeInTheDocument();
+        expect(screen.queryByRole('heading', { name: /new section/i })).not.toBeInTheDocument();
       });
 
       await waitFor(() => {
@@ -635,7 +635,7 @@ describe('SectionView', () => {
 
       // Fill and submit using the modal's submit button
       fireEvent.change(screen.getByLabelText(/Section Name/), { target: { value: 'Duplicate Section' } });
-      const modal = screen.getByText('Create New Section').closest('div[class*="bg-white rounded-xl"]');
+      const modal = screen.getByRole('dialog');
       const submitButton = modal!.querySelector('button[type="submit"]') as HTMLButtonElement;
       fireEvent.click(submitButton);
 
@@ -645,7 +645,7 @@ describe('SectionView', () => {
       });
 
       // Modal should still be open
-      expect(screen.getByText('Create New Section')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /new section/i })).toBeInTheDocument();
     });
 
     it('should not allow submission with empty section name', async () => {
@@ -661,7 +661,7 @@ describe('SectionView', () => {
       fireEvent.click(screen.getByRole('button', { name: /New Section/ }));
 
       // Get the submit button inside the modal - it should be disabled
-      const modal = screen.getByText('Create New Section').closest('div[class*="bg-white rounded-xl"]');
+      const modal = screen.getByRole('dialog');
       const submitButton = modal!.querySelector('button[type="submit"]') as HTMLButtonElement;
       expect(submitButton).toBeDisabled();
     });

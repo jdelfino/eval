@@ -3,6 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { classifyError, ErrorCategory, RecoveryAction } from '@/lib/error-messages';
+import { Banner, type BannerTone } from '@/components/ui/Banner';
+import type { IconName } from '@/components/ui/Icon';
 
 /**
  * Props for ErrorAlert component
@@ -24,7 +26,7 @@ export interface ErrorAlertProps {
   showRecoveryActions?: boolean;
   /** Whether to show help text (default: true) */
   showHelpText?: boolean;
-  /** Additional CSS classes */
+  /** Additional CSS classes applied to the wrapper element */
   className?: string;
   /** Variant for styling (default: 'error') */
   variant?: 'error' | 'warning' | 'info';
@@ -47,31 +49,23 @@ const categoryTitles: Record<ErrorCategory, string> = {
 };
 
 /**
- * Styling for different variants
+ * Maps the ErrorAlert variant to the Banner tone + icon. ErrorAlert is now a
+ * thin classification wrapper around the single token-driven Banner primitive;
+ * it no longer hand-rolls its own toned message strip.
  */
-const variantStyles = {
-  error: {
-    container: 'bg-red-50 border-red-200 text-red-700',
-    title: 'text-red-800',
-    button: 'border-red-300 text-red-700 hover:bg-red-100',
-    spinner: 'border-red-600',
-  },
-  warning: {
-    container: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-    title: 'text-yellow-800',
-    button: 'border-yellow-300 text-yellow-700 hover:bg-yellow-100',
-    spinner: 'border-yellow-600',
-  },
-  info: {
-    container: 'bg-blue-50 border-blue-200 text-blue-700',
-    title: 'text-blue-800',
-    button: 'border-blue-300 text-blue-700 hover:bg-blue-100',
-    spinner: 'border-blue-600',
-  },
+const variantToBanner: Record<NonNullable<ErrorAlertProps['variant']>, { tone: BannerTone; icon: IconName }> = {
+  error: { tone: 'danger', icon: 'alert' },
+  warning: { tone: 'warn', icon: 'alert' },
+  info: { tone: 'info', icon: 'info' },
 };
 
 /**
- * Reusable error alert component with consistent styling
+ * Reusable error alert component with consistent styling.
+ *
+ * Adds error classification (user-friendly messages, recovery links, retry
+ * gating, help text) on top of the shared {@link Banner} primitive, which
+ * provides the actual token-driven message-strip presentation. Banner is the
+ * one and only message-strip primitive; ErrorAlert composes it.
  *
  * Features:
  * - Automatic error classification for user-friendly messages
@@ -80,7 +74,6 @@ const variantStyles = {
  * - Optional dismiss button
  * - Help text explaining what went wrong
  * - Multiple style variants (error, warning, info)
- * - Accessible with proper ARIA attributes
  *
  * @example
  * ```tsx
@@ -105,7 +98,7 @@ export function ErrorAlert({
 }: ErrorAlertProps) {
   const classified = classifyError(error);
   const displayTitle = title || categoryTitles[classified.category];
-  const styles = variantStyles[variant];
+  const { tone, icon } = variantToBanner[variant];
 
   // Determine if we should show the retry button (from onRetry prop or recovery actions)
   const showRetryButton = onRetry && classified.isRetryable;
@@ -117,104 +110,71 @@ export function ErrorAlert({
       )
     : [];
 
-  return (
-    <div
-      role="alert"
-      aria-live="assertive"
-      className={`border rounded-lg p-4 ${styles.container} ${className}`}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            {/* Error icon */}
-            <svg
-              className="w-5 h-5 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <p className={`font-semibold ${styles.title}`}>{displayTitle}</p>
-          </div>
-          <p className="mt-1 text-sm">{classified.userMessage}</p>
-          {showHelpText && classified.helpText && (
-            <p className="mt-1 text-xs opacity-75">
-              {classified.helpText}
-            </p>
-          )}
-          {showTechnical && classified.technicalMessage !== classified.userMessage && (
-            <p className="mt-1 text-xs opacity-75 font-mono">
-              Technical: {classified.technicalMessage}
-            </p>
-          )}
-          {/* Recovery action links */}
-          {linkActions.length > 0 && (
-            <div className="mt-2 flex gap-2">
-              {linkActions.map((action, index) => (
-                <Link
-                  key={index}
-                  href={action.href}
-                  className={`text-sm font-medium underline hover:no-underline ${styles.title}`}
-                >
-                  {action.label}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+  const showTechnicalMessage =
+    showTechnical && classified.technicalMessage !== classified.userMessage;
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {showRetryButton && (
-            <button
-              onClick={onRetry}
-              disabled={isRetrying}
-              className={`px-3 py-1.5 text-sm font-medium border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${styles.button}`}
-              aria-label={isRetrying ? 'Retrying...' : 'Try again'}
+  const body = (
+    <>
+      <span>{classified.userMessage}</span>
+      {showHelpText && classified.helpText && (
+        <span style={{ display: 'block', marginTop: 4, opacity: 0.85 }}>
+          {classified.helpText}
+        </span>
+      )}
+      {showTechnicalMessage && (
+        <span
+          style={{ display: 'block', marginTop: 4, opacity: 0.85, fontFamily: 'monospace' }}
+        >
+          Technical: {classified.technicalMessage}
+        </span>
+      )}
+      {linkActions.length > 0 && (
+        <span style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          {linkActions.map((action, index) => (
+            <Link
+              key={index}
+              href={action.href}
+              style={{ fontWeight: 600, color: 'var(--fg)', textDecoration: 'underline' }}
             >
-              {isRetrying ? (
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className={`animate-spin w-3.5 h-3.5 border-2 border-t-transparent rounded-full ${styles.spinner}`}
-                    aria-hidden="true"
-                  />
-                  Retrying...
-                </span>
-              ) : (
-                'Try Again'
-              )}
-            </button>
-          )}
-          {onDismiss && (
-            <button
-              onClick={onDismiss}
-              className={`p-1.5 rounded-md transition-colors ${styles.button}`}
-              aria-label="Dismiss error"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
+              {action.label}
+            </Link>
+          ))}
+        </span>
+      )}
+    </>
+  );
+
+  const retryButton = showRetryButton ? (
+    <button
+      type="button"
+      onClick={onRetry}
+      disabled={isRetrying}
+      aria-label={isRetrying ? 'Retrying...' : 'Try again'}
+      style={{
+        background: 'none',
+        border: 'none',
+        color: 'var(--fg)',
+        fontWeight: 600,
+        cursor: isRetrying ? 'default' : 'pointer',
+        padding: 0,
+        fontSize: 12,
+        opacity: isRetrying ? 0.5 : 1,
+      }}
+    >
+      {isRetrying ? 'Retrying...' : 'Try Again'}
+    </button>
+  ) : undefined;
+
+  return (
+    <div className={className}>
+      <Banner
+        tone={tone}
+        icon={icon}
+        title={displayTitle}
+        body={body}
+        action={retryButton}
+        onDismiss={onDismiss}
+      />
     </div>
   );
 }

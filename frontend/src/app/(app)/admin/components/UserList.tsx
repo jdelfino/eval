@@ -62,14 +62,14 @@ export default function UserList({ users, currentUserId, onDelete, showActions =
 
   if (users.length === 0) {
     return (
-      <div className="py-8 text-center text-gray-500 bg-gray-50 rounded">
+      <div className="py-8 text-center text-fg-muted bg-bg-sunken rounded">
         No users found
       </div>
     );
   }
 
   return (
-    <Table className="bg-white shadow-sm">
+    <Table className="bg-bg-raised shadow-sm">
       <Table.Header>
         <Table.Row>
           <Table.HeaderCell>User</Table.HeaderCell>
@@ -91,7 +91,7 @@ export default function UserList({ users, currentUserId, onDelete, showActions =
                 )}
               </div>
             </Table.Cell>
-            <Table.Cell className="text-sm text-gray-500">
+            <Table.Cell className="text-sm text-fg-muted">
               {user.email}
             </Table.Cell>
             <Table.Cell>
@@ -99,16 +99,16 @@ export default function UserList({ users, currentUserId, onDelete, showActions =
                 {user.role}
               </Badge>
             </Table.Cell>
-            <Table.Cell className="text-sm text-gray-500">
+            <Table.Cell className="text-sm text-fg-muted">
               {formatDate(user.created_at)}
             </Table.Cell>
-            <Table.Cell className="text-sm text-gray-500">
+            <Table.Cell className="text-sm text-fg-muted">
               {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}
             </Table.Cell>
             {showActions && (
               <Table.Cell align="center">
                 {user.id === currentUserId ? (
-                  <span className="text-sm text-gray-500">-</span>
+                  <span className="text-sm text-fg-muted">-</span>
                 ) : confirmDeleteId === user.id ? (
                   <div className="flex gap-2 justify-center">
                     <Button

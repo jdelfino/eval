@@ -48,7 +48,7 @@ export function Skeleton({
 
   return (
     <div
-      className={`animate-pulse bg-gray-200 ${roundedClass} ${className}`}
+      className={`animate-pulse bg-bg-sunken ${roundedClass} ${className}`}
       aria-hidden="true"
       role="presentation"
     />
@@ -97,6 +97,75 @@ export function SkeletonAvatar({
     <Skeleton
       className={`rounded-full ${sizeClasses[size]} ${className}`}
     />
+  );
+}
+
+/**
+ * Pre-configured skeleton for a bordered/raised card region.
+ *
+ * Composed shimmer block matching the LoadingDashboardAE card panels
+ * (a raised, bordered box with a few stacked shimmer lines). Used by the
+ * G9 loading surfaces (dashboard / section overview / library) so each
+ * route skeleton composes from shared presets instead of hand-rolling.
+ *
+ * @example
+ * ```tsx
+ * <SkeletonCard lines={3} />
+ * ```
+ */
+export function SkeletonCard({
+  lines = 3,
+  className = '',
+}: {
+  /** Number of inner shimmer lines (default: 3) */
+  lines?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`space-y-3 rounded-lg border border-border bg-bg-raised p-4 ${className}`.trim()}
+      aria-hidden="true"
+      role="presentation"
+    >
+      {Array.from({ length: lines }).map((_, index) => (
+        <Skeleton
+          key={index}
+          className={`h-3 ${index === 0 ? 'w-1/3' : index === lines - 1 ? 'w-1/2' : 'w-full'}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Pre-configured skeleton for a single table/list row.
+ *
+ * Horizontal arrangement of shimmer chips matching the LoadingDashboardAE
+ * list rows: a leading label, a flexible spacer, then trailing meta + a
+ * pill + a button chip. Compose several into a list panel.
+ *
+ * @example
+ * ```tsx
+ * {[1, 2, 3, 4].map((i) => <SkeletonRow key={i} />)}
+ * ```
+ */
+export function SkeletonRow({
+  className = '',
+}: {
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-3 py-2.5 ${className}`.trim()}
+      aria-hidden="true"
+      role="presentation"
+    >
+      <Skeleton className="h-3 w-36" />
+      <div className="flex-1" />
+      <Skeleton className="h-2.5 w-12" />
+      <Skeleton className="h-5 w-16 rounded-full" />
+      <Skeleton className="h-6 w-20" />
+    </div>
   );
 }
 

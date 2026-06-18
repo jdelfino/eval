@@ -38,6 +38,8 @@ import { Table } from '@/components/ui/Table';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import CreateClassModal from './CreateClassModal';
 
 interface InstructorDashboardProps {
@@ -184,17 +186,17 @@ export function InstructorDashboard({
         <EmptyState
           icon="book"
           title="Welcome to the Instructor Dashboard"
-          blurb="Create your first class to get started teaching."
-          action={canCreateClass ? (
-            <button
+          body="Create your first class to get started teaching."
+          primary={canCreateClass ? (
+            <Button
+              variant="accent"
               onClick={() => setShowCreateClassModal(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
               data-testid="create-first-class-btn"
             >
               Create Your First Class
-            </button>
+            </Button>
           ) : undefined}
-          className="bg-gray-50 rounded-lg border-2 border-dashed border-gray-300"
+          className="bg-bg-sunken rounded-lg border-2 border-dashed border-border"
         />
         {createClassModal}
       </>
@@ -247,7 +249,7 @@ export function InstructorDashboard({
               >
                 <div>
                   <SectionLabel style={{ color: 'var(--info)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {live && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
+                    {live && <ConnectionDot status="live" compact />}
                     <span>{label}{subtitle ? ` · ${subtitle}` : null}</span>
                   </SectionLabel>
                   <div className="mt-1 text-base font-semibold text-gray-900">

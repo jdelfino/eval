@@ -17,7 +17,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
+import { Banner } from '@/components/ui/Banner';
 
 /**
  * Namespace User Management Page
@@ -132,7 +132,7 @@ export default function NamespaceUsersPage() {
         <h1 className="text-2xl font-bold mb-2">
           {namespace?.displayName || namespace_id}
         </h1>
-        <p className="text-gray-500 font-mono">
+        <p className="text-fg-muted font-mono">
           {namespace_id}
         </p>
       </div>
@@ -144,19 +144,19 @@ export default function NamespaceUsersPage() {
 
       {/* Error Display */}
       {(error || actionError) && (
-        <Alert variant="error" className="mb-8">
-          <strong>Error:</strong> {error || actionError}
-        </Alert>
+        <div className="mb-8">
+          <Banner tone="danger" icon="alert" title="Error:" body={error || actionError} />
+        </div>
       )}
 
       {/* User List */}
       {loading && users.length === 0 ? (
-        <div className="text-center p-8 text-gray-500">
+        <div className="text-center p-8 text-fg-muted">
           Loading users...
         </div>
       ) : users.length === 0 ? (
         <Card variant="outlined" className="text-center p-12">
-          <p className="text-gray-500">
+          <p className="text-fg-muted">
             No users in this namespace. Create a user to get started.
           </p>
         </Card>
@@ -168,7 +168,7 @@ export default function NamespaceUsersPage() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold mb-1">{user.display_name || user.email}</h3>
                   {user.display_name && (
-                    <p className="text-sm text-gray-500 mb-2">{user.email}</p>
+                    <p className="text-sm text-fg-muted mb-2">{user.email}</p>
                   )}
 
                   {editingUserId === user.id ? (
@@ -177,7 +177,7 @@ export default function NamespaceUsersPage() {
                         value={editingRole}
                         onChange={(e) => setEditingRole(e.target.value as 'namespace-admin' | 'instructor' | 'student')}
                         disabled={loading}
-                        className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        className="px-3 py-1.5 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                       >
                         <option value="student">Student</option>
                         <option value="instructor">Instructor</option>
@@ -209,36 +209,40 @@ export default function NamespaceUsersPage() {
                     </div>
                   )}
 
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-fg-muted">
                     Created: {new Date(user.created_at).toLocaleString()}
                   </div>
                 </div>
 
                 {/* User Actions */}
                 {deletingUserId === user.id ? (
-                  <Alert variant="warning" className="p-4 ml-4">
-                    <p className="text-sm mb-2">
-                      Delete this user?
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => handleDeleteUser(user.id)}
-                        disabled={loading}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setDeletingUserId(null)}
-                        disabled={loading}
-                      >
-                        No
-                      </Button>
-                    </div>
-                  </Alert>
+                  <div className="ml-4">
+                    <Banner
+                      tone="warn"
+                      icon="alert"
+                      title="Delete this user?"
+                      action={
+                        <div className="flex gap-2">
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={loading}
+                          >
+                            Yes
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setDeletingUserId(null)}
+                            disabled={loading}
+                          >
+                            No
+                          </Button>
+                        </div>
+                      }
+                    />
+                  </div>
                 ) : (
                   <div className="flex gap-2">
                     <Button

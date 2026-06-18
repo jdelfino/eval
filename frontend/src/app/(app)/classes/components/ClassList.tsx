@@ -20,8 +20,8 @@ export default function ClassList({ classes, onCreateNew, onCreateSection, onEdi
       <EmptyState
         icon="book"
         title="No classes yet"
-        blurb="Get started by creating your first class"
-        action={
+        body="Get started by creating your first class"
+        primary={
           <Button variant="accent" size="sm" onClick={onCreateNew}>
             Create Your First Class
           </Button>

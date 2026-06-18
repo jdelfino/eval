@@ -28,7 +28,7 @@ export type { BadgeProps, BadgeVariant } from './Badge';
 export { Spinner } from './Spinner';
 export type { SpinnerProps, SpinnerSize } from './Spinner';
 
-export { Skeleton, SkeletonText, SkeletonAvatar } from './Skeleton';
+export { Skeleton, SkeletonText, SkeletonAvatar, SkeletonCard, SkeletonRow } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
 
 export { ConfirmDialog } from './ConfirmDialog';
@@ -58,9 +58,6 @@ export type {
   TabsTabProps,
   TabsPanelProps,
 } from './Tabs';
-
-export { Alert } from './Alert';
-export type { AlertProps, AlertVariant } from './Alert';
 
 export { SignInButtons } from './SignInButtons';
 export type { SignInButtonsProps } from './SignInButtons';
@@ -106,3 +103,6 @@ export type { ChipProps } from './Chip';
 
 export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
+
+export { Forbidden } from './Forbidden';
+export type { ForbiddenProps } from './Forbidden';

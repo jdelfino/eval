@@ -1,5 +1,11 @@
 /**
  * Unit tests for ErrorAlert component
+ *
+ * ErrorAlert is a classification wrapper around the shared Banner primitive.
+ * These tests verify the classification behavior (titles, retry gating, recovery
+ * links, technical message) and that it renders through Banner: danger/warn tones
+ * announce as role="alert", info as role="status".
+ *
  * @jest-environment jsdom
  */
 
@@ -108,25 +114,20 @@ describe('ErrorAlert', () => {
   });
 
   describe('variants', () => {
-    it('should apply error variant styles by default', () => {
-      render(<ErrorAlert error="Error" />);
+    it('should announce error/warning variants as role="alert"', () => {
+      const { rerender } = render(<ErrorAlert error="Error" />);
+      expect(screen.getByRole('alert')).toBeInTheDocument();
 
-      const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('bg-red-50');
+      rerender(<ErrorAlert error="Warning" variant="warning" />);
+      expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    it('should apply warning variant styles', () => {
-      render(<ErrorAlert error="Warning" variant="warning" />);
-
-      const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('bg-yellow-50');
-    });
-
-    it('should apply info variant styles', () => {
+    it('should announce info variant politely as role="status"', () => {
       render(<ErrorAlert error="Info" variant="info" />);
 
-      const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('bg-blue-50');
+      // info tone maps to Banner role="status", not the urgent role="alert"
+      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 
@@ -161,12 +162,6 @@ describe('ErrorAlert', () => {
       expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 
-    it('should have aria-live assertive', () => {
-      render(<ErrorAlert error="Error" />);
-
-      expect(screen.getByRole('alert')).toHaveAttribute('aria-live', 'assertive');
-    });
-
     it('should have accessible button labels', () => {
       const onRetry = jest.fn();
       const onDismiss = jest.fn();
@@ -174,14 +169,6 @@ describe('ErrorAlert', () => {
 
       expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /dismiss/i })).toBeInTheDocument();
-    });
-  });
-
-  describe('custom className', () => {
-    it('should apply custom className', () => {
-      render(<ErrorAlert error="Error" className="my-custom-class" />);
-
-      expect(screen.getByRole('alert')).toHaveClass('my-custom-class');
     });
   });
 

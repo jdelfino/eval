@@ -8,6 +8,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Chip } from '@/components/ui/Chip';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { AuthHeading } from '@/components/ui/AuthHeading';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { useSectionEvents } from '@/hooks/useSectionEvents';
@@ -16,6 +17,7 @@ import { formatShortDate } from '@/lib/format';
 import { SolutionViewerModal } from '@/components/SolutionViewerModal';
 import { ReplayModal } from '@/app/(app)/instructor/components/RevisionViewer';
 import { OpenOnLaptop } from '@/components/OpenOnLaptop';
+import { MobileSwap } from '@/components/MobileSwap';
 import { useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { SectionDetail } from '../page';
 
@@ -96,8 +98,16 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
 
   return (
     <div
-      className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg p-4 text-white"
-      style={{ marginBottom: 30 }}
+      data-testid="live-session-card"
+      className="rounded-lg shadow-lg p-4"
+      style={{
+        marginBottom: 30,
+        // Live "run" gradient on F1 tokens (replaces the green-500→green-600
+        // Tailwind gradient): --run into a darker run via color-mix.
+        background:
+          'linear-gradient(to right, var(--run), color-mix(in oklch, var(--run) 82%, black))',
+        color: 'var(--fg-inverse)',
+      }}
     >
       {/* Layout breakpoint is driven by the JS isMobile (<768px) source, not a
           Tailwind sm: utility (640px), so the row-vs-column layout flips at the
@@ -107,14 +117,17 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
         suppressHydrationWarning
       >
         <div className="flex items-center gap-4">
-          <div className="w-9 h-9 bg-white bg-opacity-20 rounded-full flex items-center justify-center flex-shrink-0">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: 'color-mix(in oklch, var(--fg-inverse) 20%, transparent)' }}
+          >
             <span style={{ fontSize: 14, fontWeight: 700 }}>▶</span>
           </div>
           <div>
             <h2 className="text-lg font-bold mb-0.5">
               {liveNow ? 'Class is live!' : 'Current problem'}
             </h2>
-            <p className="text-green-50 text-sm">
+            <p className="text-sm" style={{ color: 'color-mix(in oklch, var(--fg-inverse) 88%, transparent)' }}>
               {isMobile
                 ? 'Open this session on your laptop to participate.'
                 : liveNow
@@ -123,31 +136,32 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
             </p>
           </div>
         </div>
-        {isMobile ? (
-          // Mobile read-only (G8 T3): nudge to the laptop instead of presenting a
-          // primary navigate-to-workspace "Join now" action. The OpenOnLaptop
-          // affordance is the consistent, dependency-free Copy-link CTA used by
-          // the T1 /student guard; the real block stays that guard, not here.
-          <div
-            className="rounded-lg overflow-hidden bg-white"
-            style={{ color: 'var(--fg)' }}
-          >
+        {/* Mobile read-only (G8 T3): nudge to the laptop instead of presenting a
+            primary navigate-to-workspace "Join now" action. The OpenOnLaptop
+            affordance is the consistent, dependency-free Copy-link CTA used by the
+            T1 /student guard; the real block stays that guard, not here. The
+            mobile-vs-desktop swap shape is the shared <MobileSwap> wrapper. */}
+        <MobileSwap
+          mobileClassName="rounded-lg overflow-hidden"
+          mobileStyle={{ color: 'var(--fg)', background: 'var(--bg-raised)' }}
+          mobile={
             <OpenOnLaptop
               title="Open this session on your laptop"
               body="Class is live — you'll join and write code on a bigger screen."
             />
-          </div>
-        ) : (
+          }
+        >
           <button
             onClick={onJoin}
-            className="px-6 py-2.5 bg-white text-green-600 text-sm font-semibold rounded-lg hover:bg-green-50 transition-colors shadow hover:shadow-md flex items-center gap-2"
+            className="px-6 py-2.5 text-sm font-semibold rounded-lg transition-colors shadow hover:shadow-md flex items-center gap-2"
+            style={{ background: 'var(--bg-raised)', color: 'var(--run)' }}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>
             {liveNow ? 'Join now' : 'Jump in'}
           </button>
-        )}
+        </MobileSwap>
       </div>
     </div>
   );
@@ -445,7 +459,7 @@ export default function StudentSectionView({
           )}
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="rounded-lg shadow p-6" style={{ background: 'var(--bg-raised)' }}>
           <div className="flex items-start justify-between">
             <div>
               <SectionLabel style={{ marginBottom: 4 }}>Section</SectionLabel>
@@ -532,19 +546,19 @@ export default function StudentSectionView({
             })}
           </div>
         ) : (
-          <div
-            className="bg-white rounded-lg shadow p-8 text-center"
-            style={{ marginBottom: 36 }}
-          >
-            <p style={{ color: 'var(--fg-muted)', fontSize: 13 }}>
-              {filter === 'solved'
-                ? 'No solved problems yet'
-                : filter === 'in-progress'
-                  ? 'No problems in progress'
-                  : filter === 'not-started'
-                    ? 'All problems have been started'
-                    : 'No problems published yet'}
-            </p>
+          <div style={{ marginBottom: 36 }}>
+            <EmptyState
+              icon="book"
+              title={
+                filter === 'solved'
+                  ? 'No solved problems yet'
+                  : filter === 'in-progress'
+                    ? 'No problems in progress'
+                    : filter === 'not-started'
+                      ? 'All problems have been started'
+                      : 'No problems published yet'
+              }
+            />
           </div>
         )}
       </div>
@@ -582,9 +596,7 @@ export default function StudentSectionView({
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No past sessions yet</p>
-          </div>
+          <EmptyState icon="layers" title="No past sessions yet" />
         )}
       </div>
 

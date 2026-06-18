@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Banner } from '@/components/ui/Banner';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Icon } from '@/components/ui/Icon';
 import { getStudentRegistrationInfo } from '@/lib/api/registration';
 import { formatJoinCodeInput, formatJoinCodeForDisplay, normalizeJoinCode, isCompleteJoinCode } from '@/lib/join-code';
@@ -22,9 +23,15 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [preview, setPreview] = useState<RegisterStudentInfo | null>(null);
+  // When the code is invalid (404) or its section is inactive (400 "not active"),
+  // we replace the form with a dedicated invalid/unavailable join-code state
+  // instead of the inline danger Banner. The backend has no 403/"expired" code.
+  const [invalidCode, setInvalidCode] = useState(false);
 
   // Ref to track the most-recently-requested preview code for stale-response guard
   const latestPreviewCodeRef = useRef<string>('');
+  // Ref to the join-code input so "Try a new code" can refocus it.
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Live preview: debounced 400ms, only when code is format-valid (6 alphanum chars)
   useEffect(() => {
@@ -82,9 +89,15 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
       setSuccess(true);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to join section';
-      if (errorMessage.toLowerCase().includes('not found') || errorMessage.toLowerCase().includes('invalid')) {
-        setError('Invalid join code. Please check the code and try again.');
-      } else if (errorMessage.toLowerCase().includes('already')) {
+      const lower = errorMessage.toLowerCase();
+      if (
+        lower.includes('not found') ||
+        lower.includes('invalid') ||
+        lower.includes('not active')
+      ) {
+        // Bad code (404) or inactive section (400) → dedicated invalid/unavailable state.
+        setInvalidCode(true);
+      } else if (lower.includes('already')) {
         setError('You are already a member of this section.');
       } else {
         setError(errorMessage);
@@ -94,6 +107,15 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
     }
   }, [join_code, onSubmit]);
 
+  // "Try a new code": leave the invalid state, clear the field, and refocus it.
+  const handleTryNewCode = useCallback(() => {
+    setInvalidCode(false);
+    setJoinCode('');
+    setError(null);
+    // Refocus on the next tick once the form is re-rendered.
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
   // Retry handler: re-submits the current code
   const handleRetry = useCallback(() => {
     setError(null);
@@ -102,6 +124,31 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
 
   const semester = preview?.section.semester;
   const disabled = submitting || !join_code.trim() || success;
+
+  if (invalidCode) {
+    return (
+      <AuthCard>
+        <EmptyState
+          code="404 · Join code"
+          icon="lock"
+          tone="warn"
+          title="That join code isn't available."
+          body="The code may be wrong, or its section may have been turned off. Check with your teacher for the current code, or try another one."
+          primary={
+            <Button variant="accent" onClick={handleTryNewCode}>
+              Try a new code
+              <Icon name="arrowR" size={13} />
+            </Button>
+          }
+          secondary={
+            <Button variant="quiet" asChild>
+              <Link href="/auth/signin">Sign in instead</Link>
+            </Button>
+          }
+        />
+      </AuthCard>
+    );
+  }
 
   return (
     <AuthCard>
@@ -148,6 +195,7 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
 
         <Field label="Join code" hint="6 letters and digits, like ABC-123">
           <Input
+            ref={inputRef}
             id="join_code"
             mono
             placeholder="ABC-123"

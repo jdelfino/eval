@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { Skeleton, SkeletonText, SkeletonAvatar } from '../Skeleton';
+import { Skeleton, SkeletonText, SkeletonAvatar, SkeletonCard, SkeletonRow } from '../Skeleton';
 
 describe('Skeleton', () => {
   describe('rendering', () => {
@@ -36,10 +36,10 @@ describe('Skeleton', () => {
       expect(container.querySelector('div')).toHaveClass('animate-pulse');
     });
 
-    it('should have gray background', () => {
+    it('should have sunken token background', () => {
       const { container } = render(<Skeleton />);
 
-      expect(container.querySelector('div')).toHaveClass('bg-gray-200');
+      expect(container.querySelector('div')).toHaveClass('bg-bg-sunken');
     });
   });
 
@@ -178,5 +178,53 @@ describe('SkeletonAvatar', () => {
 
       expect(container.querySelector('.animate-pulse')).toHaveClass('mr-2');
     });
+  });
+});
+
+// T5a: composed presets the G9 loading surfaces (LoadingDashboardAE) compose from
+describe('SkeletonCard', () => {
+  it('renders a bordered/raised box containing several inner shimmer blocks', () => {
+    const { container } = render(<SkeletonCard />);
+
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveClass('border');
+    // multiple inner shimmer lines
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('is hidden from screen readers', () => {
+    const { container } = render(<SkeletonCard />);
+
+    expect(container.firstChild).toHaveAttribute('aria-hidden', 'true');
+    expect(container.firstChild).toHaveAttribute('role', 'presentation');
+  });
+
+  it('applies a custom className to the root', () => {
+    const { container } = render(<SkeletonCard className="mt-4" />);
+
+    expect(container.firstChild).toHaveClass('mt-4');
+  });
+});
+
+describe('SkeletonRow', () => {
+  it('renders a horizontal arrangement of shimmer chips', () => {
+    const { container } = render(<SkeletonRow />);
+
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveClass('flex');
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('is hidden from screen readers', () => {
+    const { container } = render(<SkeletonRow />);
+
+    expect(container.firstChild).toHaveAttribute('aria-hidden', 'true');
+    expect(container.firstChild).toHaveAttribute('role', 'presentation');
+  });
+
+  it('applies a custom className to the root', () => {
+    const { container } = render(<SkeletonRow className="mb-2" />);
+
+    expect(container.firstChild).toHaveClass('mb-2');
   });
 });

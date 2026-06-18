@@ -39,7 +39,7 @@ describe('CreateSectionModal', () => {
   it('renders the modal with form fields', () => {
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    expect(screen.getByText('Create New Section')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /new section/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/section name/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create section/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
@@ -53,13 +53,12 @@ describe('CreateSectionModal', () => {
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes modal when clicking outside the modal content', () => {
+  it('closes modal when clicking the backdrop', () => {
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    const backdrop = screen.getByText('Create New Section').closest('div')?.parentElement?.parentElement;
-    if (backdrop) {
-      fireEvent.click(backdrop);
-    }
+    // The Modal backdrop is the dialog element; clicking it (target === currentTarget) closes.
+    const backdrop = screen.getByRole('dialog');
+    fireEvent.click(backdrop);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
@@ -67,10 +66,8 @@ describe('CreateSectionModal', () => {
   it('does not close modal when clicking inside the modal content', () => {
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    const modalContent = screen.getByText('Create New Section').parentElement;
-    if (modalContent) {
-      fireEvent.click(modalContent);
-    }
+    const heading = screen.getByRole('heading', { name: /new section/i });
+    fireEvent.click(heading);
 
     expect(mockOnClose).not.toHaveBeenCalled();
   });
@@ -78,7 +75,7 @@ describe('CreateSectionModal', () => {
   it('shows validation error when submitting empty form', async () => {
     render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    const form = screen.getByRole('button', { name: /create section/i }).closest('form');
+    const form = screen.getByLabelText(/section name/i).closest('form');
     if (form) {
       fireEvent.submit(form);
     }
@@ -136,6 +133,13 @@ describe('CreateSectionModal', () => {
         name: 'Section A',
       });
     });
+  });
+
+  it('exposes the section-name input under its stable id', () => {
+    render(<CreateSectionModal class_id={class_id} onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+
+    const nameInput = screen.getByLabelText(/section name/i);
+    expect(nameInput).toHaveAttribute('id', 'section-name');
   });
 
   it('shows loading state while creating section', async () => {
@@ -198,7 +202,7 @@ describe('CreateSectionModal', () => {
     const nameInput = screen.getByLabelText(/section name/i);
     fireEvent.change(nameInput, { target: { value: 'Section A' } });
 
-    const form = screen.getByRole('button', { name: /create section/i }).closest('form');
+    const form = screen.getByLabelText(/section name/i).closest('form');
     fireEvent.submit(form!);
 
     // Wait for createSection to be called

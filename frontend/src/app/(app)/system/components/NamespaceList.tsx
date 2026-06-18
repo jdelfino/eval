@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
+import { Banner } from '@/components/ui/Banner';
 
 interface NamespaceListProps {
   namespaces: NamespaceWithStats[];
@@ -86,7 +86,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
   if (namespaces.length === 0) {
     return (
       <Card variant="outlined" className="text-center p-12">
-        <p className="text-gray-500">
+        <p className="text-fg-muted">
           No namespaces found. Create your first namespace to get started.
         </p>
       </Card>
@@ -99,7 +99,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
         <Card
           key={namespace.id}
           variant="outlined"
-          className={`p-6 ${!namespace.active ? 'bg-gray-50 opacity-70' : ''}`}
+          className={`p-6 ${!namespace.active ? 'bg-bg-sunken opacity-70' : ''}`}
         >
           {/* Namespace Header */}
           <div className="mb-4">
@@ -137,7 +137,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
                     <h3 className="text-lg font-semibold mb-1">
                       {namespace.display_name}
                     </h3>
-                    <div className="text-sm text-gray-500 font-mono">
+                    <div className="text-sm text-fg-muted font-mono" data-testid="namespace-id">
                       {namespace.id}
                     </div>
                   </div>
@@ -150,41 +150,43 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
           </div>
 
           {/* Namespace Info */}
-          <div className="flex gap-8 mb-4 pb-4 border-b border-gray-200 text-sm text-gray-500">
+          <div className="flex gap-8 mb-4 pb-4 border-b border-border text-sm text-fg-muted">
             <div>
-              <strong className="text-gray-700">Users:</strong> {namespace.userCount}
+              <strong className="text-fg">Users:</strong> {namespace.userCount}
             </div>
             <div>
-              <strong className="text-gray-700">Created:</strong> {new Date(namespace.created_at).toLocaleDateString()}
+              <strong className="text-fg">Created:</strong> {new Date(namespace.created_at).toLocaleDateString()}
             </div>
           </div>
 
           {/* Actions */}
           {deletingId === namespace.id ? (
-            <Alert variant="warning" className="p-4">
-              <p className="font-medium mb-3">
-                Are you sure you want to delete this namespace? This will deactivate it.
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleConfirmDelete(namespace.id)}
-                  disabled={actionLoading}
-                  loading={actionLoading}
-                >
-                  {actionLoading ? 'Deleting...' : 'Yes, Delete'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleCancelDelete}
-                  disabled={actionLoading}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </Alert>
+            <Banner
+              tone="warn"
+              icon="alert"
+              title="Are you sure you want to delete this namespace? This will deactivate it."
+              action={
+                <div className="flex gap-2">
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleConfirmDelete(namespace.id)}
+                    disabled={actionLoading}
+                    loading={actionLoading}
+                  >
+                    {actionLoading ? 'Deleting...' : 'Yes, Delete'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleCancelDelete}
+                    disabled={actionLoading}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              }
+            />
           ) : (
             <div className="flex gap-2 flex-wrap">
               <Button

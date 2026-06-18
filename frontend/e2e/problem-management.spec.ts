@@ -162,9 +162,11 @@ test.describe('Problem Management', () => {
     ).not.toBeVisible({ timeout: 10000 });
 
     // The library may show the empty state (since we created exactly one problem)
-    // Note: the class still exists so the library stays visible, just empty
+    // Note: the class still exists so the library stays visible, just empty.
+    // G9 (eval-cej.25.9): the hand-rolled empty markup was migrated onto the
+    // shared EmptyState primitive, which renders the title as an <h2>.
     await expect(
-      page.locator('h3:has-text("No problems yet")')
+      page.locator('h2:has-text("No problems yet")')
     ).toBeVisible({ timeout: 10000 });
 
     // Suppress the unused variable warning — apiProblem.id is used above

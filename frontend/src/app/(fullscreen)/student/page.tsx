@@ -26,6 +26,7 @@ import { deriveDrawerModeBase } from '@/lib/drawerState';
 import StudentNewProblemBanner from './components/StudentNewProblemBanner';
 import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { mapToDotStatus } from '@/lib/connectionStatus';
+import { ReconnectingBanner } from '@/components/workspace/ReconnectingBanner';
 import type { DrawerMode, DrawerFailure, DrawerRuntimeError } from '@/components/workspace/Drawer';
 
 // ─── Drawer mode derivation ──────────────────────────────────────────────────
@@ -715,10 +716,29 @@ function StudentPage() {
           </div>
         </div>
       )}
-      {connectionError && mode === 'live' && (
+      {/* Legacy connection-error strip. ReconnectingBanner (below) now OWNS the
+          lost-link surface in live mode for the 'failed'/'disconnected' states —
+          and useRealtimeSession only ever sets connectionError alongside
+          connectionStatus==='failed' — so suppress this alert whenever the banner
+          would cover it, to avoid a double banner. */}
+      {connectionError &&
+        mode === 'live' &&
+        connectionStatus !== 'failed' &&
+        connectionStatus !== 'disconnected' && (
         <ErrorAlert
           error={connectionError}
           variant="warning"
+          className="mx-3 my-1 flex-shrink-0"
+        />
+      )}
+      {/* Realtime-link reconnecting banner. Mirrors the ConnectionDot gate
+          (mode === 'live' && joined); ReconnectingBanner itself only renders on a
+          genuine lost-link transition (failed, or disconnected-after-connected),
+          returning null otherwise. Purely additive — the shell below stays mounted
+          and run/autosave (HTTP) are never gated on this. */}
+      {mode === 'live' && joined && (
+        <ReconnectingBanner
+          connectionStatus={connectionStatus}
           className="mx-3 my-1 flex-shrink-0"
         />
       )}

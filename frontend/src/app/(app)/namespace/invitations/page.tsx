@@ -18,7 +18,7 @@ import type { SerializedInvitation } from '@/lib/api/invitations';
 import InvitationList from '@/components/InvitationList';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
+import { Banner } from '@/components/ui/Banner';
 
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -146,16 +146,16 @@ function InvitationsPageContent() {
 
       {/* Success Message */}
       {successMessage && (
-        <Alert variant="success" className="mb-6" dismissible onDismiss={() => setSuccessMessage('')}>
-          {successMessage}
-        </Alert>
+        <div className="mb-6">
+          <Banner tone="run" icon="check" title={successMessage} onDismiss={() => setSuccessMessage('')} />
+        </div>
       )}
 
       {/* Global Error */}
       {error && (
-        <Alert variant="error" className="mb-6" dismissible onDismiss={() => setError(null)}>
-          {error}
-        </Alert>
+        <div className="mb-6">
+          <Banner tone="danger" icon="alert" title={error} onDismiss={() => setError(null)} />
+        </div>
       )}
 
       {/* Actions Bar */}

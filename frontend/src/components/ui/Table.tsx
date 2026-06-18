@@ -86,7 +86,7 @@ const TableHeader = forwardRef<HTMLTableSectionElement, TableHeaderProps>(
     return (
       <thead
         ref={ref}
-        className={cn('bg-gray-50', className)}
+        className={cn('bg-bg-sunken', className)}
         {...props}
       >
         {children}
@@ -104,7 +104,7 @@ const TableBody = forwardRef<HTMLTableSectionElement, TableBodyProps>(
     return (
       <tbody
         ref={ref}
-        className={cn('divide-y divide-gray-200', className)}
+        className={cn('divide-y divide-border', className)}
         {...props}
       >
         {children}
@@ -122,7 +122,7 @@ const TableRow = forwardRef<HTMLTableRowElement, TableRowProps>(
     return (
       <tr
         ref={ref}
-        className={cn('hover:bg-gray-50 transition-colors', className)}
+        className={cn('hover:bg-bg-sunken transition-colors', className)}
         {...props}
       >
         {children}
@@ -141,7 +141,7 @@ const TableHeaderCell = forwardRef<HTMLTableCellElement, TableHeaderCellProps>(
       <th
         ref={ref}
         className={cn(
-          'px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider',
+          'px-4 py-3 text-xs font-medium text-fg-muted uppercase tracking-wider',
           alignmentStyles[align],
           className
         )}
@@ -163,7 +163,7 @@ const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(
       <td
         ref={ref}
         className={cn(
-          'px-4 py-3 text-sm text-gray-900',
+          'px-4 py-3 text-sm text-fg',
           alignmentStyles[align],
           className
         )}
@@ -209,7 +209,7 @@ const TableBase = forwardRef<HTMLTableElement, TableProps>(
       <div className="overflow-x-auto">
         <table
           ref={ref}
-          className={cn('min-w-full divide-y divide-gray-200', className)}
+          className={cn('min-w-full divide-y divide-border', className)}
           {...props}
         >
           {children}

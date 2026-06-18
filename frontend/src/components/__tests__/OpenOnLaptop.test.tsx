@@ -127,6 +127,62 @@ describe('OpenOnLaptop', () => {
     expect(button).toBeEnabled();
   });
 
+  it('falls back to execCommand and confirms the copy when the Clipboard API is absent (insecure context)', async () => {
+    /**
+     * Contract: in an insecure context navigator.clipboard is undefined. The copy
+     * affordance must still communicate success — it falls back to
+     * document.execCommand('copy') and flips the button to "Link copied" so the
+     * button never silently no-ops. Catches: the G8 silent-no-op regression.
+     */
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    const execCommand = jest.fn().mockReturnValue(true);
+    Object.defineProperty(document, 'execCommand', {
+      value: execCommand,
+      configurable: true,
+      writable: true,
+    });
+
+    render(<OpenOnLaptop />);
+    fireEvent.click(screen.getByRole('button', { name: /copy link/i }));
+
+    expect(execCommand).toHaveBeenCalledWith('copy');
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /link copied/i })).toBeInTheDocument();
+    });
+  });
+
+  it('reveals the URL as selectable text when no copy mechanism succeeds', async () => {
+    /**
+     * Contract: when both the Clipboard API and execCommand are unavailable/fail,
+     * the affordance degrades to showing the current URL as selectable text so the
+     * user can still copy it manually — the affordance never dead-ends silently.
+     * Catches: the insecure-context dead-end.
+     */
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+    const execCommand = jest.fn().mockReturnValue(false);
+    Object.defineProperty(document, 'execCommand', {
+      value: execCommand,
+      configurable: true,
+      writable: true,
+    });
+
+    render(<OpenOnLaptop />);
+    fireEvent.click(screen.getByRole('button', { name: /copy link/i }));
+
+    // The fallback exposes window.location.href as selectable text.
+    await waitFor(() => {
+      expect(screen.getByText(window.location.href)).toBeInTheDocument();
+    });
+  });
+
   it('gives the Copy link button a >=44px touch target', () => {
     render(<OpenOnLaptop />);
     const button = screen.getByRole('button', { name: /copy link/i });
