@@ -30,6 +30,26 @@ export interface ModalProps {
   backdropTestId?: string;
   /** Optional data-testid for the content (panel) node. */
   contentTestId?: string;
+  /**
+   * Override the auto-generated id placed on the heading title node and pointed
+   * at by aria-labelledby. ConfirmDialog uses this to preserve its stable
+   * `confirm-dialog-title` id.
+   */
+  titleId?: string;
+  /** Value for the dialog's aria-describedby attribute, if any. */
+  'aria-describedby'?: string;
+  /**
+   * When set, renders a dedicated aria-hidden backdrop layer inside the dialog
+   * carrying this data-testid; clicking it calls onClose. Lets ConfirmDialog
+   * preserve its `confirm-dialog-backdrop` aria-hidden node.
+   */
+  innerBackdropTestId?: string;
+  /**
+   * CSS selector (queried within the panel) for the element to focus on open,
+   * instead of the first focusable element. ConfirmDialog uses this to focus
+   * its confirm button rather than the close (X) button.
+   */
+  initialFocusSelector?: string;
 }
 
 const TONE_MAP: Record<ModalTone, { bg: string; fg: string }> = {
@@ -64,10 +84,15 @@ export function Modal({
   role = 'dialog',
   backdropTestId,
   contentTestId,
+  titleId: titleIdProp,
+  'aria-describedby': ariaDescribedBy,
+  innerBackdropTestId,
+  initialFocusSelector,
 }: ModalProps): React.ReactElement | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<Element | null>(null);
-  const titleId = useId();
+  const generatedTitleId = useId();
+  const titleId = titleIdProp ?? generatedTitleId;
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -90,9 +115,13 @@ export function Modal({
     // Focus the first focusable element in the panel (the close button) once
     // the portal content is rendered.
     const timer = setTimeout(() => {
-      const focusTarget = panelRef.current?.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
+      const focusTarget =
+        (initialFocusSelector
+          ? panelRef.current?.querySelector<HTMLElement>(initialFocusSelector)
+          : null) ??
+        panelRef.current?.querySelector<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
       focusTarget?.focus();
     }, 0);
 
@@ -107,7 +136,7 @@ export function Modal({
         previousActiveElement.current.focus();
       }
     };
-  }, [open, handleKeyDown]);
+  }, [open, handleKeyDown, initialFocusSelector]);
 
   if (!open || typeof document === 'undefined') {
     return null;
@@ -120,6 +149,7 @@ export function Modal({
       role={role}
       aria-modal="true"
       aria-labelledby={titleId}
+      aria-describedby={ariaDescribedBy}
       style={{
         position: 'fixed',
         inset: 0,
@@ -138,10 +168,19 @@ export function Modal({
         }
       }}
     >
+      {innerBackdropTestId && (
+        <div
+          aria-hidden="true"
+          data-testid={innerBackdropTestId}
+          onClick={onClose}
+          style={{ position: 'absolute', inset: 0 }}
+        />
+      )}
       <div
         ref={panelRef}
         data-testid={contentTestId}
         style={{
+          position: 'relative',
           width,
           maxWidth: '100%',
           maxHeight: '100%',

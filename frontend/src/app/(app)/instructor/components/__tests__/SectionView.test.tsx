@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import SectionView from '../SectionView';
 
 // Mock API functions
@@ -427,6 +428,63 @@ describe('SectionView', () => {
     fireEvent.click(createButton);
 
     expect(mockOnCreateSession).toHaveBeenCalledWith('section-1', 'Section A');
+  });
+
+  /**
+   * Delete-section type-to-confirm wiring (eval-cej.23.2). Verifies the confirm
+   * dialog requires the operator to type the section's join code before the
+   * Delete button enables, and only then calls deleteSection. Catches an
+   * accidental no-phrase delete (the whole point of type-to-confirm).
+   */
+  describe('delete section type-to-confirm', () => {
+    const sections = [
+      {
+        id: 'section-1',
+        namespace_id: 'ns-1',
+        class_id: 'class-1',
+        name: 'Section A',
+        semester: null,
+        join_code: 'ABC123',
+        active: true,
+        created_at: '2025-01-01T00:00:00Z',
+        updated_at: '2025-01-01T00:00:00Z',
+      },
+    ];
+
+    it('opens a confirm requiring the section join code before delete is callable', async () => {
+      mockGetClassSections.mockResolvedValue(sections);
+      mockDeleteSection.mockResolvedValue(undefined);
+
+      const user = userEvent.setup();
+      render(<SectionView {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Section A')).toBeInTheDocument();
+      });
+
+      // Open the delete confirm.
+      fireEvent.click(screen.getByRole('button', { name: 'Delete section' }));
+
+      // The phrase field is present and Delete starts disabled.
+      const phraseInput = document.querySelector('#confirm-phrase') as HTMLInputElement;
+      expect(phraseInput).toBeInTheDocument();
+      const deleteButton = screen.getByRole('button', { name: 'Delete' });
+      expect(deleteButton).toBeDisabled();
+
+      // Clicking the (disabled) Delete does nothing.
+      fireEvent.click(deleteButton);
+      expect(mockDeleteSection).not.toHaveBeenCalled();
+
+      // Type the section's join code; Delete enables and works.
+      await user.click(phraseInput);
+      await user.type(phraseInput, 'ABC-123');
+      expect(deleteButton).toBeEnabled();
+
+      fireEvent.click(deleteButton);
+      await waitFor(() => {
+        expect(mockDeleteSection).toHaveBeenCalledWith('section-1');
+      });
+    });
   });
 
   describe('CreateSectionModal integration', () => {

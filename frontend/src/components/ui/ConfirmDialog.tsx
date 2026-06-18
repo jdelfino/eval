@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { Button } from './Button';
+import { Modal } from './Modal';
+import { JoinCodeBoxes } from './JoinCodeBoxes';
+import { normalizeJoinCode, formatJoinCodeForDisplay } from '@/lib/join-code';
 
 /**
  * Confirm dialog variant options
@@ -30,17 +33,29 @@ export interface ConfirmDialogProps {
   onCancel: () => void;
   /** Whether the confirm action is in progress */
   loading?: boolean;
+  /**
+   * Optional type-to-confirm phrase (e.g. a section join code, "ABC-123").
+   * When set, a segmented input is shown and the confirm button stays disabled
+   * (and Enter is gated) until the typed value normalizes to this phrase.
+   */
+  confirmPhrase?: string;
 }
 
 /**
- * ConfirmDialog component for destructive action confirmations
+ * ConfirmDialog component for destructive action confirmations.
+ *
+ * Rebuilt on the Modal primitive: focus-trap, Escape-to-close, focus restore,
+ * body scroll-lock, and the portal/backdrop all come from Modal. ConfirmDialog
+ * preserves its stable public API and testids (`data-confirm-button`,
+ * `data-cancel-button`, `confirm-dialog-title`, `confirm-dialog-message`,
+ * `confirm-dialog-backdrop`) so its call sites stay untouched.
  *
  * Features:
- * - Modal overlay with focus trap
  * - Title and context-aware message
  * - Confirm/Cancel buttons with variant styling
  * - Keyboard support (Escape to cancel, Enter to confirm)
  * - Loading state support
+ * - Optional type-to-confirm gating via `confirmPhrase`
  *
  * @example
  * ```tsx
@@ -65,130 +80,114 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   loading = false,
+  confirmPhrase,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
-  const previousActiveElement = useRef<Element | null>(null);
+  const [typedPhrase, setTypedPhrase] = useState('');
 
-  // Handle keyboard events
+  const phraseRequired = typeof confirmPhrase === 'string' && confirmPhrase.length > 0;
+  const phraseMatches =
+    !phraseRequired ||
+    normalizeJoinCode(typedPhrase) === normalizeJoinCode(confirmPhrase as string);
+
+  const confirmDisabled = loading || !phraseMatches;
+
+  // Reset the typed phrase whenever the dialog opens (or closes), so a reopen
+  // never leaks the previously-typed value.
+  useEffect(() => {
+    setTypedPhrase('');
+  }, [open]);
+
+  // Enter-to-confirm (unless focus is on the cancel button), gated on loading
+  // and — when a phrase is required — on the phrase matching.
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!open) return;
+      if (event.key !== 'Enter' || confirmDisabled) return;
 
-      if (event.key === 'Escape') {
+      // Don't fire when the cancel button is focused (Enter there is a cancel).
+      const activeElement = document.activeElement;
+      if (!activeElement?.hasAttribute('data-cancel-button')) {
         event.preventDefault();
-        onCancel();
-      } else if (event.key === 'Enter' && !loading) {
-        // Only trigger if not focused on the cancel button
-        const activeElement = document.activeElement;
-        const cancelButton = dialogRef.current?.querySelector('[data-cancel-button]');
-        if (activeElement !== cancelButton) {
-          event.preventDefault();
-          onConfirm();
-        }
+        onConfirm();
       }
     },
-    [open, onCancel, onConfirm, loading]
+    [open, onConfirm, confirmDisabled]
   );
 
-  // Set up keyboard listeners and focus management
   useEffect(() => {
-    if (open) {
-      // Store the previously focused element
-      previousActiveElement.current = document.activeElement;
-
-      // Add keyboard listener
-      document.addEventListener('keydown', handleKeyDown);
-
-      // Focus the confirm button
-      // Use timeout to ensure the dialog is rendered
-      const timer = setTimeout(() => {
-        confirmButtonRef.current?.focus();
-      }, 0);
-
-      // Prevent body scroll
-      document.body.style.overflow = 'hidden';
-
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-        clearTimeout(timer);
-        document.body.style.overflow = '';
-
-        // Restore focus to the previously focused element
-        if (previousActiveElement.current instanceof HTMLElement) {
-          previousActiveElement.current.focus();
-        }
-      };
-    }
+    if (!open) return;
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, handleKeyDown]);
 
-  // Don't render anything if not open
   if (!open) {
     return null;
   }
 
   const confirmButtonVariant = variant === 'danger' ? 'danger' : 'primary';
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-dialog-title"
-      aria-describedby="confirm-dialog-message"
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 transition-opacity"
+  const footer = (
+    <>
+      <Button
+        variant="secondary"
         onClick={onCancel}
-        aria-hidden="true"
-        data-testid="confirm-dialog-backdrop"
-      />
-
-      {/* Dialog */}
-      <div
-        ref={dialogRef}
-        className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6 transform transition-all"
-        role="document"
+        disabled={loading}
+        data-cancel-button
       >
-        {/* Title */}
-        <h2
-          id="confirm-dialog-title"
-          className="text-lg font-semibold text-gray-900 mb-2"
-        >
-          {title}
-        </h2>
+        {cancelLabel}
+      </Button>
+      <Button
+        variant={confirmButtonVariant}
+        onClick={onConfirm}
+        loading={loading}
+        disabled={confirmDisabled}
+        data-confirm-button
+      >
+        {confirmLabel}
+      </Button>
+    </>
+  );
 
-        {/* Message */}
-        <p
-          id="confirm-dialog-message"
-          className="text-sm text-gray-600 mb-6"
-        >
+  return (
+    <Modal
+      open={open}
+      title={title}
+      tone={variant === 'danger' ? 'danger' : undefined}
+      onClose={onCancel}
+      footer={footer}
+      titleId="confirm-dialog-title"
+      aria-describedby="confirm-dialog-message"
+      innerBackdropTestId="confirm-dialog-backdrop"
+      initialFocusSelector="[data-confirm-button]"
+    >
+      <div>
+        <p id="confirm-dialog-message" style={{ margin: 0 }}>
           {message}
         </p>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-3">
-          <Button
-            variant="secondary"
-            onClick={onCancel}
-            disabled={loading}
-            data-cancel-button
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            ref={confirmButtonRef}
-            variant={confirmButtonVariant}
-            onClick={onConfirm}
-            loading={loading}
-            data-confirm-button
-          >
-            {confirmLabel}
-          </Button>
-        </div>
+        {phraseRequired && (
+          <div style={{ marginTop: 16 }}>
+            <label
+              htmlFor="confirm-phrase"
+              style={{
+                display: 'block',
+                fontSize: 12,
+                color: 'var(--fg-muted)',
+                marginBottom: 8,
+              }}
+            >
+              Type &ldquo;{formatJoinCodeForDisplay(confirmPhrase as string)}&rdquo; to confirm
+            </label>
+            <JoinCodeBoxes
+              id="confirm-phrase"
+              size="md"
+              value={typedPhrase}
+              onChange={setTypedPhrase}
+              aria-label="Type the confirmation phrase"
+            />
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 

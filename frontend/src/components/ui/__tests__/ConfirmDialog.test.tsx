@@ -280,60 +280,179 @@ describe('ConfirmDialog', () => {
     });
   });
 
+  // Rewritten for the Modal-based rebuild (plan-review amendment m4): the old
+  // hand-rolled Tailwind shell (bg-white / rounded-lg / shadow-xl / max-w-md /
+  // z-50 / bg-black/50) is replaced by the Modal primitive's portal +
+  // CSS-var-styled panel + blurred backdrop. We now assert the Modal contract
+  // that ConfirmDialog must keep wiring up, not the obsolete utility classes.
   describe('styling', () => {
-    it('should have modal overlay styling', () => {
+    it('should render through a portal on document.body (not the render container)', () => {
+      const { container } = render(<ConfirmDialog {...defaultProps} />);
+
+      // Portal escapes the React render container.
+      expect(container).not.toHaveTextContent(defaultProps.message);
+      expect(document.body).toHaveTextContent(defaultProps.message);
+    });
+
+    it('should render a blurred, fixed backdrop overlay', () => {
       render(<ConfirmDialog {...defaultProps} />);
 
       const dialog = screen.getByRole('dialog');
-      expect(dialog).toHaveClass('fixed');
-      expect(dialog).toHaveClass('inset-0');
-      expect(dialog).toHaveClass('z-50');
+      expect(dialog).toHaveStyle({ position: 'fixed' });
+      expect(dialog.style.backdropFilter).toBe('blur(2px)');
     });
 
-    it('should have backdrop with semi-transparent background', () => {
-      render(<ConfirmDialog {...defaultProps} />);
+    it('should render the danger tone chip for the danger variant', () => {
+      render(<ConfirmDialog {...defaultProps} variant="danger" />);
 
-      const backdrop = screen.getByTestId('confirm-dialog-backdrop');
-      expect(backdrop).toHaveClass('bg-black/50');
+      const chip = Array.from(
+        document.body.querySelectorAll<HTMLElement>('div')
+      ).find((el) => el.style.background === 'var(--danger-soft)');
+      expect(chip).toBeTruthy();
     });
 
-    it('should have dialog panel styling', () => {
-      render(<ConfirmDialog {...defaultProps} />);
+    it('should not render a tone chip for the default variant', () => {
+      render(<ConfirmDialog {...defaultProps} variant="default" />);
 
-      const panel = screen.getByRole('document');
-      expect(panel).toHaveClass('bg-white');
-      expect(panel).toHaveClass('rounded-lg');
-      expect(panel).toHaveClass('shadow-xl');
-      expect(panel).toHaveClass('max-w-md');
+      const chip = Array.from(
+        document.body.querySelectorAll<HTMLElement>('div')
+      ).find((el) => /-soft\)$/.test(el.style.background));
+      expect(chip).toBeUndefined();
     });
 
-    it('should have proper title styling', () => {
+    it('should render the title as a heading and the message as a paragraph', () => {
       render(<ConfirmDialog {...defaultProps} />);
 
-      const title = screen.getByRole('heading');
-      expect(title).toHaveClass('text-lg');
-      expect(title).toHaveClass('font-semibold');
-      expect(title).toHaveClass('text-gray-900');
-    });
-
-    it('should have proper message styling', () => {
-      render(<ConfirmDialog {...defaultProps} />);
-
+      expect(screen.getByRole('heading', { name: defaultProps.title })).toBeInTheDocument();
       const message = screen.getByText(defaultProps.message);
-      expect(message).toHaveClass('text-sm');
-      expect(message).toHaveClass('text-gray-600');
+      expect(message.tagName).toBe('P');
+    });
+  });
+
+  /**
+   * Type-to-confirm gating (confirmPhrase). Verifies the destructive-action
+   * guard: the confirm button stays disabled until the user types the exact
+   * phrase (normalized), Enter cannot bypass it, and reopening resets the typed
+   * value. This is what protects section deletes from accidental confirmation.
+   */
+  describe('type-to-confirm (confirmPhrase)', () => {
+    const phraseProps = {
+      open: true,
+      title: 'Delete Section',
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger' as const,
+      confirmPhrase: 'ABC-123',
+    };
+
+    const typePhrase = async (value: string) => {
+      const input = document.querySelector('#confirm-phrase') as HTMLInputElement;
+      expect(input).toBeInTheDocument();
+      const user = userEvent.setup();
+      await user.click(input);
+      await user.type(input, value);
+    };
+
+    it('renders the type-to-confirm input with id="confirm-phrase"', () => {
+      render(
+        <ConfirmDialog {...phraseProps} onConfirm={jest.fn()} onCancel={jest.fn()} />
+      );
+
+      expect(document.querySelector('#confirm-phrase')).toBeInTheDocument();
     });
 
-    it('should have proper button container styling', () => {
-      render(<ConfirmDialog {...defaultProps} />);
+    it('disables confirm initially and keeps it disabled for a wrong phrase', async () => {
+      render(
+        <ConfirmDialog {...phraseProps} onConfirm={jest.fn()} onCancel={jest.fn()} />
+      );
 
-      const confirmButton = screen.getByRole('button', { name: 'Confirm' });
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
-      const buttonContainer = confirmButton.parentElement;
+      const confirmButton = screen.getByRole('button', { name: 'Delete' });
+      expect(confirmButton).toBeDisabled();
 
-      expect(buttonContainer).toHaveClass('flex');
-      expect(buttonContainer).toHaveClass('justify-end');
-      expect(buttonContainer).toHaveClass('gap-3');
+      await typePhrase('XYZ-999');
+      expect(confirmButton).toBeDisabled();
+    });
+
+    it('enables confirm and fires onConfirm once the exact phrase is typed', async () => {
+      const onConfirm = jest.fn();
+      render(
+        <ConfirmDialog {...phraseProps} onConfirm={onConfirm} onCancel={jest.fn()} />
+      );
+
+      const confirmButton = screen.getByRole('button', { name: 'Delete' });
+
+      await typePhrase('ABC-123');
+      expect(confirmButton).toBeEnabled();
+
+      fireEvent.click(confirmButton);
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('matches the phrase case- and format-insensitively (normalizeJoinCode)', async () => {
+      render(
+        <ConfirmDialog {...phraseProps} onConfirm={jest.fn()} onCancel={jest.fn()} />
+      );
+
+      const confirmButton = screen.getByRole('button', { name: 'Delete' });
+      // Lowercase, no dash — still matches via normalizeJoinCode.
+      await typePhrase('abc123');
+      expect(confirmButton).toBeEnabled();
+    });
+
+    it('does not fire onConfirm on Enter while the phrase is incomplete', async () => {
+      const onConfirm = jest.fn();
+      render(
+        <ConfirmDialog {...phraseProps} onConfirm={onConfirm} onCancel={jest.fn()} />
+      );
+
+      await typePhrase('AB');
+      fireEvent.keyDown(document, { key: 'Enter' });
+      expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('fires onConfirm on Enter once the phrase matches', async () => {
+      const onConfirm = jest.fn();
+      render(
+        <ConfirmDialog {...phraseProps} onConfirm={onConfirm} onCancel={jest.fn()} />
+      );
+
+      await typePhrase('ABC-123');
+      fireEvent.keyDown(document, { key: 'Enter' });
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('resets the typed phrase when reopened (confirm disabled again)', async () => {
+      const { rerender } = render(
+        <ConfirmDialog {...phraseProps} onConfirm={jest.fn()} onCancel={jest.fn()} />
+      );
+
+      await typePhrase('ABC-123');
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+
+      // Close then reopen.
+      rerender(
+        <ConfirmDialog {...phraseProps} open={false} onConfirm={jest.fn()} onCancel={jest.fn()} />
+      );
+      rerender(
+        <ConfirmDialog {...phraseProps} open={true} onConfirm={jest.fn()} onCancel={jest.fn()} />
+      );
+
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    });
+
+    it('does not gate the confirm button when confirmPhrase is omitted', () => {
+      render(
+        <ConfirmDialog
+          open
+          title="End Session"
+          message="Are you sure?"
+          onConfirm={jest.fn()}
+          onCancel={jest.fn()}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Confirm' })).toBeEnabled();
+      expect(document.querySelector('#confirm-phrase')).not.toBeInTheDocument();
     });
   });
 
