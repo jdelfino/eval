@@ -226,7 +226,7 @@ For more information, see [Python docs](https://docs.python.org).`;
     it('applies dark theme to links', () => {
       render(<MarkdownContent content="[Link](https://example.com)" darkTheme={true} />);
       const link = screen.getByRole('link');
-      expect(link).toHaveClass('text-blue-400');
+      expect(link).toHaveClass('text-accent');
     });
   });
 

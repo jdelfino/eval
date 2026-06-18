@@ -270,5 +270,29 @@ describe('Button', () => {
       const button = screen.getByRole('button', { name: 'Cancel' });
       expect(button).toHaveStyle({ color: 'var(--fg-muted)' });
     });
+
+    /**
+     * Canonical primary is the brand accent (eval-7lg). The legacy indigo/purple
+     * gradient was removed; primary must now render the --accent token background
+     * (identical treatment to the `accent` variant) so the default Button matches
+     * the redesign's orange brand color.
+     */
+    it('variant=primary renders with --accent background via inline style', () => {
+      render(<Button variant="primary">Save</Button>);
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).toHaveStyle({ background: 'var(--accent)' });
+    });
+
+    it('variant=primary renders with --accent-fg text color', () => {
+      render(<Button variant="primary">Save</Button>);
+      const button = screen.getByRole('button', { name: 'Save' });
+      expect(button).toHaveStyle({ color: 'var(--accent-fg)' });
+    });
+
+    it('default Button (no variant) renders with --accent background', () => {
+      render(<Button>Default</Button>);
+      const button = screen.getByRole('button', { name: 'Default' });
+      expect(button).toHaveStyle({ background: 'var(--accent)' });
+    });
   });
 });

@@ -70,7 +70,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+        <div className="animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full"></div>
       </div>
     );
   }
@@ -103,7 +103,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
           </p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-accent-fg hover:brightness-110 font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -130,7 +130,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
         <h2 className="text-2xl font-bold text-gray-900">Your Classes</h2>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
+          className="px-6 py-3 bg-accent text-accent-fg hover:brightness-110 font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -152,11 +152,11 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
             <button
               onClick={() => onSelectClass(classInfo.id)}
               disabled={deletingId === classInfo.id}
-              className="w-full text-left p-6 bg-white border-2 border-gray-200 rounded-xl shadow-sm hover:shadow-lg hover:border-blue-400 transition-all duration-200 transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full text-left p-6 bg-white border-2 border-gray-200 rounded-xl shadow-sm hover:shadow-lg hover:border-accent transition-all duration-200 transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 pr-12">
-                  <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{classInfo.name}</h3>
+                  <h3 className="text-xl font-bold text-gray-900 group-hover:text-accent-ink transition-colors">{classInfo.name}</h3>
                   {classInfo.description && (
                     <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                       {classInfo.description}
@@ -164,7 +164,7 @@ export default function ClassList({ onSelectClass }: ClassListProps) {
                   )}
                 </div>
                 <svg
-                  className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0"
+                  className="w-6 h-6 text-gray-400 group-hover:text-accent-ink transition-colors flex-shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"

@@ -216,7 +216,7 @@ export function InstructorDashboard({
         {canCreateClass && (
           <button
             onClick={() => setShowCreateClassModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center gap-2"
+            className="px-4 py-2 bg-accent text-accent-fg rounded-lg hover:brightness-110 transition-colors font-semibold flex items-center gap-2"
             data-testid="create-class-btn"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,7 +245,7 @@ export function InstructorDashboard({
             return (
               <div
                 key={section.id}
-                className="flex items-center justify-between gap-4 rounded-lg border border-blue-200 bg-gradient-to-b from-blue-50 to-white px-4 py-3"
+                className="flex items-center justify-between gap-4 rounded-lg border border-info bg-info-soft px-4 py-3"
               >
                 <div>
                   <SectionLabel style={{ color: 'var(--info)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -261,7 +261,7 @@ export function InstructorDashboard({
                 </div>
                 <button
                   onClick={() => onRejoinSession(section.currentSessionId!)}
-                  className="shrink-0 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                  className="shrink-0 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:brightness-110 transition-colors"
                   data-testid={`rejoin-session-${section.id}`}
                 >
                   Rejoin session
@@ -292,7 +292,7 @@ export function InstructorDashboard({
                   <Table.Cell>
                     <Link
                       href={`/classes/${classInfo.id}`}
-                      className="font-medium text-blue-600 hover:text-blue-900"
+                      className="font-medium text-accent-ink hover:underline"
                       data-testid={`class-link-${classInfo.id}`}
                     >
                       {classInfo.name}
@@ -317,7 +317,7 @@ export function InstructorDashboard({
                       {sectionIndex === 0 ? (
                         <Link
                           href={`/classes/${classInfo.id}`}
-                          className="font-medium text-blue-600 hover:text-blue-900"
+                          className="font-medium text-accent-ink hover:underline"
                           data-testid={`class-link-${classInfo.id}`}
                         >
                           {classInfo.name}
@@ -327,7 +327,7 @@ export function InstructorDashboard({
                     <Table.Cell>
                       <Link
                         href={`/sections/${section.id}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-900"
+                        className="text-sm font-medium text-accent-ink hover:underline"
                         data-testid={`section-link-${section.id}`}
                       >
                         {section.name}
@@ -355,7 +355,7 @@ export function InstructorDashboard({
                       {canCreateSession && !hasPointer && (
                         <button
                           onClick={() => onStartSession(section.id, section.name)}
-                          className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                          className="px-3 py-1.5 text-sm font-medium rounded-md bg-accent-soft text-accent-ink hover:brightness-105 transition-colors"
                           data-testid={`start-session-${section.id}`}
                         >
                           Start Session

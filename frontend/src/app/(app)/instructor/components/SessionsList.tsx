@@ -148,7 +148,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
           <p className="text-sm mt-2">{error}</p>
           <button
             onClick={fetchSessions}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="mt-4 px-4 py-2 bg-accent text-accent-fg rounded hover:brightness-110"
           >
             Retry
           </button>
@@ -176,7 +176,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
             >
               <option value="all">All Sessions</option>
               <option value="active">Active Only</option>
@@ -188,7 +188,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
               placeholder="Search by section..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 sm:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 sm:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
             />
           </div>
         </div>
@@ -234,7 +234,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
                 <div className="flex gap-2 sm:flex-col sm:justify-center">
                   <button
                     onClick={() => handleRejoin(session.id)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                    className="px-4 py-2 bg-accent text-accent-fg rounded-lg hover:brightness-110 transition-colors whitespace-nowrap"
                   >
                     Rejoin
                   </button>

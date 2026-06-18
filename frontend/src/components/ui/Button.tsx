@@ -36,22 +36,9 @@ const baseClasses = [
 ].join(' ');
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: [
-    'text-white',
-    'bg-gradient-to-r',
-    'from-indigo-600',
-    'to-purple-600',
-    'hover:from-indigo-700',
-    'hover:to-purple-700',
-    'focus:ring-indigo-500',
-    'shadow-lg',
-    'hover:shadow-xl',
-    'transform',
-    'hover:-translate-y-0.5',
-    'active:translate-y-0',
-    'border',
-    'border-transparent',
-  ].join(' '),
+  // Canonical primary is the brand accent (token-driven). Styling is applied via
+  // variantInlineStyles below, matching the `accent` variant.
+  primary: '',
   secondary: [
     'text-gray-700',
     'bg-white',
@@ -86,7 +73,16 @@ const variantClasses: Record<ButtonVariant, string> = {
  * from the F1 design token layer (globals.css) which Tailwind utility classes
  * cannot reference directly. Existing Tailwind variants are untouched.
  */
+const accentInlineStyle: React.CSSProperties = {
+  background: 'var(--accent)',
+  color: 'var(--accent-fg)',
+  borderRadius: 'var(--radius)',
+  fontWeight: 600,
+};
+
 const variantInlineStyles: Partial<Record<ButtonVariant, React.CSSProperties>> = {
+  // Canonical primary === accent (brand).
+  primary: accentInlineStyle,
   run: {
     background: 'var(--run)',
     color: 'var(--accent-fg)',
@@ -98,12 +94,7 @@ const variantInlineStyles: Partial<Record<ButtonVariant, React.CSSProperties>> =
     color: 'var(--fg-muted)',
     border: '1px solid var(--border)',
   },
-  accent: {
-    background: 'var(--accent)',
-    color: 'var(--accent-fg)',
-    borderRadius: 'var(--radius)',
-    fontWeight: 600,
-  },
+  accent: accentInlineStyle,
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

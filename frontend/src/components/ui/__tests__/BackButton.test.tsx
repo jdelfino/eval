@@ -160,7 +160,7 @@ describe('BackButton', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveClass('focus:outline-none');
       expect(button).toHaveClass('focus:ring-2');
-      expect(button).toHaveClass('focus:ring-indigo-500');
+      expect(button).toHaveClass('focus:ring-accent');
       expect(button).toHaveClass('focus:ring-offset-2');
     });
 

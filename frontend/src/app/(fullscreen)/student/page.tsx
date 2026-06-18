@@ -644,7 +644,7 @@ function StudentPage() {
       <main className="p-8 text-center">
         <h1 className="text-2xl font-bold mb-4">No Student Work</h1>
         <p className="text-gray-600 mb-4">Please navigate to a problem from your section page.</p>
-        <Link href="/" className="text-blue-600 hover:text-blue-700 underline">
+        <Link href="/" className="text-accent-ink hover:underline underline">
           Go to Home
         </Link>
       </main>
@@ -678,7 +678,7 @@ function StudentPage() {
             onDismiss={() => setError(null)}
           />
         </div>
-        <Link href="/" className="text-blue-600 hover:text-blue-700 underline mt-4 inline-block">
+        <Link href="/" className="text-accent-ink hover:underline underline mt-4 inline-block">
           Go to Home
         </Link>
       </main>

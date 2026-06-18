@@ -144,7 +144,7 @@ export default function StartSessionModal({
                 disabled={loading}
                 className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
                   selectedOption === 'blank'
-                    ? 'border-blue-500 bg-blue-50'
+                    ? 'border-accent bg-accent-soft'
                     : 'border-gray-200 hover:border-gray-300'
                 } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
@@ -180,7 +180,7 @@ export default function StartSessionModal({
                         disabled={loading}
                         className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
                           selectedOption === problem.id
-                            ? 'border-blue-500 bg-blue-50'
+                            ? 'border-accent bg-accent-soft'
                             : 'border-gray-200 hover:border-gray-300'
                         } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >

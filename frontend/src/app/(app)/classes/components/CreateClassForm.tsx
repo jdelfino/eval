@@ -56,7 +56,7 @@ export default function CreateClassForm({ onSubmit, onCancel }: CreateClassFormP
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., CS 101 - Intro to Programming"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             disabled={submitting}
             required
           />
@@ -72,7 +72,7 @@ export default function CreateClassForm({ onSubmit, onCancel }: CreateClassFormP
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional description of the class..."
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             disabled={submitting}
           />
         </div>
@@ -89,7 +89,7 @@ export default function CreateClassForm({ onSubmit, onCancel }: CreateClassFormP
           <button
             type="submit"
             disabled={submitting || !name.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-accent text-accent-fg rounded-md hover:brightness-110 disabled:opacity-50"
           >
             {submitting ? 'Creating...' : 'Create Class'}
           </button>

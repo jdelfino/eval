@@ -223,7 +223,7 @@ export default function StudentDetailPage() {
                       <button
                         type="button"
                         data-testid={`view-code-${session.session_id}`}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap"
+                        className="text-xs text-accent-ink hover:underline font-medium whitespace-nowrap"
                         onClick={() => toggleExpand(workSummary.problem.id)}
                       >
                         View code →

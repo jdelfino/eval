@@ -60,7 +60,7 @@ export default function SessionControls({
   }, [sectionId, onEndSession]);
 
   return (
-    <div className="bg-white border border-blue-200 rounded-lg shadow-sm px-4 py-2" data-testid="active-session-header">
+    <div className="bg-white border border-info rounded-lg shadow-sm px-4 py-2" data-testid="active-session-header">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           {join_code && (
@@ -68,7 +68,7 @@ export default function SessionControls({
               onClick={handleCopyCode}
               title="Copy join code"
               data-testid="session-controls-copy-code"
-              className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-sm font-mono font-bold rounded-lg hover:bg-blue-200 transition-colors"
+              className="inline-flex items-center px-3 py-1 bg-accent-soft text-accent-ink text-sm font-mono font-bold rounded-lg hover:brightness-105 transition-colors"
             >
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
@@ -87,7 +87,7 @@ export default function SessionControls({
         <div className="flex flex-wrap gap-2">
           <button
             onClick={handleOpenPublicView}
-            className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-300 rounded-lg hover:bg-blue-100 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-accent-ink bg-accent-soft border border-accent rounded-lg hover:brightness-105 transition-colors"
             title="Open public view in a new window to display student code to the class"
           >
             Open Public View

@@ -300,7 +300,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -373,7 +373,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
                 id="class-picker"
                 value={selectedClassId}
                 onChange={(e) => handleClassChange(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 <option value="">All classes</option>
                 {classes.map((c) => (
@@ -398,7 +398,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
           {onCreateNew && (
             <button
               onClick={onCreateNew}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-accent text-accent-fg rounded-lg hover:brightness-110 transition-colors flex items-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -421,7 +421,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
           placeholder="Search problems by title..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
         />
 
         <div className="flex items-center gap-2">
@@ -433,7 +433,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
             aria-label="Sort by"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'title' | 'created' | 'updated')}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
           >
             <option value="created">Date Created</option>
             <option value="updated">Last Updated</option>
@@ -502,7 +502,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
                   <Table.Cell>
                     <Link
                       href={`/instructor/problems/${problem.id}`}
-                      className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                      className="font-medium text-gray-900 hover:text-accent-ink hover:underline"
                       style={TITLE_CELL_STYLE}
                     >
                       {problem.title}

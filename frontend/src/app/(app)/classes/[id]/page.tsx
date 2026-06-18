@@ -216,7 +216,7 @@ export default function ClassDetailsPage() {
                       <Table.Cell align="right">
                         <Link
                           href={`/sections/${section.id}`}
-                          className="text-xs text-blue-600 hover:text-blue-800"
+                          className="text-xs text-accent-ink hover:underline"
                           data-testid={`open-section-${section.id}`}
                         >
                           Open →

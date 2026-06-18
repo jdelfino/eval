@@ -38,7 +38,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 
     const borderClasses = error
       ? 'border-red-300 focus:ring-red-500'
-      : 'border-gray-300 focus:ring-indigo-500';
+      : 'border-gray-300 focus:ring-accent';
 
     const combinedClasses = [baseClasses, borderClasses, className]
       .filter(Boolean)

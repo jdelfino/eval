@@ -245,7 +245,7 @@ describe('StartSessionModal', () => {
 
       // Check that the problem is now selected (highlighted)
       const fizzBuzzElement = screen.getByText('FizzBuzz').closest('button');
-      expect(fizzBuzzElement).toHaveClass('border-blue-500');
+      expect(fizzBuzzElement).toHaveClass('border-accent');
     });
 
     it('allows selecting blank session option', async () => {
@@ -267,7 +267,7 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByText(/create blank session/i));
 
       const blankOption = screen.getByText(/create blank session/i).closest('button');
-      expect(blankOption).toHaveClass('border-blue-500');
+      expect(blankOption).toHaveClass('border-accent');
     });
   });
 

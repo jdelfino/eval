@@ -218,7 +218,7 @@ describe('InstructorNav - Navigation Fixes', () => {
       );
 
       const classesButton = screen.getByRole('button', { name: /Classes/i });
-      expect(classesButton).toHaveClass('bg-blue-600', 'text-white');
+      expect(classesButton).toHaveClass('bg-accent', 'text-accent-fg');
     });
 
     it('should show hover state for non-active buttons', () => {

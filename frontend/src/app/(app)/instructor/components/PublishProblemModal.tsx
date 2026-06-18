@@ -195,7 +195,7 @@ export default function PublishProblemModal({
                       checked={state.isPublished}
                       onChange={() => handleTogglePublish(state.section.id)}
                       disabled={loading}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent"
                       aria-label={`${state.section.name} ${state.section.semester || ''}`}
                     />
                     <label
@@ -217,7 +217,7 @@ export default function PublishProblemModal({
                         checked={state.showSolution}
                         onChange={() => handleToggleSolution(state.section.id)}
                         disabled={loading}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent"
                         aria-label={`Show Solution for ${state.section.name}`}
                       />
                       <label

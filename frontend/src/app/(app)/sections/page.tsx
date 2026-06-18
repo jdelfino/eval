@@ -93,7 +93,7 @@ export default function MySectionsPage() {
         </div>
         <Link
           href="/sections/join"
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 bg-accent text-accent-fg text-sm font-medium rounded-lg hover:brightness-110 transition-colors"
         >
           Join Section
         </Link>
@@ -115,7 +115,7 @@ export default function MySectionsPage() {
             primary={
               <Link
                 href="/sections/join"
-                className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center px-6 py-3 bg-accent text-accent-fg font-medium rounded-lg hover:brightness-110 transition-colors"
               >
                 Join a Section
               </Link>
@@ -170,7 +170,7 @@ export default function MySectionsPage() {
                     {isLive && (
                       <Link
                         href={`/sections/${info.section.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-accent text-accent-fg rounded-lg hover:brightness-110 transition-colors"
                       >
                         Jump in
                       </Link>

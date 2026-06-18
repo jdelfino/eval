@@ -240,7 +240,7 @@ function PublicViewContent() {
     <main className="h-full w-full flex flex-col p-2 box-border">
       {/* Join code + Connection status at top */}
       <div className="flex items-center gap-3 mb-2">
-        <span className="text-lg font-bold font-mono text-blue-600">
+        <span className="text-lg font-bold font-mono text-accent-ink">
           {state?.join_code || '------'}
         </span>
         <ConnectionDot status={mapToDotStatus(connectionStatus)} />

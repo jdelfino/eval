@@ -112,7 +112,7 @@ export default function SectionView({
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+        <div className="animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full"></div>
       </div>
     );
   }
@@ -138,7 +138,7 @@ export default function SectionView({
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center gap-2"
+            className="px-4 py-2 bg-accent text-accent-fg rounded-lg hover:brightness-110 transition-colors font-semibold flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -162,7 +162,7 @@ export default function SectionView({
             </p>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold inline-flex items-center gap-2"
+              className="px-4 py-2 bg-accent text-accent-fg rounded-lg hover:brightness-110 transition-colors font-semibold inline-flex items-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -179,14 +179,14 @@ export default function SectionView({
               >
                 <button
                   onClick={() => setSelectedSection(section)}
-                  className="w-full text-left p-6 bg-white border-2 border-gray-200 rounded-xl shadow-sm hover:shadow-lg hover:border-blue-400 transition-all duration-200 transform hover:-translate-y-1"
+                  className="w-full text-left p-6 bg-white border-2 border-gray-200 rounded-xl shadow-sm hover:shadow-lg hover:border-accent transition-all duration-200 transform hover:-translate-y-1"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 pr-12">
-                      <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      <h3 className="text-xl font-bold text-gray-900 group-hover:text-accent-ink transition-colors">
                         {section.name}
                       </h3>
-                      <div className="mt-2 inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-sm font-mono font-bold rounded-lg">
+                      <div className="mt-2 inline-flex items-center px-3 py-1 bg-accent-soft text-accent-ink text-sm font-mono font-bold rounded-lg">
                         <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                         </svg>
@@ -194,7 +194,7 @@ export default function SectionView({
                       </div>
                     </div>
                     <svg
-                      className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0 ml-2"
+                      className="w-6 h-6 text-gray-400 group-hover:text-accent-ink transition-colors flex-shrink-0 ml-2"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -267,7 +267,7 @@ export default function SectionView({
         <div className="flex items-center gap-4 text-gray-600">
           <div className="flex items-center">
             <span className="mr-2">Join Code:</span>
-            <span className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-sm font-mono font-bold rounded-lg">
+            <span className="inline-flex items-center px-3 py-1 bg-accent-soft text-accent-ink text-sm font-mono font-bold rounded-lg">
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
               </svg>
@@ -281,7 +281,7 @@ export default function SectionView({
         <h3 className="text-xl font-bold text-gray-900">Sessions</h3>
         <button
           onClick={handleCreateSession}
-          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
+          className="px-6 py-3 bg-accent text-accent-fg hover:brightness-110 font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -292,13 +292,13 @@ export default function SectionView({
 
       {loadingSessions ? (
         <div className="flex justify-center items-center py-12">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+          <div className="animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full"></div>
         </div>
       ) : sessions.length === 0 ? (
-        <div className="text-center py-16 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border-2 border-dashed border-blue-300">
+        <div className="text-center py-16 bg-info-soft rounded-xl border-2 border-dashed border-info">
           <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 bg-info-soft rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
@@ -307,7 +307,7 @@ export default function SectionView({
           <p className="text-sm text-gray-500 mb-6">Create a new session to start teaching</p>
           <button
             onClick={handleCreateSession}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-accent-fg hover:brightness-110 font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

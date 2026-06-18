@@ -99,7 +99,7 @@ export default function SectionCard({
       <div>
         <Link
           href={`/sections/${section.id}`}
-          className="text-xl font-semibold text-blue-600 hover:text-blue-900"
+          className="text-xl font-semibold text-accent-ink hover:underline"
           data-testid={`section-link-${section.id}`}
         >
           {section.name}
@@ -121,7 +121,7 @@ export default function SectionCard({
           <span className="text-sm font-medium text-gray-700">Join Code</span>
           <button
             onClick={() => setShowJoinCode(!showJoinCode)}
-            className="text-sm text-blue-600 hover:text-blue-700"
+            className="text-sm text-accent-ink hover:underline"
           >
             {showJoinCode ? 'Hide' : 'Show'}
           </button>
@@ -176,12 +176,12 @@ export default function SectionCard({
                 value={newInstructorEmail}
                 onChange={(e) => setNewInstructorEmail(e.target.value)}
                 placeholder="instructor@example.com"
-                className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-accent"
                 required
               />
               <button
                 type="submit"
-                className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="px-3 py-1 text-sm bg-accent text-accent-fg rounded hover:brightness-110"
               >
                 Add
               </button>
@@ -199,7 +199,7 @@ export default function SectionCard({
           ) : (
             <button
               onClick={() => setAddingInstructor(true)}
-              className="text-sm text-blue-600 hover:text-blue-700"
+              className="text-sm text-accent-ink hover:underline"
             >
               + Add Co-Instructor
             </button>
