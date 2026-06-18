@@ -36,6 +36,7 @@ import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { deriveStudentStatus } from '../lib/studentStatus';
 import { RealtimeStudent } from '../types';
 import type { EnrolledStudent } from './InstructorRoster';
+import { SectionLabel } from '@/components/ui';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
@@ -58,9 +59,6 @@ const DEFAULT_PROMPT =
   `- Each issue must have at least 1 student.\n` +
   `- Omit students with empty or unmodified starter code from issue lists.\n` +
   `- Set overall_note to a 1-2 sentence summary of the class's performance.`;
-
-const SECTION_LABEL_CLASS =
-  'text-[11px] font-semibold uppercase tracking-wide text-gray-500';
 
 /** Small label/value signal card, reskinned per instructor-signals.jsx. */
 function SigCard({
@@ -181,7 +179,7 @@ export function SignalsPanel({
       className="flex flex-col gap-3 overflow-y-auto border-l border-gray-200 bg-white p-3.5"
     >
       {/* Class signal cards */}
-      <div className={SECTION_LABEL_CLASS}>Class signal</div>
+      <SectionLabel>Class signal</SectionLabel>
       <SigCard label="Joined" testId="signal-joined">
         {joinedCount} / {enrolledCount}
       </SigCard>
@@ -197,7 +195,7 @@ export function SignalsPanel({
       <div className="h-px bg-gray-200" />
 
       {/* Common bugs (re-homed analysis flow) */}
-      <div className={SECTION_LABEL_CLASS}>Common bugs &middot; click to focus</div>
+      <SectionLabel>Common bugs &middot; click to focus</SectionLabel>
 
       <div>
         {analysisState === 'error' ? (

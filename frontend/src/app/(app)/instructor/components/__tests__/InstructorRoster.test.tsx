@@ -16,7 +16,7 @@
 import React from 'react';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { InstructorRoster } from '../InstructorRoster';
-import type { Student, RealtimeStudent } from '../../types';
+import type { RealtimeStudent } from '../../types';
 import type { RunSummary } from '@/types/api';
 
 // Fixed clock so "idle Nm" / "ran Nm ago" relative times are deterministic.
@@ -44,22 +44,11 @@ function errorSummary(at: string): RunSummary {
 const minutesAgo = (m: number) => new Date(NOW - m * 60_000);
 const isoMinutesAgo = (m: number) => minutesAgo(m).toISOString();
 
-/** Build the parallel `students` prop (Student[]) from realtime rows. */
-function studentsFrom(rts: RealtimeStudent[]): Student[] {
-  return rts.map((s) => ({
-    id: s.id,
-    name: s.name,
-    has_code: !!s.code,
-    last_code_update: s.last_update,
-  }));
-}
-
 function renderRoster(
   overrides: Partial<React.ComponentProps<typeof InstructorRoster>> = {},
 ) {
   const realtimeStudents: RealtimeStudent[] = overrides.realtimeStudents ?? [];
   const props: React.ComponentProps<typeof InstructorRoster> = {
-    students: overrides.students ?? studentsFrom(realtimeStudents),
     realtimeStudents,
     enrolled: overrides.enrolled ?? [],
     focusedStudentId: overrides.focusedStudentId ?? null,

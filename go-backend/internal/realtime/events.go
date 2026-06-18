@@ -14,7 +14,6 @@ const (
 	EventSessionEnded            EventType = "session_ended"
 	EventFeaturedStudentChanged  EventType = "featured_student_changed"
 	EventProblemUpdated          EventType = "problem_updated"
-	EventSessionStartedInSection EventType = "session_started_in_section"
 	EventSessionEndedInSection   EventType = "session_ended_in_section"
 	EventSectionCurrentChanged   EventType = "section_current_changed"
 )
@@ -60,12 +59,6 @@ type FeaturedStudentChangedData struct {
 // ProblemUpdatedData is the payload for EventProblemUpdated.
 type ProblemUpdatedData struct {
 	ProblemID string `json:"problem_id"`
-}
-
-// SessionStartedInSectionData is the payload for EventSessionStartedInSection.
-type SessionStartedInSectionData struct {
-	SessionID string          `json:"session_id"`
-	Problem   json.RawMessage `json:"problem"`
 }
 
 // SessionEndedInSectionData is the payload for EventSessionEndedInSection.

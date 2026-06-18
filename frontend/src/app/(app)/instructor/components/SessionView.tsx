@@ -253,7 +253,6 @@ export function SessionView({
           >
             {/* Left: roster */}
             <InstructorRoster
-              students={students}
               realtimeStudents={realtimeStudents}
               enrolled={enrolled}
               focusedStudentId={focusedStudentId}

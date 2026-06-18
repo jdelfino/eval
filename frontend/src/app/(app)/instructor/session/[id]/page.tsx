@@ -60,7 +60,6 @@ export default function InstructorSessionPage() {
   // Realtime session hook.
   // NOTE: `replacementInfo` is intentionally NOT consumed here. The ended/reopen
   // and session-replaced UI is retired under the section-pointer model (B2).
-  // T12 removes `replacementInfo` from the hook once this page stops reading it.
   const {
     session: realtimeSessionRaw,
     joinCode: join_code,

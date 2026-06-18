@@ -151,17 +151,17 @@ describe('useSectionEvents (section-pointer model)', () => {
       expect(result.current.currentProblem).toBeNull();
     });
 
-    it('refreshes the pointer from getSection on mount', async () => {
-      mockGetSection.mockResolvedValue({ id: 'section-1', current_session_id: 'session-fetched' });
-
-      const { result } = renderHook(() =>
-        useSectionEvents({ sectionId: 'section-1' })
+    it('does NOT re-fetch the section on mount (caller is the single fetch path)', async () => {
+      // The hook seeds the pointer from caller-provided initial values; it must
+      // not issue a redundant getSection (G4 efficiency #2).
+      renderHook(() =>
+        useSectionEvents({ sectionId: 'section-1', initialCurrentSessionId: 'session-1' })
       );
 
       await waitFor(() => {
-        expect(result.current.currentSessionId).toBe('session-fetched');
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
       });
-      expect(mockGetSection).toHaveBeenCalledWith('section-1');
+      expect(mockGetSection).not.toHaveBeenCalled();
     });
 
     it('seeds the problem + last activity from the initial values', () => {
@@ -176,7 +176,23 @@ describe('useSectionEvents (section-pointer model)', () => {
       );
 
       expect(result.current.currentProblem).toEqual(problem);
+      expect(result.current.currentProblemId).toBe(problem.id);
       expect(result.current.lastActivity).toBe('2026-06-18T00:00:00Z');
+    });
+
+    it('seeds currentProblemId from initialCurrentProblemId (seed-only path)', () => {
+      // The student page seeds the problem id from section.current_problem_id
+      // without the full problem snapshot.
+      const { result } = renderHook(() =>
+        useSectionEvents({
+          sectionId: 'section-1',
+          initialCurrentSessionId: 'session-1',
+          initialCurrentProblemId: 'problem-seed',
+        })
+      );
+
+      expect(result.current.currentProblemId).toBe('problem-seed');
+      expect(result.current.currentProblem).toBeNull();
     });
   });
 
@@ -243,6 +259,7 @@ describe('useSectionEvents (section-pointer model)', () => {
       expect(result.current.currentSessionId).toBe('session-new');
       expect(result.current.currentProblem?.id).toBe('problem-7');
       expect(result.current.currentProblem?.title).toBe('FizzBuzz');
+      expect(result.current.currentProblemId).toBe('problem-7');
       expect(result.current.lastActivity).not.toBeNull();
     });
 
@@ -269,6 +286,7 @@ describe('useSectionEvents (section-pointer model)', () => {
 
       expect(result.current.currentSessionId).toBeNull();
       expect(result.current.currentProblem).toBeNull();
+      expect(result.current.currentProblemId).toBeNull();
       expect(result.current.lastActivity).toBeNull();
     });
   });

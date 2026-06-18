@@ -88,7 +88,6 @@ type mockSessionPublisher struct {
 	sessionEndedCalls            []sessionEndedCall
 	featuredStudentChangedCalls  []featuredStudentChangedCall
 	problemUpdatedCalls          []problemUpdatedCall
-	sessionStartedInSectionCalls []sessionStartedInSectionCall
 	sessionEndedInSectionCalls   []sessionEndedInSectionCall
 	sectionCurrentChangedCalls   []sectionCurrentChangedCall
 	err                          error         // error to return from all methods
@@ -117,10 +116,6 @@ type featuredStudentChangedCall struct {
 }
 type problemUpdatedCall struct {
 	sessionID, problemID string
-}
-type sessionStartedInSectionCall struct {
-	sectionID, sessionID string
-	problem              json.RawMessage
 }
 type sessionEndedInSectionCall struct {
 	sectionID, sessionID string
@@ -177,13 +172,6 @@ func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, session
 func (m *mockSessionPublisher) ProblemUpdated(_ context.Context, sessionID, problemID string) error {
 	m.mu.Lock()
 	m.problemUpdatedCalls = append(m.problemUpdatedCalls, problemUpdatedCall{sessionID, problemID})
-	m.mu.Unlock()
-	m.done <- struct{}{}
-	return m.err
-}
-func (m *mockSessionPublisher) SessionStartedInSection(_ context.Context, sectionID, sessionID string, problem json.RawMessage) error {
-	m.mu.Lock()
-	m.sessionStartedInSectionCalls = append(m.sessionStartedInSectionCalls, sessionStartedInSectionCall{sectionID, sessionID, problem})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err

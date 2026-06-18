@@ -23,8 +23,10 @@
 import React, { useMemo, useState } from 'react';
 import { RealtimeStudent } from '../types';
 import type { EnrolledStudent } from './InstructorRoster';
+import { SectionLabel } from '@/components/ui';
 import {
   deriveStudentStatus,
+  statusColor,
   type StudentStatus,
 } from '../lib/studentStatus';
 
@@ -50,8 +52,17 @@ const PEEK_LINES = 12;
  * previously computed array (reference-stable) and skip recomputation entirely.
  *
  * Exported for tests to assert the cache-hit (no-recompute) contract.
+ *
+ * Bounded (BARS_CACHE_MAX): the key is the raw code string, which changes on
+ * every keystroke for every student, so an unbounded cache would grow without
+ * limit for the page's lifetime. Bars are cheap to recompute, so when the cap is
+ * exceeded we simply clear the cache (the live tiles repopulate it on the next
+ * render).
  */
 export const barsCache = new Map<string, number[]>();
+
+/** Max distinct code strings cached before the cache is cleared. */
+const BARS_CACHE_MAX = 500;
 
 function computeBars(code: string): number[] {
   // Split into lines, drop a single trailing empty line (from a final newline),
@@ -82,18 +93,15 @@ export function codeToBars(code: string | undefined): number[] {
   const cached = barsCache.get(key);
   if (cached !== undefined) return cached;
   const bars = computeBars(key);
+  // Bound the cache: drop everything when it grows too large (bars are cheap to
+  // recompute). Keeps the module-level Map from growing per keystroke forever.
+  if (barsCache.size >= BARS_CACHE_MAX) {
+    barsCache.clear();
+  }
   barsCache.set(key, bars);
   return bars;
 }
 
-/** Tailwind background class for each status dot color. */
-const STATUS_DOT_CLASS: Record<StudentStatus, string> = {
-  run: 'bg-green-500',
-  danger: 'bg-red-500',
-  warn: 'bg-amber-500',
-  idle: 'bg-gray-400',
-  missing: 'bg-gray-300',
-};
 
 interface TileModel {
   user_id: string;
@@ -155,9 +163,9 @@ export function ClassMinimap({
       className="relative border-b border-gray-200 bg-white p-3"
     >
       <div className="mb-2.5 flex items-center justify-between">
-        <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <SectionLabel as="h2" style={{ margin: 0 }}>
           Class minimap
-        </h3>
+        </SectionLabel>
       </div>
 
       <div
@@ -226,7 +234,8 @@ export function ClassMinimap({
               <span
                 data-testid={`minimap-dot-${tile.user_id}`}
                 data-status={tile.status}
-                className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLASS[tile.status]}`}
+                className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+                style={{ background: statusColor(tile.status) }}
               />
 
               {/* 1-based tile number (top-left). */}

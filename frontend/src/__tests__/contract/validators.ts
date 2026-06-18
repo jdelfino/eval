@@ -19,7 +19,6 @@ import type {
   SessionEndedData,
   FeaturedStudentChangedData,
   ProblemUpdatedData,
-  SessionStartedInSectionData,
   SessionEndedInSectionData,
   SectionCurrentChangedData,
 } from '@/types/realtime-events';
@@ -131,11 +130,6 @@ export function validateFeaturedStudentChangedShape(obj: FeaturedStudentChangedD
 /** Validate the shape of a problem_updated event payload. */
 export function validateProblemUpdatedShape(obj: ProblemUpdatedData): void {
   typia.assertEquals<ProblemUpdatedData>(obj);
-}
-
-/** Validate the shape of a session_started_in_section event payload. */
-export function validateSessionStartedInSectionShape(obj: SessionStartedInSectionData): void {
-  typia.assertEquals<SessionStartedInSectionData>(obj);
 }
 
 /** Validate the shape of a session_ended_in_section event payload. */

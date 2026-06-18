@@ -38,6 +38,7 @@ jest.mock('@/lib/api/sections', () => ({
     id: 'section-1',
     name: 'CS 101',
     current_session_id: 'session-1',
+    current_problem_id: 'problem-1',
   }),
 }));
 

@@ -16,7 +16,6 @@ type SessionPublisher interface {
 	SessionEnded(ctx context.Context, sessionID, reason string) error
 	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error
 	ProblemUpdated(ctx context.Context, sessionID, problemID string) error
-	SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error
 	SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error
 	// SectionCurrentChanged publishes the G4 section-pointer change on the
 	// section channel. sessionID is nil when the pointer was cleared; problem
@@ -97,13 +96,6 @@ func (s *sessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID
 func (s *sessionPublisher) ProblemUpdated(ctx context.Context, sessionID, problemID string) error {
 	return s.publish(ctx, sessionID, EventProblemUpdated, ProblemUpdatedData{
 		ProblemID: problemID,
-	})
-}
-
-func (s *sessionPublisher) SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error {
-	return s.publishToSection(ctx, sectionID, EventSessionStartedInSection, SessionStartedInSectionData{
-		SessionID: sessionID,
-		Problem:   problem,
 	})
 }
 

@@ -382,8 +382,7 @@ func TestCreateSession_Success(t *testing.T) {
 // TestCreateSession_DefaultSetsPointerAndPublishes verifies the G4 default
 // (set_current omitted → true): the new session becomes the section's current
 // session via SetSectionCurrentSession and a section_current_changed event is
-// published carrying the new session id + problem. It also asserts the retired
-// events (SessionReplaced / SessionStartedInSection) are NOT published.
+// published carrying the new session id + problem.
 func TestCreateSession_DefaultSetsPointerAndPublishes(t *testing.T) {
 	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -453,10 +452,6 @@ func TestCreateSession_DefaultSetsPointerAndPublishes(t *testing.T) {
 	}
 	if string(call.problem) != string(newSess.Problem) {
 		t.Errorf("expected problem %q, got %q", string(newSess.Problem), string(call.problem))
-	}
-	// Retired events must not be published.
-	if len(pub.sessionStartedInSectionCalls) != 0 {
-		t.Errorf("expected no SessionStartedInSection calls, got %d", len(pub.sessionStartedInSectionCalls))
 	}
 }
 

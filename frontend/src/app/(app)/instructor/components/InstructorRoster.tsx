@@ -25,10 +25,12 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pill, type PillTone } from '@/components/ui/Pill';
-import { Student, RealtimeStudent } from '../types';
+import { SectionLabel } from '@/components/ui';
+import { RealtimeStudent } from '../types';
 import {
   deriveStudentStatus,
   IDLE_THRESHOLD_MS,
+  statusColor,
   type StudentStatus,
 } from '../lib/studentStatus';
 
@@ -38,8 +40,6 @@ export interface EnrolledStudent {
 }
 
 export interface InstructorRosterProps {
-  /** Students derived from realtime data (id/name/has_code). */
-  students: Student[];
   /** Raw realtime students with live code, last activity, and run summary. */
   realtimeStudents: RealtimeStudent[];
   /** Enrolled roster (section student-progress diff source) for missing students. */
@@ -55,15 +55,6 @@ export interface InstructorRosterProps {
 }
 
 type RosterTab = 'activity' | 'joined';
-
-/** Glyph dot color per status, matching `instructor-roster-row.jsx` colorMap. */
-const STATUS_COLOR: Record<StudentStatus, string> = {
-  run: 'var(--run)',
-  warn: 'var(--warn)',
-  danger: 'var(--danger)',
-  idle: 'var(--fg-subtle)',
-  missing: 'var(--border-strong)',
-};
 
 /** Header count pill tone per glyph status (only run/warn/danger get pills). */
 const PILL_TONE: Record<'run' | 'warn' | 'danger', PillTone> = {
@@ -128,7 +119,6 @@ function detailLine(entry: RosterEntry, now: number): string {
 }
 
 export function InstructorRoster({
-  students: _students,
   realtimeStudents,
   enrolled,
   focusedStudentId,
@@ -234,9 +224,9 @@ export function InstructorRoster({
     >
       {/* Header: label + count pills */}
       <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 m-0">
+        <SectionLabel as="h2" style={{ margin: 0 }}>
           Class
-        </h3>
+        </SectionLabel>
         <div className="flex gap-1">
           {(['run', 'warn', 'danger'] as const).map((k) =>
             counts[k] > 0 ? (
@@ -315,7 +305,7 @@ export function InstructorRoster({
                   style={{
                     width: 6,
                     height: 6,
-                    background: STATUS_COLOR[entry.status],
+                    background: statusColor(entry.status),
                   }}
                 />
                 <div className="flex-1 min-w-0 flex flex-col">

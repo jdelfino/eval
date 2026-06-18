@@ -39,7 +39,6 @@ export const EXCLUDED_FUNCTIONS: Record<string, string> = {
  */
 export const EXCLUDED_EVENTS: Record<string, string> = {
   SessionReplacedData: 'Backend no longer emits session_replaced (eval-cej.8.1); FE type removed by T12',
-  SessionStartedInSectionData: 'Create path now emits section_current_changed instead (eval-cej.8.1); FE type removed by follow-on cleanup',
 };
 
 // ---------------------------------------------------------------------------

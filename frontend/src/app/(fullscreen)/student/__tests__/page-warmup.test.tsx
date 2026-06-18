@@ -164,13 +164,16 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       expect(mockWarmExecutor).toHaveBeenCalledTimes(1);
     });
 
-    it('does not call warmExecutor when the section pointer is set (live mode)', async () => {
+    it('does not call warmExecutor when the pointer matches the opened problem (live mode)', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      // Pointer set → live mode (no executor warm-up needed).
+      // Pointer set AND its problem == the opened work's problem → live mode
+      // (no executor warm-up needed). This is the B1 problem-identity gate's
+      // matching case.
       mockGetSection.mockResolvedValue({
         id: 'section-1',
         name: 'Test Section',
         current_session_id: 'session-1',
+        current_problem_id: 'problem-1',
       });
       mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: null });
       mockUseRealtimeSession.mockReturnValue({
@@ -190,6 +193,37 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       });
 
       expect(mockWarmExecutor).not.toHaveBeenCalled();
+      expect(mockJoinSession).toHaveBeenCalled();
+    });
+
+    it('stays in practice mode (and does NOT join) when the pointer is a DIFFERENT problem (B1 gate)', async () => {
+      // Regression for silent cross-problem corruption: a student opens a
+      // non-live published problem (problem-1) while the section pointer points
+      // at a DIFFERENT live problem (problem-OTHER). The page must NOT join the
+      // live session — otherwise the student's code is autosaved under the wrong
+      // problem. It must enter practice mode for the opened problem instead.
+      mockGetStudentWork.mockResolvedValue(fakeStudentWork); // problem_id: 'problem-1'
+      mockGetSection.mockResolvedValue({
+        id: 'section-1',
+        name: 'Test Section',
+        current_session_id: 'session-live',
+        current_problem_id: 'problem-OTHER',
+      });
+      mockJoinSession.mockResolvedValue({ code: 'x', test_cases: null });
+      mockUseRealtimeSession.mockReturnValue({
+        ...defaultRealtimeSession,
+        joinSession: mockJoinSession,
+      });
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      // Practice mode: executor warmed, live session NOT joined.
+      expect(mockWarmExecutor).toHaveBeenCalledTimes(1);
+      expect(mockJoinSession).not.toHaveBeenCalled();
     });
 
     it('does not block page load or show errors if warmExecutor fails', async () => {

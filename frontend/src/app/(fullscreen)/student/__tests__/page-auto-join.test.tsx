@@ -122,6 +122,7 @@ describe('StudentPage auto-join (PLAT-6y2j.1)', () => {
       id: 'section-1',
       name: 'Test Section',
       current_session_id: 'session-live',
+      current_problem_id: 'problem-1',
     });
   });
 

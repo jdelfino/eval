@@ -6,8 +6,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// sectionColumns lists the base sections table columns (qualified-free) used by
+// write-returning queries that operate on a single row without the pointer JOIN.
+// Such rows have no derived current_problem_id (it stays nil).
 const sectionColumns = `id, namespace_id, class_id, name, semester, join_code, active, current_session_id, created_at, updated_at`
 
+// sectionReadColumns selects the section row plus the pointer session's problem
+// id, derived via a LEFT JOIN on the pointer session (alias `cur`). It assumes
+// the FROM clause aliases the sections table as `sec` and joins
+// `LEFT JOIN sessions cur ON cur.id = sec.current_session_id`.
+// NULLIF guards against sessions whose problem JSON has an empty-string id
+// (e.g. a blank-session create path); '' is not a valid uuid and would otherwise
+// raise 22P02 on the cast.
+const sectionReadColumns = `sec.id, sec.namespace_id, sec.class_id, sec.name, sec.semester, sec.join_code, sec.active, sec.current_session_id, NULLIF(cur.problem->>'id', '')::uuid, sec.created_at, sec.updated_at`
+
+// sectionReadFrom is the FROM/JOIN clause matching sectionReadColumns.
+const sectionReadFrom = `FROM sections sec LEFT JOIN sessions cur ON cur.id = sec.current_session_id`
+
+// scanSection scans a base sections row (no current_problem_id). CurrentProblemID
+// is left nil.
 func scanSection(row interface{ Scan(dest ...any) error }) (*Section, error) {
 	var sec Section
 	err := row.Scan(
@@ -28,10 +45,33 @@ func scanSection(row interface{ Scan(dest ...any) error }) (*Section, error) {
 	return &sec, nil
 }
 
+// scanSectionRead scans a section row produced by sectionReadColumns, including
+// the derived current_problem_id.
+func scanSectionRead(row interface{ Scan(dest ...any) error }) (*Section, error) {
+	var sec Section
+	err := row.Scan(
+		&sec.ID,
+		&sec.NamespaceID,
+		&sec.ClassID,
+		&sec.Name,
+		&sec.Semester,
+		&sec.JoinCode,
+		&sec.Active,
+		&sec.CurrentSessionID,
+		&sec.CurrentProblemID,
+		&sec.CreatedAt,
+		&sec.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &sec, nil
+}
+
 // ListSectionsByClass retrieves all sections for a given class.
 // RLS policies filter results based on the user's role and namespace.
 func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]Section, error) {
-	query := "SELECT " + sectionColumns + " FROM sections WHERE class_id = $1 ORDER BY created_at"
+	query := "SELECT " + sectionReadColumns + " " + sectionReadFrom + " WHERE sec.class_id = $1 ORDER BY sec.created_at"
 
 	rows, err := s.q.Query(ctx, query, classID)
 	if err != nil {
@@ -41,7 +81,7 @@ func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]S
 
 	var sections []Section
 	for rows.Next() {
-		sec, err := scanSection(rows)
+		sec, err := scanSectionRead(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -53,8 +93,8 @@ func (s *Store) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]S
 // GetSection retrieves a section by its ID.
 // Returns ErrNotFound if the section does not exist.
 func (s *Store) GetSection(ctx context.Context, id uuid.UUID) (*Section, error) {
-	query := "SELECT " + sectionColumns + " FROM sections WHERE id = $1"
-	sec, err := scanSection(s.q.QueryRow(ctx, query, id))
+	query := "SELECT " + sectionReadColumns + " " + sectionReadFrom + " WHERE sec.id = $1"
+	sec, err := scanSectionRead(s.q.QueryRow(ctx, query, id))
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
@@ -115,10 +155,11 @@ func (s *Store) DeleteSection(ctx context.Context, id uuid.UUID) error {
 func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySectionInfo, error) {
 	const query = `
 		SELECT s.id, s.namespace_id, s.class_id, s.name, s.semester, s.join_code, s.active,
-		       s.current_session_id, s.created_at, s.updated_at, c.name
+		       s.current_session_id, NULLIF(cur.problem->>'id', '')::uuid, s.created_at, s.updated_at, c.name
 		FROM sections s
 		JOIN section_memberships sm ON sm.section_id = s.id
 		JOIN classes c ON c.id = s.class_id
+		LEFT JOIN sessions cur ON cur.id = s.current_session_id
 		WHERE sm.user_id = $1
 		ORDER BY s.created_at`
 
@@ -131,11 +172,11 @@ func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySecti
 	var results []MySectionInfo
 	for rows.Next() {
 		var info MySectionInfo
-		// Scans section columns + extra class name; can't reuse scanSection.
+		// Scans section columns + derived current_problem_id + class name; can't reuse scanSection.
 		if err := rows.Scan(
 			&info.Section.ID, &info.Section.NamespaceID, &info.Section.ClassID,
 			&info.Section.Name, &info.Section.Semester, &info.Section.JoinCode,
-			&info.Section.Active, &info.Section.CurrentSessionID,
+			&info.Section.Active, &info.Section.CurrentSessionID, &info.Section.CurrentProblemID,
 			&info.Section.CreatedAt, &info.Section.UpdatedAt,
 			&info.ClassName,
 		); err != nil {

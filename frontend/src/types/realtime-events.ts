@@ -20,7 +20,6 @@ export type RealtimeEventType =
   | 'session_ended'
   | 'featured_student_changed'
   | 'problem_updated'
-  | 'session_started_in_section'
   | 'session_ended_in_section'
   | 'section_current_changed';
 
@@ -72,12 +71,6 @@ export interface FeaturedStudentChangedData {
 /** Payload for problem_updated — matches Go ProblemUpdatedData. */
 export interface ProblemUpdatedData {
   problem_id: string;
-}
-
-/** Payload for session_started_in_section — matches Go SessionStartedInSectionData. */
-export interface SessionStartedInSectionData {
-  session_id: string;
-  problem: ApiProblem; // Full problem object from the backend
 }
 
 /** Payload for session_ended_in_section — matches Go SessionEndedInSectionData. */

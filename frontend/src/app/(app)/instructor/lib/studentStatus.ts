@@ -83,3 +83,21 @@ export function deriveStudentStatus({
   if (lastRunSummary.errors > 0) return 'warn';
   return 'run';
 }
+
+/**
+ * Canonical token (CSS-var) color for a student status glyph. All G4 dashboard
+ * columns (roster glyph dots, minimap tiles) consume this single map so the same
+ * status never renders a different color across views.
+ */
+const STATUS_COLOR: Record<StudentStatus, string> = {
+  run: 'var(--run)',
+  warn: 'var(--warn)',
+  danger: 'var(--danger)',
+  idle: 'var(--fg-subtle)',
+  missing: 'var(--border-strong)',
+};
+
+/** Returns the canonical CSS-var color for a student status glyph. */
+export function statusColor(status: StudentStatus): string {
+  return STATUS_COLOR[status];
+}

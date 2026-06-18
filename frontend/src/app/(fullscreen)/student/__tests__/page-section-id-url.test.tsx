@@ -173,6 +173,7 @@ describe('StudentPage live-vs-practice via section pointer (G4 B1)', () => {
       id: 'section-1',
       name: 'Test Section',
       current_session_id: 'session-1',
+      current_problem_id: 'problem-1',
     });
 
     mockUseSearchParams.mockReturnValue({
@@ -189,6 +190,38 @@ describe('StudentPage live-vs-practice via section pointer (G4 B1)', () => {
     await waitFor(() => {
       expect(mockJoinSession).toHaveBeenCalled();
     });
+  });
+
+  it('enters practice mode (no join) when the pointer is a DIFFERENT problem', async () => {
+    /**
+     * G4 B1 problem-identity gate: the section pointer is live but points at a
+     * DIFFERENT problem than the one the student opened. Joining the live session
+     * would autosave the student's code under the wrong problem (silent
+     * cross-problem corruption). The page must stay in practice mode and NOT join.
+     */
+    mockGetSection.mockResolvedValue({
+      id: 'section-1',
+      name: 'Test Section',
+      current_session_id: 'session-live',
+      current_problem_id: 'problem-OTHER', // pointer's problem ≠ opened work's 'problem-1'
+    });
+
+    mockUseSearchParams.mockReturnValue({
+      get: (key: string) => {
+        if (key === 'work_id') return 'work-123';
+        if (key === 'section_id') return 'section-1';
+        return null;
+      },
+    });
+
+    render(<StudentPageWrapper />);
+
+    // Wait for the section fetch + mode resolution to settle, then assert no join.
+    await waitFor(() => {
+      expect(mockGetSection).toHaveBeenCalledWith('section-1');
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockJoinSession).not.toHaveBeenCalled();
   });
 
   it('enters practice mode (no join) when there is no section pointer', async () => {

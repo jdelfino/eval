@@ -124,6 +124,10 @@ function StudentPage() {
   // a separate "resolved" flag because null is a valid pointer value (no problem).
   const [sectionPointerResolved, setSectionPointerResolved] = useState(false);
   const [sectionCurrentSessionId, setSectionCurrentSessionId] = useState<string | null>(null);
+  // The pointer session's problem id (from section.current_problem_id), used to
+  // gate live-mode entry: we only join the live session when its problem matches
+  // the opened work's problem (G4 B1 problem-identity gate). null when no pointer.
+  const [sectionCurrentProblemId, setSectionCurrentProblemId] = useState<string | null>(null);
   // "Instructor moved on" banner state: set when section_current_changed reports
   // a session different from the one the student is in.
   const [movedOnTo, setMovedOnTo] = useState<{ sessionId: string; problemId: string; title: string } | null>(null);
@@ -177,6 +181,7 @@ function StudentPage() {
     useSectionEvents({
       sectionId: mode === 'live' && sectionId ? sectionId : '',
       initialCurrentSessionId: sectionCurrentSessionId,
+      initialCurrentProblemId: sectionCurrentProblemId,
     });
 
 
@@ -218,38 +223,43 @@ function StudentPage() {
       .then((section) => {
         setSectionName(section.name);
         setSectionCurrentSessionId(section.current_session_id ?? null);
+        setSectionCurrentProblemId(section.current_problem_id ?? null);
         setSectionPointerResolved(true);
       })
       .catch(() => {
         // Graceful degradation: treat as no pointer (practice). Section name is
         // cosmetic; the pointer defaults to null on failure.
         setSectionCurrentSessionId(null);
+        setSectionCurrentProblemId(null);
         setSectionPointerResolved(true);
       });
   }, [sectionId]);
 
-  // Step 2b: Determine mode from the section pointer (G4 B1). Live when the
-  // pointer is set: under the pointer model a student reaches /student for a
-  // live problem only via the pointer flow (the section card / "Jump in" /
-  // moved-on banner all route through getOrCreateStudentWork(pointerProblem)),
-  // so the opened work's problem IS the pointer's problem — the student arrived
-  // via the pointer's session. We therefore join the pointer's session.
-  // Otherwise practice (warm the executor as today).
+  // Step 2b: Determine mode from the section pointer (G4 B1). We enter live mode
+  // and join the pointer's session ONLY when the pointer is set AND its problem
+  // matches the opened work's problem (problem-identity gate). A student who
+  // opens a non-live published problem during a live class (pointer points at a
+  // DIFFERENT problem) must stay in practice mode for the problem they opened —
+  // otherwise they would be joined to the live session and their code autosaved
+  // under the wrong problem (silent cross-problem corruption).
   useEffect(() => {
     if (mode !== 'loading' || !sectionPointerResolved || !problemId) return;
 
-    if (sectionCurrentSessionId) {
-      // The section has a current problem: enter live mode and join the pointer's
-      // session. Late-joiners land here with zero instructor action.
+    if (sectionCurrentSessionId && sectionCurrentProblemId === problemId) {
+      // The section's current problem IS the opened problem: enter live mode and
+      // join the pointer's session. Late-joiners land here with zero instructor
+      // action.
       setActiveSessionId(sectionCurrentSessionId);
       setMode('live');
     } else {
+      // No pointer, or the pointer points at a different problem: practice mode
+      // for the opened problem.
       setMode('practice');
       warmExecutor().catch(() => {
         // Fire-and-forget
       });
     }
-  }, [mode, sectionPointerResolved, sectionCurrentSessionId, problemId]);
+  }, [mode, sectionPointerResolved, sectionCurrentSessionId, sectionCurrentProblemId, problemId]);
 
   // Step 3: Auto-join session in live mode
   const joinAttemptedRef = useRef<string | null>(null);

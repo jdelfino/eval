@@ -227,38 +227,6 @@ func TestPublisherError(t *testing.T) {
 	}
 }
 
-func TestSessionStartedInSection(t *testing.T) {
-	mock, sp := newTestPublisher()
-	problemJSON := json.RawMessage(`{"id":"prob-1","title":"Two Sum"}`)
-	err := sp.SessionStartedInSection(context.Background(), "sect-1", "sess-10", problemJSON)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if mock.channel != "section:sect-1" {
-		t.Errorf("channel = %q, want %q", mock.channel, "section:sect-1")
-	}
-	event, ok := mock.data.(Event)
-	if !ok {
-		t.Fatalf("data is not Event")
-	}
-	if event.Type != EventSessionStartedInSection {
-		t.Errorf("type = %q, want %q", event.Type, EventSessionStartedInSection)
-	}
-	if event.Timestamp != fixedTime() {
-		t.Errorf("timestamp = %v, want %v", event.Timestamp, fixedTime())
-	}
-	data, ok := event.Data.(SessionStartedInSectionData)
-	if !ok {
-		t.Fatalf("payload is not SessionStartedInSectionData")
-	}
-	if data.SessionID != "sess-10" {
-		t.Errorf("session_id = %q, want %q", data.SessionID, "sess-10")
-	}
-	if string(data.Problem) != `{"id":"prob-1","title":"Two Sum"}` {
-		t.Errorf("problem = %q, want %q", string(data.Problem), `{"id":"prob-1","title":"Two Sum"}`)
-	}
-}
-
 func TestSessionEndedInSection(t *testing.T) {
 	mock, sp := newTestPublisher()
 	err := sp.SessionEndedInSection(context.Background(), "sect-2", "sess-11")

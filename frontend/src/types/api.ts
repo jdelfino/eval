@@ -77,6 +77,17 @@ export interface Section {
    * unset). The contract test asserts presence against the real response.
    */
   current_session_id?: string | null;
+  /**
+   * G4 B1 problem-identity gate: the problem id of the pointer session's problem,
+   * or null when no pointer is set. Derived by the backend via a LEFT JOIN on the
+   * pointer session. Lets the student late-join flow verify the opened work's
+   * problem matches the pointer's problem before joining the live session, and
+   * lets useSectionEvents seed currentProblemId without a second fetch.
+   *
+   * Optional on the client type only to avoid forcing every existing Section test
+   * fixture to set it; the backend always serializes the key (null when unset).
+   */
+  current_problem_id?: string | null;
   created_at: string;
   updated_at: string;
 }

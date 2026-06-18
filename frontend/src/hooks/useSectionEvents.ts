@@ -2,18 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
-import { getSection } from '@/lib/api/sections';
 import type { Problem } from '@/types/api';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
-
-/**
- * Liveness heuristic window (G4-R3). The section pointer alone means "most recent
- * class problem" — the correct late-join target at any time — but it is NEVER
- * auto-cleared, so a stale pointer must NOT read as "live right now" for visual
- * emphasis. There is no server-side Centrifugo presence (verified), so we treat
- * the pointer's session as live only when its last activity is within this window.
- */
-export const LIVENESS_WINDOW_MS = 60 * 60 * 1000; // 60 minutes
 
 export interface UseSectionEventsOptions {
   sectionId: string;
@@ -30,6 +20,14 @@ export interface UseSectionEventsOptions {
    */
   initialCurrentProblem?: Problem | null;
   /**
+   * The pointer's problem id as known at mount (from
+   * getSection().current_problem_id). Seeds `currentProblemId` for the B1
+   * problem-identity gate before any realtime event arrives — available even
+   * when the full problem snapshot is not. `null` when no problem is set.
+   * Defaults to `initialCurrentProblem?.id` when omitted.
+   */
+  initialCurrentProblemId?: string | null;
+  /**
    * The pointer's last activity ISO timestamp as known at mount. Feeds the
    * liveness heuristic so a recently-active pointer reads as live on first paint.
    * `null` when unknown.
@@ -42,6 +40,13 @@ export interface UseSectionEventsResult {
   currentSessionId: string | null;
   /** The problem snapshot carried by the pointer's session, or null. */
   currentProblem: Problem | null;
+  /**
+   * The pointer's problem id, or null when no problem is set. Tracked
+   * consistently from BOTH the initial seed and section_current_changed, so it
+   * always moves in lock-step with currentSessionId (no stale-problem window).
+   * Available even when the full problem snapshot is not (seed-only path).
+   */
+  currentProblemId: string | null;
   /**
    * ISO timestamp of the pointer's last activity, or null. Used by the liveness
    * heuristic. Populated from the section fetch on mount; realtime pointer
@@ -57,7 +62,8 @@ export interface UseSectionEventsResult {
  * The pointer is driven by `section_current_changed {session_id, problem}`:
  * a non-null session_id sets the pointer (and surfaces the problem for late
  * join); a null session_id clears it (instructor "End class"). The initial
- * value comes from getSection().current_session_id, fetched on mount.
+ * pointer (session id + problem id) is provided by the caller, which has
+ * already fetched the section — there is no redundant getSection here.
  *
  * The retired `session_started_in_section` / `session_ended_in_section` events
  * are no longer consumed — sessions are persistent and never started/ended for
@@ -67,6 +73,7 @@ export function useSectionEvents({
   sectionId,
   initialCurrentSessionId = null,
   initialCurrentProblem = null,
+  initialCurrentProblemId = null,
   initialLastActivity = null,
 }: UseSectionEventsOptions): UseSectionEventsResult {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(
@@ -75,33 +82,12 @@ export function useSectionEvents({
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(
     initialCurrentProblem
   );
+  const [currentProblemId, setCurrentProblemId] = useState<string | null>(
+    initialCurrentProblemId ?? initialCurrentProblem?.id ?? null
+  );
   const [lastActivity, setLastActivity] = useState<string | null>(
     initialLastActivity
   );
-
-  // Refresh the pointer from the section on mount. This keeps the pointer
-  // honest if it changed between the parent's fetch and this subscription
-  // mounting. The section payload does not carry the session's problem or
-  // last_activity, so we only update the session id here — the problem/activity
-  // are seeded from the parent's resolved initial values and refreshed by
-  // section_current_changed.
-  useEffect(() => {
-    if (!sectionId) return;
-
-    let cancelled = false;
-    getSection(sectionId)
-      .then((section) => {
-        if (cancelled) return;
-        setCurrentSessionId(section.current_session_id ?? null);
-      })
-      .catch(() => {
-        // Graceful degradation: keep the provided initial pointer value.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sectionId]);
 
   useEffect(() => {
     if (!sectionId) return;
@@ -126,8 +112,12 @@ export function useSectionEvents({
         // data: SectionCurrentChangedData{session_id, problem?}
         // session_id null → pointer cleared (instructor ended class).
         const { session_id, problem } = parsed.data;
+        const nextProblem = session_id ? ((problem ?? null) as Problem | null) : null;
         setCurrentSessionId(session_id);
-        setCurrentProblem(session_id ? ((problem ?? null) as Problem | null) : null);
+        setCurrentProblem(nextProblem);
+        // Keep the problem id in lock-step with the session id (no stale-problem
+        // window): derive it from the event's problem.
+        setCurrentProblemId(nextProblem?.id ?? null);
         // A pointer change is, by definition, recent activity right now.
         setLastActivity(session_id ? new Date().toISOString() : null);
       }
@@ -146,5 +136,5 @@ export function useSectionEvents({
     };
   }, [sectionId]);
 
-  return { currentSessionId, currentProblem, lastActivity };
+  return { currentSessionId, currentProblem, currentProblemId, lastActivity };
 }

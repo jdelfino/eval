@@ -619,6 +619,7 @@ describe('StudentPage wired to WorkspaceShell', () => {
         id: 'section-1',
         name: 'Test Section',
         current_session_id: 'session-1',
+        current_problem_id: 'problem-1',
       });
       mockJoinSession.mockResolvedValue({
         code: 'print("hello")',

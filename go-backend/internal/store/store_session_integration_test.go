@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -179,6 +180,14 @@ func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
 	db.createMembership(ctx, t, instructorID, sectionID, "instructor")
 	sessionID := uuid.New()
 	db.createSession(ctx, t, sessionID, nsID, sectionID, "Pointer Section", instructorID)
+	// Give the pointer session a problem with a known id so the derived
+	// current_problem_id (sessions.problem->>'id') can be asserted on the read paths.
+	problemID := uuid.New()
+	if err := db.execAsSuperuser(ctx,
+		`UPDATE sessions SET problem = $2 WHERE id = $1`,
+		sessionID, fmt.Sprintf(`{"id":"%s","title":"Pointer Problem"}`, problemID)); err != nil {
+		t.Fatalf("set session problem: %v", err)
+	}
 
 	authInstructor := &auth.User{
 		ID:          instructorID,
@@ -202,6 +211,9 @@ func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
 		if sec.CurrentSessionID == nil || *sec.CurrentSessionID != sessionID {
 			t.Errorf("GetSection pointer = %v, want %v", sec.CurrentSessionID, sessionID)
 		}
+		if sec.CurrentProblemID == nil || *sec.CurrentProblemID != problemID {
+			t.Errorf("GetSection current_problem_id = %v, want %v", sec.CurrentProblemID, problemID)
+		}
 
 		secs, err := s.ListSectionsByClass(ctx, classID)
 		if err != nil {
@@ -213,6 +225,9 @@ func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
 				foundList = true
 				if x.CurrentSessionID == nil || *x.CurrentSessionID != sessionID {
 					t.Errorf("ListSectionsByClass pointer = %v, want %v", x.CurrentSessionID, sessionID)
+				}
+				if x.CurrentProblemID == nil || *x.CurrentProblemID != problemID {
+					t.Errorf("ListSectionsByClass current_problem_id = %v, want %v", x.CurrentProblemID, problemID)
 				}
 			}
 		}
@@ -230,6 +245,9 @@ func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
 				foundMine = true
 				if info.Section.CurrentSessionID == nil || *info.Section.CurrentSessionID != sessionID {
 					t.Errorf("ListMySections pointer = %v, want %v", info.Section.CurrentSessionID, sessionID)
+				}
+				if info.Section.CurrentProblemID == nil || *info.Section.CurrentProblemID != problemID {
+					t.Errorf("ListMySections current_problem_id = %v, want %v", info.Section.CurrentProblemID, problemID)
 				}
 			}
 		}
@@ -251,6 +269,9 @@ func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
 		}
 		if sec.CurrentSessionID != nil {
 			t.Errorf("expected nil pointer after clear, got %v", *sec.CurrentSessionID)
+		}
+		if sec.CurrentProblemID != nil {
+			t.Errorf("expected nil current_problem_id after clear, got %v", *sec.CurrentProblemID)
 		}
 	})
 

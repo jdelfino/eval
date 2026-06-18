@@ -38,7 +38,6 @@ jest.mock('../SessionControls', () => {
 // can assert wiring + contract without the real (T7-T10) internals.
 jest.mock('../InstructorRoster', () => ({
   InstructorRoster: function MockInstructorRoster({
-    students,
     realtimeStudents,
     enrolled,
     focusedStudentId,
@@ -53,7 +52,6 @@ jest.mock('../InstructorRoster', () => ({
         data-featured={featured_student_id ?? ''}
         data-enrolled={enrolled.length}
         data-rt={realtimeStudents.length}
-        data-students={students.length}
         data-join-code={joinCode ?? ''}
         data-rt-summary={realtimeStudents[0]?.last_run_summary?.passed ?? ''}
         data-rt-last-update={

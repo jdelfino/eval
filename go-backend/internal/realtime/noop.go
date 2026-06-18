@@ -23,9 +23,6 @@ func (NoOpSessionPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ st
 	return nil
 }
 func (NoOpSessionPublisher) ProblemUpdated(_ context.Context, _, _ string) error { return nil }
-func (NoOpSessionPublisher) SessionStartedInSection(_ context.Context, _, _ string, _ json.RawMessage) error {
-	return nil
-}
 func (NoOpSessionPublisher) SessionEndedInSection(_ context.Context, _, _ string) error { return nil }
 func (NoOpSessionPublisher) SectionCurrentChanged(_ context.Context, _ string, _ *uuid.UUID, _ json.RawMessage) error {
 	return nil

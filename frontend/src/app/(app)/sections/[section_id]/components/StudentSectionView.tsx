@@ -11,7 +11,8 @@ import { Pill } from '@/components/ui/Pill';
 import { Chip } from '@/components/ui/Chip';
 import { AuthHeading } from '@/components/ui/AuthHeading';
 import { SectionLabel } from '@/components/ui/SectionLabel';
-import { useSectionEvents, LIVENESS_WINDOW_MS } from '@/hooks/useSectionEvents';
+import { useSectionEvents } from '@/hooks/useSectionEvents';
+import { isSectionLive } from '@/lib/liveness';
 import { formatShortDate } from '@/lib/format';
 import type { SectionDetail } from '../page';
 
@@ -433,10 +434,7 @@ export default function StudentSectionView({
   // lastActivity to the current time, which always reads as live against this
   // snapshot, so the card stays correct as the pointer moves.
   const [mountNow] = useState(() => Date.now());
-  const liveNow =
-    hasCurrentProblem &&
-    lastActivity != null &&
-    mountNow - new Date(lastActivity).getTime() <= LIVENESS_WINDOW_MS;
+  const liveNow = isSectionLive(currentSessionId, lastActivity, mountNow);
 
   const filteredProblems = useMemo(
     () =>

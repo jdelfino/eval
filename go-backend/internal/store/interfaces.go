@@ -261,6 +261,12 @@ type Section struct {
 	// session, or nil if none is set. Per G4-R3 it is never auto-cleared — a
 	// stale value is the correct late-join target. Exposed for late join.
 	CurrentSessionID *uuid.UUID `json:"current_session_id"`
+	// CurrentProblemID is the problem id of the pointer session's problem
+	// (sessions.problem->>'id'), or nil when no pointer is set. Exposed so the
+	// student late-join flow can verify the opened work's problem matches the
+	// pointer's problem before joining the live session (G4 B1 problem-identity
+	// gate) without a second fetch. Derived via LEFT JOIN on the pointer session.
+	CurrentProblemID *uuid.UUID `json:"current_problem_id"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }

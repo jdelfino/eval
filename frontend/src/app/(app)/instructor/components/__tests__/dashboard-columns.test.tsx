@@ -25,7 +25,6 @@ describe('InstructorRoster placeholder', () => {
   it('renders its testid and accepts the full contract (incl. featured_student_id)', () => {
     render(
       <InstructorRoster
-        students={students}
         realtimeStudents={realtimeStudents}
         enrolled={enrolled}
         focusedStudentId={null}

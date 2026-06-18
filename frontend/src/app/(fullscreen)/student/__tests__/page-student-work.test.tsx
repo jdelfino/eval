@@ -207,6 +207,7 @@ describe('StudentPage (student_work-centric)', () => {
         id: 'section-1',
         name: 'Test Section',
         current_session_id: 'session-1',
+        current_problem_id: 'problem-1',
       });
       mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: null });
 
@@ -348,6 +349,7 @@ describe('StudentPage (student_work-centric)', () => {
         id: 'section-1',
         name: 'Test Section',
         current_session_id: 'session-1',
+        current_problem_id: 'problem-1',
       });
 
       render(<StudentPageWrapper />);

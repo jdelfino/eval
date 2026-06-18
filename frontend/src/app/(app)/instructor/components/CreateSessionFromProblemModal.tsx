@@ -27,6 +27,7 @@ import { createSession } from '@/lib/api/sessions';
 import type { Section } from '@/types/api';
 import SessionComposer, { ComposerSection } from './SessionComposer';
 import { useProblemPublishState } from '../hooks/useProblemPublishState';
+import { PublishOptions } from '../hooks/PublishOptions';
 
 interface CreateSessionFromProblemModalProps {
   problem_id: string;
@@ -166,37 +167,7 @@ export default function CreateSessionFromProblemModal({
           sections={composerSections}
           selectedSectionId={selectedSectionId || null}
           onSelectSection={setSelectedSectionId}
-          optionsSlot={
-            selectedSectionId && publish.loaded && !publish.isPublished ? (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                <label className="flex items-center gap-2 text-sm text-blue-900">
-                  <input
-                    type="checkbox"
-                    checked={true}
-                    disabled={true}
-                    aria-label="Publish to section"
-                    className="rounded"
-                    readOnly
-                  />
-                  <span>Publish to section</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm text-blue-800 ml-5">
-                  <input
-                    type="checkbox"
-                    checked={publish.showSolution}
-                    onChange={(e) => publish.setShowSolution(e.target.checked)}
-                    aria-label="Show solution to students"
-                    className="rounded"
-                  />
-                  <span>Show solution to students</span>
-                </label>
-              </div>
-            ) : selectedSectionId && publish.loaded && publish.isPublished ? (
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
-                Already published to this section
-              </div>
-            ) : null
-          }
+          optionsSlot={<PublishOptions publish={publish} active={!!selectedSectionId} />}
           onStart={handleStart}
           onCancel={onClose}
           starting={loading}
