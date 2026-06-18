@@ -329,3 +329,97 @@ test('author full flow: create, add tests of both kinds, edit, persist round-tri
     await page.locator('button:has-text("Cancel")').click();
   });
 });
+
+/**
+ * Desktop workspace-overflow regression (eval-9p4 #1 / eval-n0v).
+ *
+ * The embedded ProblemCreator host previously wrapped the WorkspaceShell in a
+ * `-m-6` negative-margin div (src/app/(app)/instructor/problems/page.tsx). The
+ * redesign's AppShell <main> has no padding, so that negative margin made the
+ * editor over-bleed 24px past the viewport on the right, pushing the right-hand
+ * header actions ("Generate" and "Update Problem") partly off-screen where the
+ * WorkspaceShell's `overflow: hidden` clips them. The fix removed `-m-6`.
+ *
+ * The mobile-readonly spec only guards overflow at 420px; this test guards the
+ * DESKTOP path (Playwright's default 1280px viewport).
+ *
+ * Detection notes (verified empirically against both builds):
+ *   - `documentElement.scrollWidth - clientWidth` is NOT sufficient: the 24px
+ *     bleed is swallowed by ancestor `overflow: hidden`, so document-level
+ *     overflow reads 0 in BOTH the buggy and fixed builds.
+ *   - `toBeVisible()` is NOT sufficient either: a button clipped by an ancestor's
+ *     `overflow: hidden` still reports visible to Playwright.
+ *   - The discriminating signal is the button's right edge vs the viewport width:
+ *       buggy `-m-6`: "Update Problem" right edge = 1288 (> 1280) → clipped
+ *       fixed:        "Update Problem" right edge = 1264 (<= 1280) → in view
+ * So this test asserts each ribbon action's bounding box lies fully within the
+ * viewport. It MUST fail against the buggy `-m-6` wrapper and pass at HEAD.
+ *
+ * Setup uses the API (the assertion is the rendered UI layout, not the create
+ * path — that is covered by problem-management.spec.ts).
+ */
+
+/** Asserts the element's bounding box lies fully within the viewport width. */
+async function expectWithinViewportWidth(
+  page: import('@playwright/test').Page,
+  locator: import('@playwright/test').Locator,
+  label: string,
+) {
+  const viewport = page.viewportSize();
+  expect(viewport, 'viewport size must be known').not.toBeNull();
+  const box = await locator.boundingBox();
+  expect(box, `${label} must have a bounding box`).not.toBeNull();
+  // Right edge must not extend past the viewport (allow 1px rounding slop).
+  const rightEdge = box!.x + box!.width;
+  expect(rightEdge, `${label} right edge (${rightEdge}) exceeds viewport width (${viewport!.width})`)
+    .toBeLessThanOrEqual(viewport!.width + 1);
+  // And the element must start within the viewport (not pushed entirely off-screen).
+  expect(box!.x, `${label} left edge (${box!.x}) is off-screen`).toBeLessThan(viewport!.width);
+}
+
+test('desktop editor pane does not overflow horizontally and ribbon actions stay visible', async ({
+  page,
+  testNamespace,
+  setupInstructor,
+}) => {
+  test.setTimeout(60000);
+
+  // ── API SETUP (the assertion is the desktop layout, not the create path) ────
+  const instructor = await setupInstructor();
+  const cls = await createClass(instructor.token, `Overflow Class ${testNamespace}`);
+  const problem = await createProblem(instructor.token, cls.id, {
+    title: `Overflow Problem ${testNamespace}`,
+    description: 'A problem for the desktop overflow regression',
+    language: 'python',
+    starterCode: '# starter\n',
+  });
+
+  // Sign in and open the editor at the default desktop viewport.
+  await signInAs(page, instructor.email);
+  await page.goto(`/instructor/problems?edit=${problem.id}`);
+  await expect(page.locator('h2:has-text("Edit Problem")')).toBeVisible({ timeout: 15000 });
+  await waitForMonacoReady(page);
+
+  // The WorkspaceShell editor pane must not bleed past the viewport on the right.
+  // The buggy `-m-6` wrapper pushed the shell's right edge to 1304 (24px past a
+  // 1280 viewport); the fix keeps it at exactly the viewport edge.
+  const shellRight = await page.evaluate(() => {
+    const ribbon = document.querySelector('[data-testid="ribbon-header"]');
+    const shell = ribbon?.parentElement; // WorkspaceShell root
+    return shell ? shell.getBoundingClientRect().right : null;
+  });
+  expect(shellRight, 'WorkspaceShell root must be measurable').not.toBeNull();
+  expect(
+    shellRight!,
+    `editor shell right edge (${shellRight}) bleeds past viewport (${page.viewportSize()!.width})`,
+  ).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
+
+  // Both right-hand Ribbon actions must remain fully within the viewport (not
+  // clipped off-screen by the overflow). These are the actions `-m-6` hid.
+  const generateBtn = page.locator('button:has-text("Generate")');
+  const updateBtn = page.locator('button:has-text("Update Problem")');
+  await expect(generateBtn).toBeVisible();
+  await expect(updateBtn).toBeVisible();
+  await expectWithinViewportWidth(page, generateBtn, 'Generate button');
+  await expectWithinViewportWidth(page, updateBtn, 'Update Problem button');
+});
