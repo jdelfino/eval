@@ -89,6 +89,19 @@ describe('SignInPage', () => {
       expect(screen.queryByLabelText(/email address/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
     });
+
+    it('renders the OAuth provider stack and the join footer link together (mobile stack contract)', () => {
+      /**
+       * G8 mobile contract: the OAuth provider stack and the "Join as a student"
+       * footer link both render on the sign-in surface so the stacked-mobile layout
+       * keeps its primary (providers) and escape-hatch (join) affordances. Catches a
+       * reskin accidentally dropping the provider stack or footer link.
+       */
+      render(<SignInPage />);
+
+      expect(screen.getByTestId('sign-in-buttons')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /join as a student/i })).toBeInTheDocument();
+    });
   });
 
   describe('Authentication flow', () => {

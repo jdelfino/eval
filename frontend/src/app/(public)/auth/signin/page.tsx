@@ -50,7 +50,7 @@ function SignInPageContent() {
 
   return (
     <AuthPublicShell narrow showSignInLink={false}>
-      <AuthCard style={{ marginTop: 30, padding: 28 }}>
+      <AuthCard style={{ marginTop: 'clamp(16px, 6vw, 30px)', padding: 'clamp(20px, 5vw, 28px)' }}>
         {/* Heading */}
         <AuthHeading size="lg" sub="Use the same account you signed up with.">
           Sign in to Eval

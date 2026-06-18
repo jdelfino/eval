@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import InstructorActions from './InstructorActions';
 import StudentActions from './StudentActions';
+import { MobileSolveSwitch } from './MobileSolveSwitch';
 import { getPublicProblem } from '@/lib/api/problems';
 import { getLanguageVersion } from '@/lib/languageVersions';
 import { formatShortDate } from '@/lib/format';
@@ -125,7 +126,8 @@ export default async function PublicProblemPage({ params }: Params) {
       {/* Hero */}
       <div
         style={{
-          padding: '32px 64px 28px 64px',
+          // Horizontal padding collapses on small screens so the hero fits 420px.
+          padding: '32px clamp(16px, 6vw, 64px) 28px',
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg)',
         }}
@@ -165,32 +167,35 @@ export default async function PublicProblemPage({ params }: Params) {
       </div>
 
       {/* Page body */}
-      <div style={{ padding: '28px 64px 64px 64px', maxWidth: 1180 }}>
-        {/* Persona CTAs */}
-        {!problem.class_id && (
-          <div style={{ marginBottom: 24 }}>
-            <Button variant="accent" size="md" asChild>
-              <Link href="/auth/signin">Sign in</Link>
-            </Button>
-          </div>
-        )}
+      <div style={{ padding: '28px clamp(16px, 6vw, 64px) 64px', maxWidth: 1180 }}>
+        {/* Persona CTAs — solve/practice path. On mobile this read-only surface
+            swaps the whole solve block for the OpenOnLaptop affordance (G8). */}
+        <MobileSolveSwitch>
+          {!problem.class_id && (
+            <div style={{ marginBottom: 24 }}>
+              <Button variant="accent" size="md" asChild>
+                <Link href="/auth/signin">Sign in</Link>
+              </Button>
+            </div>
+          )}
 
-        {problem.class_id && (
-          <>
-            <Suspense fallback={null}>
-              <InstructorActions
-                problem_id={problem.id}
-                problem_title={problem.title}
-                class_id={problem.class_id}
-                className={className}
-              />
-            </Suspense>
+          {problem.class_id && (
+            <>
+              <Suspense fallback={null}>
+                <InstructorActions
+                  problem_id={problem.id}
+                  problem_title={problem.title}
+                  class_id={problem.class_id}
+                  className={className}
+                />
+              </Suspense>
 
-            <Suspense fallback={null}>
-              <StudentActions problem_id={problem.id} class_id={problem.class_id} />
-            </Suspense>
-          </>
-        )}
+              <Suspense fallback={null}>
+                <StudentActions problem_id={problem.id} class_id={problem.class_id} />
+              </Suspense>
+            </>
+          )}
+        </MobileSolveSwitch>
 
         {/* Problem statement */}
         {problem.description && (

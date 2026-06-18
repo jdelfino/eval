@@ -92,7 +92,14 @@ export default function Home() {
   // Render landing page for unauthenticated users (screen I)
   return (
     <AuthPublicShell showSignInLink={true}>
-      <div style={{ maxWidth: 460, margin: '60px auto 0' }}>
+      <div
+        style={{
+          // Fluid width so the card fits a 420px viewport without horizontal scroll.
+          width: '100%',
+          maxWidth: 460,
+          margin: 'clamp(24px, 8vw, 60px) auto 0',
+        }}
+      >
 
         {/* Brand hero — centered logomark + tagline */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
@@ -167,7 +174,7 @@ export default function Home() {
             variant="accent"
             disabled={isValidating || !join_code}
             loading={isValidating}
-            style={{ marginTop: 18, width: '100%' }}
+            style={{ marginTop: 18, width: '100%', minHeight: 44 }}
           >
             {isValidating ? (
               'Joining…'
