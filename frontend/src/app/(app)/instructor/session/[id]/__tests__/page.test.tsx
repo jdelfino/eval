@@ -42,10 +42,9 @@ jest.mock('../../../components/SessionView', () => ({
     onEndSession,
     onUpdateProblem,
     onFeatureStudent,
-    forceDesktop,
   }: any) {
     return (
-      <div data-testid="session-view" data-force-desktop={forceDesktop ? 'true' : 'false'}>
+      <div data-testid="session-view">
         <span data-testid="session-id">{session_id}</span>
         <span data-testid="join-code">{join_code}</span>
         <span data-testid="section-name">{sessionContext?.section_name}</span>
@@ -560,12 +559,4 @@ describe('InstructorSessionPage', () => {
     });
   });
 
-  describe('SessionView forceDesktop', () => {
-    it('passes forceDesktop=true to SessionView for projector zoom protection', () => {
-      render(<InstructorSessionPage />);
-
-      const sessionView = screen.getByTestId('session-view');
-      expect(sessionView).toHaveAttribute('data-force-desktop', 'true');
-    });
-  });
 });

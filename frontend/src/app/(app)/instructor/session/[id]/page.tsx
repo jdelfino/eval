@@ -306,7 +306,6 @@ export default function InstructorSessionPage() {
           onClearPublicView={handleClearPublicView}
           executeCode={handleExecuteCode}
           featured_student_id={realtimeSession?.featured_student_id}
-          forceDesktop
         />
       )}
     </div>
