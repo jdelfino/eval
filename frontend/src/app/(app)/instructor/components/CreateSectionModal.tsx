@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Modal, Button, Field, Input } from '@/components/ui';
 import { createSection } from '@/lib/api/classes';
 
 interface CreateSectionModalProps {
@@ -55,73 +56,48 @@ export default function CreateSectionModal({ class_id, onClose, onSuccess }: Cre
     }
   };
 
+  const footer = (
+    <>
+      <Button type="button" variant="secondary" onClick={handleClose} disabled={loading}>
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        form="create-section-form"
+        variant="primary"
+        loading={loading}
+        disabled={loading || !name.trim()}
+      >
+        {loading ? 'Creating...' : 'Create section'}
+      </Button>
+    </>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleClose}>
-      <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Create New Section</h2>
-          <button
-            onClick={handleClose}
+    <Modal
+      open
+      title="New section"
+      sub="A section is a meeting time within a class. Students join it with its code."
+      width={448}
+      onClose={handleClose}
+      footer={footer}
+      initialFocusSelector="#section-name"
+    >
+      <form id="create-section-form" onSubmit={handleSubmit}>
+        <Field label="Section Name *">
+          <Input
+            id="section-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., Section A"
             disabled={loading}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="section-name" className="block text-sm font-medium text-gray-700 mb-1">
-                Section Name *
-              </label>
-              <input
-                id="section-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Section A"
-                disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100"
-                maxLength={100}
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-                {error}
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={loading}
-              className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !name.trim()}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  Creating...
-                </>
-              ) : (
-                'Create Section'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            autoFocus
+            maxLength={100}
+            error={error ?? undefined}
+          />
+        </Field>
+      </form>
+    </Modal>
   );
 }
