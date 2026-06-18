@@ -38,9 +38,9 @@ jest.mock('@/lib/api/section-problems', () => ({
   listSectionProblems: (...args: unknown[]) => mockListSectionProblems(...args),
 }));
 
-const mockGetActiveSessions = jest.fn();
+const mockListSectionSessions = jest.fn();
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
+  listSectionSessions: (...args: unknown[]) => mockListSectionSessions(...args),
 }));
 
 jest.mock('next/link', () => {
@@ -68,7 +68,8 @@ jest.mock('next/link', () => {
 function buildSection(
   id: string,
   name: string,
-  className: string
+  className: string,
+  currentSessionId: string | null = null
 ) {
   return {
     section: {
@@ -79,6 +80,7 @@ function buildSection(
       semester: null,
       join_code: 'ABC123',
       active: true,
+      current_session_id: currentSessionId,
       created_at: '2025-01-01T00:00:00Z',
       updated_at: '2025-01-01T00:00:00Z',
     },
@@ -131,15 +133,26 @@ function buildProblem(
   };
 }
 
-function buildActiveSession(sectionId: string) {
+// Recent timestamp → within the 60-min liveness window.
+const RECENT = new Date().toISOString();
+// Stale timestamp → outside the window (pointer set, but not "live now").
+const STALE = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+// Builds the pointer session returned by listSectionSessions. id must match the
+// section's current_session_id for the page to treat it as the live session.
+function buildPointerSession(
+  sectionId: string,
+  sessionId: string,
+  lastActivity: string = RECENT
+) {
   return {
-    id: 'session-live-1',
+    id: sessionId,
     namespace_id: 'ns-1',
     section_id: sectionId,
     section_name: 'CS A',
     status: 'active' as const,
     created_at: '2025-01-01T00:00:00Z',
-    last_activity: '2025-01-01T00:00:00Z',
+    last_activity: lastActivity,
     ended_at: null,
     problem: null,
     featured_student_id: null,
@@ -176,7 +189,7 @@ describe('MySectionsPage', () => {
       buildProblem('p4', null),
       buildProblem('p5'),
     ]);
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockListSectionSessions.mockResolvedValue([]);
 
     render(<MySectionsPage />);
 
@@ -186,20 +199,21 @@ describe('MySectionsPage', () => {
   });
 
   /**
-   * TC2: Live vs idle state wiring.
-   * Live section: green top-bar and accent "Jump in" button.
-   * Idle section: "Practice problems →" is the primary CTA.
+   * TC2: Live vs idle state wiring (G4 pointer model).
+   * Live section: pointer set + recent activity → green top-bar and "Jump in".
+   * Idle section: no pointer → "Practice problems →" is the primary CTA.
+   * Catches: live flag drifting back to status='active' / getActiveSessions.
    */
   it('live section renders green top-bar + "Jump in"; idle section renders Practice CTA', async () => {
     mockListMySections.mockReturnValue([
-      buildSection('s1', 'CS A · Period 3', 'Lincoln HS'),
+      buildSection('s1', 'CS A · Period 3', 'Lincoln HS', 'sess-s1'),
       buildSection('s2', 'CS B · Block A', 'Lincoln HS'),
     ]);
-    // s1 is live, s2 is idle
+    // s1 has a recent pointer (live), s2 has no pointer (idle)
     mockListSectionProblems.mockResolvedValue([]);
-    mockGetActiveSessions
+    mockListSectionSessions
       .mockImplementation((sectionId: string) => {
-        if (sectionId === 's1') return Promise.resolve([buildActiveSession('s1')]);
+        if (sectionId === 's1') return Promise.resolve([buildPointerSession('s1', 'sess-s1', RECENT)]);
         return Promise.resolve([]);
       });
 
@@ -218,15 +232,39 @@ describe('MySectionsPage', () => {
   });
 
   /**
+   * TC2c (G4-R3): a section with a pointer but STALE activity is NOT "live now":
+   * no top-bar, no "Jump in". The pointer alone must not light up the card.
+   * Catches: stale-pointer-as-live regression on the student sections list.
+   */
+  it('section with a stale pointer renders no top-bar and no "Jump in"', async () => {
+    mockListMySections.mockReturnValue([
+      buildSection('s1', 'CS A · Period 3', 'Lincoln HS', 'sess-stale'),
+    ]);
+    mockListSectionProblems.mockResolvedValue([]);
+    mockListSectionSessions.mockResolvedValue([
+      buildPointerSession('s1', 'sess-stale', STALE),
+    ]);
+
+    render(<MySectionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('CS A · Period 3')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId('live-top-bar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /jump in/i })).not.toBeInTheDocument();
+  });
+
+  /**
    * TC2b: "Jump in" link href routes to the correct section.
    * Catches: live CTA pointing to a wrong section or missing the section ID.
    */
   it('"Jump in" link href routes to /sections/{sectionId}', async () => {
     mockListMySections.mockReturnValue([
-      buildSection('s-live', 'CS A · Period 3', 'Lincoln HS'),
+      buildSection('s-live', 'CS A · Period 3', 'Lincoln HS', 'sess-live'),
     ]);
     mockListSectionProblems.mockResolvedValue([]);
-    mockGetActiveSessions.mockResolvedValue([buildActiveSession('s-live')]);
+    mockListSectionSessions.mockResolvedValue([buildPointerSession('s-live', 'sess-live', RECENT)]);
 
     render(<MySectionsPage />);
 
@@ -248,7 +286,7 @@ describe('MySectionsPage', () => {
       buildSection('s1', 'CS A · Period 3', 'Lincoln HS'),
     ]);
     mockListSectionProblems.mockRejectedValue(new Error('network error'));
-    mockGetActiveSessions.mockRejectedValue(new Error('network error'));
+    mockListSectionSessions.mockRejectedValue(new Error('network error'));
 
     render(<MySectionsPage />);
 
@@ -271,7 +309,7 @@ describe('MySectionsPage', () => {
       buildSection('s1', 'CS A · Period 3', 'Lincoln HS'),
     ]);
     mockListSectionProblems.mockResolvedValue([]);
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockListSectionSessions.mockResolvedValue([]);
 
     render(<MySectionsPage />);
 
@@ -287,7 +325,7 @@ describe('MySectionsPage', () => {
   it('"Join Section" link to /sections/join present when section list is empty', () => {
     mockListMySections.mockReturnValue([]);
     mockListSectionProblems.mockResolvedValue([]);
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockListSectionSessions.mockResolvedValue([]);
 
     render(<MySectionsPage />);
 
@@ -305,7 +343,7 @@ describe('MySectionsPage', () => {
       buildSection('s-abc', 'CS A · Period 3', 'Lincoln HS'),
     ]);
     mockListSectionProblems.mockResolvedValue([]);
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockListSectionSessions.mockResolvedValue([]);
 
     render(<MySectionsPage />);
 
@@ -326,7 +364,7 @@ describe('MySectionsPage', () => {
       buildSection('s1', 'CS A · Period 3', 'Lincoln HS'),
     ]);
     mockListSectionProblems.mockResolvedValue([]);
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockListSectionSessions.mockResolvedValue([]);
 
     render(<MySectionsPage />);
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getClassSections, deleteSection, getActiveSessions } from '@/lib/api/sections';
+import { getClassSections, deleteSection, listSectionSessions } from '@/lib/api/sections';
 import CreateSectionModal from './CreateSectionModal';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { BackButton } from '@/components/ui/BackButton';
@@ -87,10 +87,13 @@ export default function SectionView({
     }
   };
 
+  // G4 (T13): list ALL sessions for the section (not just status='active').
+  // The "current" session is identified by the section pointer
+  // (selectedSection.current_session_id), not by status.
   const loadSessions = async (section_id: string) => {
     try {
       setLoadingSessions(true);
-      const sessions = await getActiveSessions(section_id);
+      const sessions = await listSectionSessions(section_id);
       setSessions(sessions || []);
     } catch (err) {
       console.error('Error loading sessions:', err);
@@ -328,13 +331,20 @@ export default function SectionView({
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">
-                <span className={`px-2 py-1 rounded-full ${
-                  session.status === 'active'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-gray-100 text-gray-700'
-                }`}>
-                  {session.status}
-                </span>
+                {/* G4 (T13): "current" is the session the section pointer targets,
+                    not status='active'. */}
+                {(() => {
+                  const isCurrent = session.id === selectedSection.current_session_id;
+                  return (
+                    <span className={`px-2 py-1 rounded-full ${
+                      isCurrent
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {isCurrent ? 'current' : 'past'}
+                    </span>
+                  );
+                })()}
                 <span>{new Date(session.last_activity).toLocaleTimeString()}</span>
               </div>
             </button>

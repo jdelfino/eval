@@ -2,14 +2,22 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
-// InstructorDashboard returns classes with sections, student counts, and active session IDs
-// for an instructor. Uses a single query that joins classes, sections, memberships, and sessions.
+// InstructorDashboard returns classes with sections, student counts, and the
+// section live indicator for an instructor. Uses a single query that joins
+// classes, sections, memberships, and the pointer session.
 // RLS policies handle namespace filtering automatically.
 // Classes without sections are included (LEFT JOIN on sections).
+//
+// G4 (T13): the live indicator is derived from the section pointer
+// (sections.current_session_id), NOT the retired status='active' lifecycle.
+// We also surface the pointer session's last_activity so the client can apply
+// the 60-min "Live now" liveness heuristic (a non-null pointer means "current
+// problem"; recent last_activity additionally means "live now").
 func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]DashboardClass, error) {
 	const query = `
 		SELECT
@@ -20,8 +28,8 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 			sec.join_code AS section_join_code,
 			sec.semester AS section_semester,
 			COALESCE(sm.student_count, 0) AS student_count,
-			sess.active_id AS active_session_id,
-			sec.current_session_id AS current_session_id
+			sec.current_session_id AS current_session_id,
+			cur.last_activity AS current_last_activity
 		FROM classes c
 		LEFT JOIN sections sec ON sec.class_id = c.id
 		LEFT JOIN LATERAL (
@@ -29,13 +37,7 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 			FROM section_memberships
 			WHERE section_id = sec.id AND role = 'student'
 		) sm ON true
-		LEFT JOIN LATERAL (
-			SELECT id AS active_id
-			FROM sessions
-			WHERE section_id = sec.id AND status = 'active'
-			ORDER BY created_at DESC
-			LIMIT 1
-		) sess ON true
+		LEFT JOIN sessions cur ON cur.id = sec.current_session_id
 		WHERE c.created_by = $1
 		   OR sec.id IN (
 		       SELECT section_id FROM section_memberships
@@ -61,10 +63,10 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 			sectionJoinCode *string    // nullable for classes without sections
 			sectionSemester *string    // nullable
 			studentCount     int
-			activeSessionID  *uuid.UUID // nullable if no active session (legacy status-derived)
 			currentSessionID *uuid.UUID // nullable G4 section pointer
+			currentLastAct   *time.Time // nullable; pointer session's last_activity
 		)
-		if err := rows.Scan(&classID, &className, &sectionID, &sectionName, &sectionJoinCode, &sectionSemester, &studentCount, &activeSessionID, &currentSessionID); err != nil {
+		if err := rows.Scan(&classID, &className, &sectionID, &sectionName, &sectionJoinCode, &sectionSemester, &studentCount, &currentSessionID, &currentLastAct); err != nil {
 			return nil, err
 		}
 
@@ -87,8 +89,8 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 				JoinCode:         *sectionJoinCode,
 				Semester:         sectionSemester,
 				StudentCount:     studentCount,
-				ActiveSessionID:  activeSessionID,
 				CurrentSessionID: currentSessionID,
+				LastActivity:     currentLastAct,
 			})
 		}
 	}

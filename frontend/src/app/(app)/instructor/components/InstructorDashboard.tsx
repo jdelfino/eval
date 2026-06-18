@@ -3,14 +3,22 @@
 /**
  * InstructorDashboard - v4 reskin of the instructor home page.
  *
+ * G4 (T13): the live indicator derives from the section pointer
+ * (`section.currentSessionId`) plus the 60-min liveness heuristic
+ * (`section.lastActivity`, see lib/liveness). A non-null pointer means the
+ * section has a "current problem" (rejoin target). "Live now" emphasis (pulse +
+ * green pill) additionally requires recent activity; a stale pointer shows the
+ * current-problem affordance (rejoin) WITHOUT the live pulse.
+ *
  * Layout:
- *   1. Live strip — one card per section with an active session. Shows
- *      "Live now · N/M connected" where N = joined students (from
- *      GET /sessions/{id}/students) and M = section.studentCount. Degrades
- *      to "Live now" (no fraction) when the secondary fetch fails.
+ *   1. Live strip — one card per section with a current-session pointer. Shows
+ *      "Live now · N/M connected" (recent) or "Current problem · N/M connected"
+ *      (stale), where N = joined students (from GET /sessions/{id}/students) and
+ *      M = section.studentCount. Degrades to no fraction when the secondary fetch
+ *      fails. Always offers Rejoin.
  *   2. Classes table — class · section name, student count, status pill
- *      (Live / Idle), and action button (Start Session for idle sections).
- *      Rejoin for live sections is in the live strip above.
+ *      (Live / Idle), and action button (Start Session for sections with no
+ *      pointer). Rejoin for sections with a pointer is in the live strip above.
  *      No "Meets" column (no meeting-time data). No right rail (dropped per spec).
  *
  * Preserves: start-session-{id} / rejoin-session-{id} testids required by e2e.
@@ -24,6 +32,7 @@ import { ErrorAlert } from '@/components/ErrorAlert';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 import { getInstructorDashboard, type DashboardClass } from '@/lib/api/instructor';
 import { getSessionStudents } from '@/lib/api/sessions';
+import { isSectionLive } from '@/lib/liveness';
 import { Pill } from '@/components/ui/Pill';
 import { Table } from '@/components/ui/Table';
 import { SectionLabel } from '@/components/ui/SectionLabel';
@@ -39,7 +48,7 @@ interface InstructorDashboardProps {
 }
 
 /**
- * Fetches connected student counts for all active sessions in parallel.
+ * Fetches connected student counts for all current-pointer sessions in parallel.
  * Returns a map of sessionId -> connectedCount.
  * Sessions that fail to fetch are omitted from the map (graceful degradation).
  */
@@ -48,19 +57,19 @@ async function fetchConnectedCounts(
 ): Promise<Map<string, number>> {
   const results = new Map<string, number>();
 
-  const activeSessions: Array<{ sessionId: string }> = [];
+  const currentSessions: Array<{ sessionId: string }> = [];
   for (const cls of classes) {
     for (const section of cls.sections) {
-      if (section.activeSessionId) {
-        activeSessions.push({ sessionId: section.activeSessionId });
+      if (section.currentSessionId) {
+        currentSessions.push({ sessionId: section.currentSessionId });
       }
     }
   }
 
-  if (activeSessions.length === 0) return results;
+  if (currentSessions.length === 0) return results;
 
   await Promise.all(
-    activeSessions.map(async ({ sessionId }) => {
+    currentSessions.map(async ({ sessionId }) => {
       try {
         const students = await getSessionStudents(sessionId);
         results.set(sessionId, students.length);
@@ -141,12 +150,16 @@ export function InstructorDashboard({
     );
   }
 
-  /** Returns all sections with an active session across all classes. */
-  const getLiveSections = (classes: DashboardClass[]) => {
+  /**
+   * Returns all sections with a current-session pointer across all classes.
+   * These are the "current problem" / rejoin targets; whether each is "live now"
+   * (recent activity) vs stale is decided per-card via the liveness heuristic.
+   */
+  const getCurrentSections = (classes: DashboardClass[]) => {
     const entries: Array<{ section: DashboardClass['sections'][0]; className: string }> = [];
     for (const cls of classes) {
       for (const section of cls.sections) {
-        if (section.activeSessionId) {
+        if (section.currentSessionId) {
           entries.push({ section, className: cls.name });
         }
       }
@@ -188,7 +201,7 @@ export function InstructorDashboard({
     );
   }
 
-  const liveSectionEntries = getLiveSections(classesWithSections);
+  const currentSectionEntries = getCurrentSections(classesWithSections);
 
   return (
     <div data-testid="instructor-dashboard">
@@ -212,15 +225,20 @@ export function InstructorDashboard({
         )}
       </div>
 
-      {/* Live strip — one card per active session */}
-      {liveSectionEntries.length > 0 && (
+      {/* Current-problem strip — one card per section with a pointer.
+          "Live now" pulse appears only when the pointer session is recently
+          active (60-min heuristic); a stale pointer shows "Current problem"
+          without the pulse but still offers Rejoin. */}
+      {currentSectionEntries.length > 0 && (
         <div className="flex flex-col gap-3 mb-6">
-          {liveSectionEntries.map(({ section, className }) => {
-            const connectedCount = connectedCounts?.get(section.activeSessionId!) ?? null;
+          {currentSectionEntries.map(({ section, className }) => {
+            const connectedCount = connectedCounts?.get(section.currentSessionId!) ?? null;
             const subtitle =
               connectedCount !== null
                 ? `${connectedCount}/${section.studentCount} connected`
                 : null;
+            const live = isSectionLive(section.currentSessionId, section.lastActivity);
+            const label = live ? 'Live now' : 'Current problem';
 
             return (
               <div
@@ -229,8 +247,8 @@ export function InstructorDashboard({
               >
                 <div>
                   <SectionLabel style={{ color: 'var(--info)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-                    <span>Live now{subtitle ? ` · ${subtitle}` : null}</span>
+                    {live && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
+                    <span>{label}{subtitle ? ` · ${subtitle}` : null}</span>
                   </SectionLabel>
                   <div className="mt-1 text-base font-semibold text-gray-900">
                     {section.name} · {className}
@@ -240,7 +258,7 @@ export function InstructorDashboard({
                   </div>
                 </div>
                 <button
-                  onClick={() => onRejoinSession(section.activeSessionId!)}
+                  onClick={() => onRejoinSession(section.currentSessionId!)}
                   className="shrink-0 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
                   data-testid={`rejoin-session-${section.id}`}
                 >
@@ -285,7 +303,10 @@ export function InstructorDashboard({
                 </Table.Row>
               ) : (
                 // Class with sections — one row per section
-                classInfo.sections.map((section, sectionIndex) => (
+                classInfo.sections.map((section, sectionIndex) => {
+                  const sectionLive = isSectionLive(section.currentSessionId, section.lastActivity);
+                  const hasPointer = !!section.currentSessionId;
+                  return (
                   <Table.Row
                     key={section.id}
                     data-testid={`section-row-${section.id}`}
@@ -318,17 +339,18 @@ export function InstructorDashboard({
                     </Table.Cell>
                     <Table.Cell>
                       <Pill
-                        tone={section.activeSessionId ? 'ok' : 'neutral'}
-                        dot={!!section.activeSessionId}
+                        tone={sectionLive ? 'ok' : 'neutral'}
+                        dot={sectionLive}
                         data-testid={`status-pill-${section.id}`}
                       >
-                        {section.activeSessionId ? 'Live' : 'Idle'}
+                        {sectionLive ? 'Live' : 'Idle'}
                       </Pill>
                     </Table.Cell>
                     <Table.Cell align="right">
-                      {/* Start session button only for idle sections.
-                          Rejoin for live sections is provided in the live strip above. */}
-                      {canCreateSession && !section.activeSessionId && (
+                      {/* Start session button only for sections with no current
+                          pointer. Rejoin for sections with a pointer is provided
+                          in the current-problem strip above. */}
+                      {canCreateSession && !hasPointer && (
                         <button
                           onClick={() => onStartSession(section.id, section.name)}
                           className="px-3 py-1.5 text-sm font-medium rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
@@ -339,7 +361,8 @@ export function InstructorDashboard({
                       )}
                     </Table.Cell>
                   </Table.Row>
-                ))
+                  );
+                })
               )
             ))}
           </Table.Body>

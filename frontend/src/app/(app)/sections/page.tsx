@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSections } from '@/hooks/useSections';
 import { listSectionProblems } from '@/lib/api/section-problems';
-import { getActiveSessions } from '@/lib/api/sections';
+import { listSectionSessions } from '@/lib/api/sections';
 import { useParallelEnrichment } from '@/hooks/useParallelEnrichment';
+import { isSectionLive } from '@/lib/liveness';
 import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,12 +21,18 @@ interface SectionEnrichment {
 }
 
 // Fetch problems + sessions in parallel for one section; degrade on failure.
-// getActiveSessions already passes ?status=active so no client-side filtering needed.
+//
+// G4 (T13): "live" is derived from the section pointer (current_session_id) plus
+// the 60-min liveness heuristic — NOT the retired status='active' lifecycle. We
+// list the section's sessions to find the pointer session's last_activity, then
+// apply isSectionLive. A stale pointer (recent activity gone) is not "live".
 async function fetchSectionEnrichment(info: MySectionInfo): Promise<SectionEnrichment> {
   const sectionId = info.section.id;
+  const currentSessionId = info.section.current_session_id ?? null;
   const [problemsResult, sessionsResult] = await Promise.allSettled([
     listSectionProblems(sectionId),
-    getActiveSessions(sectionId),
+    // Only need the sessions list to resolve the pointer's last_activity.
+    currentSessionId ? listSectionSessions(sectionId) : Promise.resolve([]),
   ]);
 
   let solvedCount: number | null = null;
@@ -38,8 +45,11 @@ async function fetchSectionEnrichment(info: MySectionInfo): Promise<SectionEnric
     ).length;
   }
 
-  const live =
-    sessionsResult.status === 'fulfilled' && sessionsResult.value.length > 0;
+  let live = false;
+  if (currentSessionId && sessionsResult.status === 'fulfilled') {
+    const pointerSession = sessionsResult.value.find((s) => s.id === currentSessionId);
+    live = isSectionLive(currentSessionId, pointerSession?.last_activity ?? null);
+  }
 
   return { solvedCount, totalCount, live };
 }

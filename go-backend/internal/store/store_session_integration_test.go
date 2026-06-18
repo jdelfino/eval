@@ -273,6 +273,99 @@ func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
 	})
 }
 
+// TestIntegration_InstructorDashboardPointer verifies the G4 (T13) dashboard
+// live-indicator switch: InstructorDashboard derives CurrentSessionID and
+// LastActivity from the section pointer (sections.current_session_id +
+// the pointer session's last_activity), NOT from the retired status='active'
+// lifecycle.
+//
+// Contract verified:
+//   - a section with the pointer set surfaces CurrentSessionID + LastActivity;
+//   - a section with no pointer returns nil for both;
+//   - a completed-status session that is NOT the pointer does not surface
+//     (proves the SQL no longer reads status='active').
+//
+// Why it matters: the instructor home strip / status pill key on these fields;
+// a regression here either blanks live indicators or revives the dead status path.
+func TestIntegration_InstructorDashboardPointer(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	instructorID := uuid.New()
+	db.createUser(ctx, t, instructorID, "dash-instr@test.com", "instructor", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "Dashboard Class", instructorID)
+
+	// Section A: has a pointer to an active-ish session.
+	secA := uuid.New()
+	db.createSection(ctx, t, secA, nsID, classID, "Section A", "DASHA")
+	db.createMembership(ctx, t, instructorID, secA, "instructor")
+	sessA := uuid.New()
+	db.createSession(ctx, t, sessA, nsID, secA, "Section A", instructorID)
+
+	// Section B: NO pointer, but DOES have a completed session in the section.
+	// Under the old status-derived SQL this would have surfaced nothing live;
+	// under the pointer model it must surface nil because the pointer is unset.
+	secB := uuid.New()
+	db.createSection(ctx, t, secB, nsID, classID, "Section B", "DASHB")
+	db.createMembership(ctx, t, instructorID, secB, "instructor")
+	sessB := uuid.New()
+	db.createSession(ctx, t, sessB, nsID, secB, "Section B", instructorID)
+	if err := db.execAsSuperuser(ctx,
+		`UPDATE sessions SET status = 'completed' WHERE id = $1`, sessB); err != nil {
+		t.Fatalf("mark sessB completed: %v", err)
+	}
+
+	authInstructor := &auth.User{
+		ID:          instructorID,
+		Email:       "dash-instr@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	s, conn := db.storeWithRLS(ctx, t, authInstructor)
+	defer conn.Release()
+
+	// Set the pointer on Section A only.
+	if err := s.SetSectionCurrentSession(ctx, secA, sessA); err != nil {
+		t.Fatalf("SetSectionCurrentSession: %v", err)
+	}
+
+	classes, err := s.InstructorDashboard(ctx, instructorID)
+	if err != nil {
+		t.Fatalf("InstructorDashboard: %v", err)
+	}
+
+	var found bool
+	for _, c := range classes {
+		for _, sec := range c.Sections {
+			switch sec.ID {
+			case secA:
+				found = true
+				if sec.CurrentSessionID == nil || *sec.CurrentSessionID != sessA {
+					t.Errorf("Section A CurrentSessionID = %v, want %v", sec.CurrentSessionID, sessA)
+				}
+				if sec.LastActivity == nil {
+					t.Error("Section A LastActivity should be populated from the pointer session")
+				}
+			case secB:
+				if sec.CurrentSessionID != nil {
+					t.Errorf("Section B has no pointer; CurrentSessionID = %v, want nil", *sec.CurrentSessionID)
+				}
+				if sec.LastActivity != nil {
+					t.Errorf("Section B has no pointer; LastActivity = %v, want nil", *sec.LastActivity)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("Section A not present in dashboard result")
+	}
+}
+
 // TestIntegration_CreateSessionDoesNotFlipOthers verifies the G4 plain create:
 // CreateSession inserts a new row and does not flip any other session's status
 // to 'completed' (no leftover replacement behavior).

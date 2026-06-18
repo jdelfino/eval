@@ -11,17 +11,19 @@
  *    websocket is disconnected.
  *
  * 2. Section mode (section_id): Subscribes to the Centrifugo section channel
- *    and auto-follows the active session. On session_started_in_section, begins
- *    tracking the new session (fetching its state and subscribing to its channel).
- *    On session_ended_in_section, clears the tracked session. This allows a single
- *    projector tab to persist across multiple sessions in a lecture.
+ *    and auto-follows the section's current-session pointer (G4-R3). On the
+ *    initial load it reads the section pointer (getSection().current_session_id)
+ *    and follows that session if set. On section_current_changed it follows the
+ *    new pointer (non-null session_id) or clears the tracked session (null).
+ *    This allows a single projector tab to persist across multiple problems in a
+ *    lecture, including casting mid-session (the pointer is read on load).
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Centrifuge, Subscription } from 'centrifuge';
 import { createCentrifuge, getSubscriptionToken } from '@/lib/centrifugo';
 import { getSessionPublicState } from '@/lib/api/sessions';
-import { getActiveSessions } from '@/lib/api/sections';
+import { getSection } from '@/lib/api/sections';
 import type { SessionPublicState } from '@/types/api';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 import type { RealtimeStatus } from '@/lib/connectionStatus';
@@ -321,16 +323,18 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
   useEffect(() => {
     if (!section_id) return;
 
-    // Initial load: check for active sessions in this section
+    // Initial load (G4-R3 / B3): read the section pointer and follow it if set.
+    // Reading the pointer (rather than status='active') means casting to a
+    // projector mid-session immediately shows the current session, instead of
+    // waiting for a section_current_changed event to fire.
     const initialLoad = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const allSessions = await getActiveSessions(section_id);
-        const activeSessions = allSessions.filter(s => s.status === 'active');
-        if (activeSessions.length > 0) {
-          const sessionId = activeSessions[0].id;
+        const section = await getSection(section_id);
+        const sessionId = section.current_session_id;
+        if (sessionId) {
           activeSessionIdRef.current = sessionId;
           setActiveSessionId(sessionId);
           const data = await getSessionPublicState(sessionId);
@@ -367,49 +371,35 @@ export function useRealtimePublicView({ session_id, section_id }: UseRealtimePub
       }
 
       switch (parsed.type) {
-        case 'session_started_in_section': {
+        case 'section_current_changed': {
+          // G4-R3: the section pointer moved. A non-null session_id begins
+          // auto-following that session; null clears the tracked session.
           const { session_id: sessionId } = parsed.data;
 
-          // Clean up any existing session subscription
+          // Clean up any existing session subscription before switching/clearing.
           if (sessionCleanupRef.current) {
             sessionCleanupRef.current();
             sessionCleanupRef.current = null;
           }
 
-          // Start tracking the new session
-          activeSessionIdRef.current = sessionId;
-          setActiveSessionId(sessionId);
-          getSessionPublicState(sessionId).then(data => {
-            setState(data);
-            setError(null);
-          }).catch(e => {
-            console.error('[useRealtimePublicView] Failed to fetch new session state:', e);
-            setError(e instanceof Error ? e.message : 'Failed to fetch session state');
-          });
+          if (sessionId) {
+            // Start tracking the new pointer session.
+            activeSessionIdRef.current = sessionId;
+            setActiveSessionId(sessionId);
+            getSessionPublicState(sessionId).then(data => {
+              setState(data);
+              setError(null);
+            }).catch(e => {
+              console.error('[useRealtimePublicView] Failed to fetch new session state:', e);
+              setError(e instanceof Error ? e.message : 'Failed to fetch session state');
+            });
 
-          const cleanup = subscribeToSessionChannel(sessionId);
-          sessionCleanupRef.current = cleanup;
-          break;
-        }
-
-        case 'session_ended_in_section': {
-          const { session_id: endedSessionId } = parsed.data;
-          // Read activeSessionId outside the updater to keep the updater pure.
-          // React updaters must be side-effect-free (they may run multiple times).
-          setActiveSessionId(prev => {
-            if (prev !== endedSessionId) return prev;
-            return null;
-          });
-          // Perform side effects outside the updater.
-          // We check the ref directly; if the ended session matches we clean up.
-          // The ref tracks the current session regardless of render cycle.
-          const currentId = activeSessionIdRef.current;
-          if (currentId === endedSessionId) {
+            const cleanup = subscribeToSessionChannel(sessionId);
+            sessionCleanupRef.current = cleanup;
+          } else {
+            // Pointer cleared (e.g. "End class") — return to the waiting state.
             activeSessionIdRef.current = null;
-            if (sessionCleanupRef.current) {
-              sessionCleanupRef.current();
-              sessionCleanupRef.current = null;
-            }
+            setActiveSessionId(null);
             setState(null);
           }
           break;

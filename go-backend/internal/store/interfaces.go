@@ -487,12 +487,18 @@ type DashboardSection struct {
 	JoinCode     string    `json:"join_code"`
 	Semester     *string   `json:"semester,omitempty"`
 	StudentCount int       `json:"studentCount"`
-	// ActiveSessionID is the legacy status='active'-derived session id. T13
-	// switches the dashboard SQL to derive from the section pointer; T1 only
-	// adds CurrentSessionID alongside it.
-	ActiveSessionID *uuid.UUID `json:"activeSessionId,omitempty"`
 	// CurrentSessionID is the G4 section pointer (sections.current_session_id).
+	// T13 switched the dashboard SQL to derive the live indicator from this
+	// pointer instead of the retired status='active' lifecycle. A non-null
+	// value is the section's "current problem" / late-join target (G4-R3); the
+	// pointer alone does NOT imply "live now" — that additionally requires
+	// LastActivity to be recent (60-min liveness heuristic, applied client-side).
 	CurrentSessionID *uuid.UUID `json:"currentSessionId,omitempty"`
+	// LastActivity is the current pointer session's last_activity timestamp,
+	// or nil when the pointer is unset. The instructor home strip uses it for
+	// the 60-min "Live now" liveness heuristic (no server-side Centrifugo
+	// presence exists). Sourced from sessions.last_activity via the pointer join.
+	LastActivity *time.Time `json:"lastActivity,omitempty"`
 }
 
 // DashboardClass represents a class summary in the instructor dashboard.

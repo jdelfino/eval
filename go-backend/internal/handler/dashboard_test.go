@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -40,6 +41,7 @@ func TestDashboard_Success(t *testing.T) {
 	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	sessionID := uuid.MustParse("ffffffff-1111-2222-3333-444444444444")
 	userID := uuid.MustParse("99999999-8888-7777-6666-555555555555")
+	lastActivity := time.Now()
 
 	repo := &mockDashboardRepo{
 		instructorDashboardFn: func(_ context.Context, id uuid.UUID) ([]store.DashboardClass, error) {
@@ -52,11 +54,12 @@ func TestDashboard_Success(t *testing.T) {
 					Name: "CS 101",
 					Sections: []store.DashboardSection{
 						{
-							ID:              sectionID,
-							Name:            "Section A",
-							JoinCode:        "ABC123",
-							StudentCount:    25,
-							ActiveSessionID: &sessionID,
+							ID:               sectionID,
+							Name:             "Section A",
+							JoinCode:         "ABC123",
+							StudentCount:     25,
+							CurrentSessionID: &sessionID,
+							LastActivity:     &lastActivity,
 						},
 					},
 				},
@@ -94,8 +97,11 @@ func TestDashboard_Success(t *testing.T) {
 	if sec.StudentCount != 25 {
 		t.Errorf("expected 25 students, got %d", sec.StudentCount)
 	}
-	if sec.ActiveSessionID == nil || *sec.ActiveSessionID != sessionID {
-		t.Errorf("unexpected active session ID: %v", sec.ActiveSessionID)
+	if sec.CurrentSessionID == nil || *sec.CurrentSessionID != sessionID {
+		t.Errorf("unexpected current session ID: %v", sec.CurrentSessionID)
+	}
+	if sec.LastActivity == nil {
+		t.Error("expected lastActivity to be surfaced for a section with a pointer")
 	}
 }
 
