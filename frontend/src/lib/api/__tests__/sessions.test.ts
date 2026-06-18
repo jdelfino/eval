@@ -9,6 +9,7 @@
  */
 
 const mockApiPost = jest.fn();
+const mockMarkSessionLaunched = jest.fn();
 
 jest.mock('@/lib/api-client', () => ({
   apiGet: jest.fn(),
@@ -16,6 +17,10 @@ jest.mock('@/lib/api-client', () => ({
   apiPatch: jest.fn(),
   apiDelete: jest.fn(),
   apiFetch: jest.fn(),
+}));
+
+jest.mock('@/lib/session-launch-flag', () => ({
+  markSessionLaunched: (...args: unknown[]) => mockMarkSessionLaunched(...args),
 }));
 
 import { createSession } from '../sessions';
@@ -55,5 +60,19 @@ describe('createSession request body', () => {
   it('omits problem_id and show_solution for a blank session', async () => {
     await createSession('sec-1');
     expect(mockApiPost).toHaveBeenCalledWith('/sessions', { section_id: 'sec-1' });
+  });
+});
+
+describe('createSession launch flag', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('marks the returned session id as launched on success', async () => {
+    mockApiPost.mockResolvedValue({ id: 'session-42' });
+
+    await createSession('sec-1', 'prob-1');
+
+    expect(mockMarkSessionLaunched).toHaveBeenCalledWith('session-42');
   });
 });

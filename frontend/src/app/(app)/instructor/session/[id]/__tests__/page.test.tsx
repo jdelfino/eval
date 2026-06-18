@@ -89,8 +89,13 @@ jest.mock('@/lib/api/execute', () => ({
   executeCode: jest.fn().mockResolvedValue({ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: '', time_ms: 10 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 10 } }),
 }));
 
-jest.mock('@/lib/api/sessions', () => ({
-  reopenSession: jest.fn().mockResolvedValue(undefined),
+jest.mock('@/lib/api/sections', () => ({
+  getSection: jest.fn().mockResolvedValue({ id: 'section-1', current_session_id: 'session-123' }),
+}));
+
+jest.mock('@/lib/session-launch-flag', () => ({
+  peekSessionLaunched: jest.fn().mockReturnValue(false),
+  clearSessionLaunched: jest.fn(),
 }));
 
 describe('InstructorSessionPage', () => {
@@ -215,75 +220,88 @@ describe('InstructorSessionPage', () => {
     });
   });
 
-  describe('Session Ended State', () => {
-    it('shows ended banner with reopen button when session is completed', () => {
-      (useRealtimeSession as jest.Mock).mockReturnValue({
-        ...defaultRealtimeSessionReturn,
-        session: { ...mockSession, status: 'completed' },
-      });
+  describe('Section pointer (no longer current)', () => {
+    it('shows a neutral read-only notice when the pointer no longer matches this session', async () => {
+      const { getSection } = require('@/lib/api/sections');
+      getSection.mockResolvedValue({ id: 'section-1', current_session_id: 'other-session' });
 
       render(<InstructorSessionPage />);
 
-      expect(screen.getByTestId('session-ended-banner')).toBeInTheDocument();
-      expect(screen.getByText(/This session has ended/)).toBeInTheDocument();
-      expect(screen.getByTestId('reopen-session-btn')).toBeInTheDocument();
-    });
-
-    it('still renders SessionView for completed sessions (read-only browsing)', () => {
-      (useRealtimeSession as jest.Mock).mockReturnValue({
-        ...defaultRealtimeSessionReturn,
-        session: { ...mockSession, status: 'completed' },
+      await waitFor(() => {
+        expect(screen.getByTestId('not-current-problem-notice')).toBeInTheDocument();
       });
-
-      render(<InstructorSessionPage />);
-
+      expect(screen.getByText(/This is no longer the current class problem/)).toBeInTheDocument();
+      // The session document still renders read-only.
       expect(screen.getByTestId('session-view')).toBeInTheDocument();
     });
 
-    it('shows new session banner with link when session was replaced', () => {
-      (useRealtimeSession as jest.Mock).mockReturnValue({
-        ...defaultRealtimeSessionReturn,
-        session: { ...mockSession, status: 'completed' },
-        replacementInfo: { new_session_id: 'new-session-456' },
-      });
+    it('does not show the notice when the pointer still matches this session', async () => {
+      const { getSection } = require('@/lib/api/sections');
+      getSection.mockResolvedValue({ id: 'section-1', current_session_id: 'session-123' });
 
       render(<InstructorSessionPage />);
-
-      expect(screen.getByText(/A new session has been started/)).toBeInTheDocument();
-      expect(screen.getByTestId('go-to-new-session-btn')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByTestId('go-to-new-session-btn'));
-      expect(mockPush).toHaveBeenCalledWith('/instructor/session/new-session-456');
-    });
-
-    it('suppresses connection errors when session is ended', () => {
-      (useRealtimeSession as jest.Mock).mockReturnValue({
-        ...defaultRealtimeSessionReturn,
-        session: { ...mockSession, status: 'completed' },
-        connectionError: 'Connection lost',
-      });
-
-      render(<InstructorSessionPage />);
-
-      // Should not show connection error for ended sessions
-      expect(screen.queryByText('Connection lost')).not.toBeInTheDocument();
-    });
-
-    it('calls reopen API when reopen button is clicked', async () => {
-      const { reopenSession: mockReopenSession } = require('@/lib/api/sessions');
-
-      (useRealtimeSession as jest.Mock).mockReturnValue({
-        ...defaultRealtimeSessionReturn,
-        session: { ...mockSession, status: 'completed' },
-      });
-
-      render(<InstructorSessionPage />);
-
-      fireEvent.click(screen.getByTestId('reopen-session-btn'));
 
       await waitFor(() => {
-        expect(mockReopenSession).toHaveBeenCalledWith('session-123');
+        expect(screen.getByTestId('session-view')).toBeInTheDocument();
       });
+      expect(screen.queryByTestId('not-current-problem-notice')).not.toBeInTheDocument();
+    });
+
+    it('does not render the retired ended/reopen banner', async () => {
+      (useRealtimeSession as jest.Mock).mockReturnValue({
+        ...defaultRealtimeSessionReturn,
+        session: { ...mockSession, status: 'completed' },
+      });
+
+      render(<InstructorSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('session-view')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('session-ended-banner')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('reopen-session-btn')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('go-to-new-session-btn')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Post-launch confirmation strip', () => {
+    it('renders the strip when the launch flag is set for this session', async () => {
+      const { peekSessionLaunched } = require('@/lib/session-launch-flag');
+      peekSessionLaunched.mockReturnValue(true);
+
+      render(<InstructorSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('session-launch-strip')).toBeInTheDocument();
+      });
+    });
+
+    it('does not render the strip when the flag is not set', async () => {
+      const { peekSessionLaunched } = require('@/lib/session-launch-flag');
+      peekSessionLaunched.mockReturnValue(false);
+
+      render(<InstructorSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('session-view')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('session-launch-strip')).not.toBeInTheDocument();
+    });
+
+    it('dismiss clears the flag and removes the strip', async () => {
+      const { peekSessionLaunched, clearSessionLaunched } = require('@/lib/session-launch-flag');
+      peekSessionLaunched.mockReturnValue(true);
+
+      render(<InstructorSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('session-launch-strip')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('session-launch-strip-dismiss'));
+
+      expect(clearSessionLaunched).toHaveBeenCalledWith('session-123');
+      expect(screen.queryByTestId('session-launch-strip')).not.toBeInTheDocument();
     });
   });
 
@@ -312,21 +330,9 @@ describe('InstructorSessionPage', () => {
   });
 
   describe('Session Actions', () => {
-    it('calls endSession when end session button is clicked', async () => {
-      mockEndSession.mockResolvedValue(undefined);
-
-      render(<InstructorSessionPage />);
-
-      fireEvent.click(screen.getByTestId('end-session-btn'));
-
-      await waitFor(() => {
-        expect(mockEndSession).toHaveBeenCalledWith('session-123');
-      });
-    });
-
-    it('navigates to sessions list after ending session', async () => {
-      mockEndSession.mockResolvedValue(undefined);
-
+    // Under the section-pointer model the clear-pointer call lives in
+    // SessionControls; the page's onEndSession callback only navigates home.
+    it('navigates to the instructor home when End class completes', async () => {
       render(<InstructorSessionPage />);
 
       fireEvent.click(screen.getByTestId('end-session-btn'));
@@ -336,18 +342,16 @@ describe('InstructorSessionPage', () => {
       });
     });
 
-    it('shows error when end session fails', async () => {
-      mockEndSession.mockRejectedValue(new Error('Failed to end'));
-
+    it('does not call the retired endSession operation from the page', async () => {
       render(<InstructorSessionPage />);
 
       fireEvent.click(screen.getByTestId('end-session-btn'));
 
       await waitFor(() => {
-        expect(screen.getByTestId('error-message')).toHaveTextContent('Failed to end');
+        expect(mockPush).toHaveBeenCalledWith('/instructor');
       });
+      expect(mockEndSession).not.toHaveBeenCalled();
     });
-
   });
 
   describe('Problem Updates', () => {
@@ -411,12 +415,12 @@ describe('InstructorSessionPage', () => {
 
   describe('Error Dismissal', () => {
     it('can dismiss error alerts', async () => {
-      mockEndSession.mockRejectedValue(new Error('Some error'));
+      mockUpdateProblem.mockRejectedValue(new Error('Some error'));
 
       render(<InstructorSessionPage />);
 
       // Trigger error
-      fireEvent.click(screen.getByTestId('end-session-btn'));
+      fireEvent.click(screen.getByTestId('update-problem-btn'));
 
       await waitFor(() => {
         expect(screen.getByTestId('error-message')).toHaveTextContent('Some error');

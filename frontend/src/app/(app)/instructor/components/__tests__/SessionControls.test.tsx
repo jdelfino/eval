@@ -1,5 +1,11 @@
 /**
- * Unit tests for SessionControls component
+ * Unit tests for SessionControls component.
+ *
+ * Under the section-pointer model (T1) the destructive control is "End class",
+ * which clears the section pointer via clearSectionCurrentSession (NOT
+ * endSession/completeSession — those are retired from the live path). The
+ * ConfirmDialog gate and the copyable join code are preserved.
+ *
  * @jest-environment jsdom
  */
 
@@ -7,25 +13,34 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SessionControls from '../SessionControls';
 
+const mockClearSectionCurrentSession = jest.fn();
+
+jest.mock('@/lib/api/sections', () => ({
+  clearSectionCurrentSession: (...args: unknown[]) => mockClearSectionCurrentSession(...args),
+}));
+
 describe('SessionControls', () => {
   const mockOnEndSession = jest.fn();
 
   const defaultProps = {
     session_id: 'session-123',
+    sectionId: 'section-1',
     onEndSession: mockOnEndSession,
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClearSectionCurrentSession.mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
+    });
   });
 
   it('should render session controls', () => {
     render(<SessionControls {...defaultProps} />);
 
-    // No "Active Session" heading — compact layout has no heading
     expect(screen.queryByText('Active Session')).not.toBeInTheDocument();
-    // End Session button always present
-    expect(screen.getByRole('button', { name: /End Session/ })).toBeInTheDocument();
+    expect(screen.getByTestId('end-class-button')).toBeInTheDocument();
   });
 
   it('should display section name when provided', () => {
@@ -40,16 +55,15 @@ describe('SessionControls', () => {
     expect(screen.queryByText(/Section/)).not.toBeInTheDocument();
   });
 
-  it('should render End Session button', () => {
+  it('should render the End class button', () => {
     render(<SessionControls {...defaultProps} />);
 
-    expect(screen.getByRole('button', { name: /End Session/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /End class/ })).toBeInTheDocument();
   });
 
   it('should apply flex-wrap to the button container for mobile responsiveness', () => {
     const { container } = render(<SessionControls {...defaultProps} />);
 
-    // The button container should have flex-wrap so buttons wrap on small screens
     const buttonContainer = container.querySelector('.flex.gap-2');
     expect(buttonContainer).toBeInTheDocument();
     expect(buttonContainer).toHaveClass('flex-wrap');
@@ -77,6 +91,24 @@ describe('SessionControls', () => {
       expect(screen.getByText(/Join Code: ABC123/)).toBeInTheDocument();
     });
 
+    it('should render the join code in a mono font', () => {
+      render(<SessionControls {...defaultProps} join_code="ABC123" />);
+
+      // The copyable join code control carries the mono styling.
+      const copyBtn = screen.getByTestId('session-controls-copy-code');
+      expect(copyBtn).toHaveClass('font-mono');
+    });
+
+    it('should copy the join code to the clipboard when clicked', async () => {
+      render(<SessionControls {...defaultProps} join_code="ABC123" />);
+
+      fireEvent.click(screen.getByTestId('session-controls-copy-code'));
+
+      await waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith('ABC123');
+      });
+    });
+
     it('should render problem title when provided', () => {
       render(<SessionControls {...defaultProps} problemTitle="Two Sum" />);
 
@@ -99,7 +131,7 @@ describe('SessionControls', () => {
 
       expect(screen.getByRole('button', { name: /Open Public View/ })).toBeInTheDocument();
       expect(screen.getByTestId('clear-public-view-button')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /End Session/ })).toBeInTheDocument();
+      expect(screen.getByTestId('end-class-button')).toBeInTheDocument();
     });
 
     it('should not render Show Solution button', () => {
@@ -115,106 +147,89 @@ describe('SessionControls', () => {
     });
   });
 
-  describe('End Session confirmation dialog', () => {
-    it('should show confirmation dialog when End Session button is clicked', () => {
+  describe('Open Public View', () => {
+    it('opens the public view window with the session id', () => {
+      const openSpy = jest.spyOn(window, 'open').mockReturnValue(null);
+
+      render(<SessionControls {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /Open Public View/ }));
+
+      expect(openSpy).toHaveBeenCalledWith(
+        '/public-view?session_id=session-123',
+        '_blank',
+        'width=1200,height=800'
+      );
+      openSpy.mockRestore();
+    });
+  });
+
+  describe('End class confirmation dialog', () => {
+    it('should show confirmation dialog when End class button is clicked', () => {
       render(<SessionControls {...defaultProps} />);
 
-      // Click End Session button
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
+      fireEvent.click(screen.getByTestId('end-class-button'));
 
-      // Confirmation dialog should appear
       expect(screen.getByRole('dialog')).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'End Session' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'End class' })).toBeInTheDocument();
     });
 
-    it('should not call onEndSession immediately when End Session button is clicked', () => {
+    it('should not clear the section pointer immediately when End class is clicked', () => {
       render(<SessionControls {...defaultProps} />);
 
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
+      fireEvent.click(screen.getByTestId('end-class-button'));
 
-      // onEndSession should NOT be called yet
+      expect(mockClearSectionCurrentSession).not.toHaveBeenCalled();
       expect(mockOnEndSession).not.toHaveBeenCalled();
     });
 
-    it('should call onEndSession when confirmation dialog is confirmed', () => {
+    it('should clear the section pointer (not complete the session) on confirm', async () => {
       render(<SessionControls {...defaultProps} />);
 
-      // Click End Session to open dialog
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
-
-      // There are now two "End Session" buttons - get the dialog's confirm button using data attribute
+      fireEvent.click(screen.getByTestId('end-class-button'));
       const confirmButton = document.querySelector('[data-confirm-button]') as HTMLElement;
       fireEvent.click(confirmButton);
 
-      expect(mockOnEndSession).toHaveBeenCalledTimes(1);
+      await waitFor(() => {
+        expect(mockClearSectionCurrentSession).toHaveBeenCalledWith('section-1');
+      });
+      await waitFor(() => {
+        expect(mockOnEndSession).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('should use the End-class confirm copy', () => {
+      render(<SessionControls {...defaultProps} />);
+
+      fireEvent.click(screen.getByTestId('end-class-button'));
+
+      expect(
+        screen.getByText(/students will no longer be pulled into this problem/)
+      ).toBeInTheDocument();
     });
 
     it('should close dialog when cancel is clicked', () => {
       render(<SessionControls {...defaultProps} />);
 
-      // Click End Session to open dialog
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
-
+      fireEvent.click(screen.getByTestId('end-class-button'));
       expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-      // Click cancel button
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
-      fireEvent.click(cancelButton);
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-      // Dialog should be closed
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mockClearSectionCurrentSession).not.toHaveBeenCalled();
       expect(mockOnEndSession).not.toHaveBeenCalled();
-    });
-
-    it('should show message about connected students when count is provided', () => {
-      render(<SessionControls {...defaultProps} connectedStudentCount={5} />);
-
-      // Click End Session to open dialog
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
-
-      expect(screen.getByText(/5 students are currently connected/)).toBeInTheDocument();
-    });
-
-    it('should show singular message for one connected student', () => {
-      render(<SessionControls {...defaultProps} connectedStudentCount={1} />);
-
-      // Click End Session to open dialog
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
-
-      expect(screen.getByText(/1 student is currently connected/)).toBeInTheDocument();
-    });
-
-    it('should show generic message when no students are connected', () => {
-      render(<SessionControls {...defaultProps} connectedStudentCount={0} />);
-
-      // Click End Session to open dialog
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
-
-      expect(screen.getByText(/Are you sure you want to end this session\?/)).toBeInTheDocument();
     });
 
     it('should close dialog on Escape key press', () => {
       render(<SessionControls {...defaultProps} />);
 
-      // Click End Session to open dialog
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
-
+      fireEvent.click(screen.getByTestId('end-class-button'));
       expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-      // Press Escape
       fireEvent.keyDown(document, { key: 'Escape' });
 
-      // Dialog should be closed
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(mockOnEndSession).not.toHaveBeenCalled();
+      expect(mockClearSectionCurrentSession).not.toHaveBeenCalled();
     });
 
     it('should show Clear Public View button when onClearPublicView is provided', () => {
@@ -232,27 +247,11 @@ describe('SessionControls', () => {
       expect(mockOnClearPublicView).toHaveBeenCalledTimes(1);
     });
 
-    it('should show Clear Public View button when onClearPublicView is provided (no featured_student_id needed)', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-          onClearPublicView={jest.fn()}
-        />
-      );
-
-      expect(screen.getByTestId('clear-public-view-button')).toBeInTheDocument();
-    });
-
     it('should not show Clear Public View button when onClearPublicView is not provided', () => {
-      render(
-        <SessionControls
-          {...defaultProps}
-        />
-      );
+      render(<SessionControls {...defaultProps} />);
 
       expect(screen.queryByTestId('clear-public-view-button')).not.toBeInTheDocument();
     });
-
   });
 
   describe('problem title display', () => {
@@ -269,17 +268,13 @@ describe('SessionControls', () => {
     });
   });
 
-  describe('End Session confirmation dialog', () => {
+  describe('End class confirm button styling', () => {
     it('should use danger variant for the confirm button', () => {
       render(<SessionControls {...defaultProps} />);
 
-      // Click End Session to open dialog
-      const endButton = screen.getByRole('button', { name: /End Session/ });
-      fireEvent.click(endButton);
+      fireEvent.click(screen.getByTestId('end-class-button'));
 
-      // The confirm button in the dialog should have danger styling
-      const dialogButtons = screen.getAllByRole('button', { name: /End Session/ });
-      const confirmButton = dialogButtons[1]; // Dialog's confirm button
+      const confirmButton = document.querySelector('[data-confirm-button]') as HTMLElement;
       expect(confirmButton).toHaveClass('bg-red-600');
     });
   });

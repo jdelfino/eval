@@ -26,6 +26,8 @@ interface SessionContext {
 interface SessionViewProps {
   /** Current session ID */
   session_id: string;
+  /** Section id — passed to SessionControls for the "End class" clear-pointer call */
+  sectionId?: string;
   /** Join code for the session */
   join_code: string | null;
   /** Session context (section info) */
@@ -73,6 +75,7 @@ type SessionTab = 'students' | 'problem';
  */
 export function SessionView({
   session_id,
+  sectionId,
   join_code,
   sessionContext,
   students,
@@ -136,9 +139,9 @@ export function SessionView({
       {/* Session Controls Header */}
       <SessionControls
         session_id={session_id}
+        sectionId={sectionId}
         section_name={sessionContext?.section_name}
         join_code={join_code || undefined}
-        connectedStudentCount={students.length}
         onEndSession={onEndSession}
         onClearPublicView={onClearPublicView}
         problemTitle={sessionProblem?.title}

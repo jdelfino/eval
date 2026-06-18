@@ -85,8 +85,13 @@ jest.mock('@/lib/api/execute', () => ({
   ioTestCasesToCaseDefs: jest.fn((cases: unknown[]) => cases),
 }));
 
-jest.mock('@/lib/api/sessions', () => ({
-  reopenSession: jest.fn().mockResolvedValue(undefined),
+jest.mock('@/lib/api/sections', () => ({
+  getSection: jest.fn().mockResolvedValue({ id: 'section-1', current_session_id: 'session-123' }),
+}));
+
+jest.mock('@/lib/session-launch-flag', () => ({
+  peekSessionLaunched: jest.fn().mockReturnValue(false),
+  clearSessionLaunched: jest.fn(),
 }));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
