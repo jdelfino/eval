@@ -164,10 +164,10 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
                 <button
                   type="button"
                   onClick={handleRetry}
+                  className="text-danger"
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: 'var(--danger)',
                     fontWeight: 600,
                     cursor: 'pointer',
                     padding: 0,
@@ -208,18 +208,16 @@ export default function JoinSectionForm({ onSubmit }: JoinSectionFormProps) {
 
         {preview && (
           <div
+            className="bg-accent-soft border border-accent-soft text-accent-ink"
             style={{
               marginTop: 4,
               padding: 12,
-              background: 'var(--accent-soft)',
-              border: '1px solid var(--accent-soft)',
               borderRadius: 'var(--radius)',
               fontSize: 12.5,
-              color: 'var(--accent-ink)',
             }}
           >
             <div style={{ fontWeight: 600 }}>{preview.class.name}</div>
-            <div style={{ color: 'var(--fg-muted)', marginTop: 2 }}>
+            <div className="text-fg-muted" style={{ marginTop: 2 }}>
               Section: {preview.section.name}{semester ? ` · ${semester}` : ''}
             </div>
           </div>
