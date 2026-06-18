@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
 
 interface InstructorNavProps {
   currentView: 'classes' | 'sections' | 'problems' | 'sessions' | 'session' | 'details';
@@ -60,7 +61,7 @@ const InstructorNav: React.FC<InstructorNavProps> = ({
           `}
           title="Click to return to active session"
         >
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <ConnectionDot status="live" compact />
           <span>{currentView === 'session' ? 'In Session' : 'Return to Session'}</span>
         </button>
       )}

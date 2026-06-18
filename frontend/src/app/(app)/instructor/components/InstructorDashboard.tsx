@@ -38,6 +38,7 @@ import { Table } from '@/components/ui/Table';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import CreateClassModal from './CreateClassModal';
 
 interface InstructorDashboardProps {
@@ -247,7 +248,7 @@ export function InstructorDashboard({
               >
                 <div>
                   <SectionLabel style={{ color: 'var(--info)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {live && <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />}
+                    {live && <ConnectionDot status="live" compact />}
                     <span>{label}{subtitle ? ` · ${subtitle}` : null}</span>
                   </SectionLabel>
                   <div className="mt-1 text-base font-semibold text-gray-900">

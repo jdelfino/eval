@@ -185,11 +185,11 @@ describe('InstructorNav - Navigation Fixes', () => {
       expect(onReturnToSession).toHaveBeenCalledTimes(1);
     });
 
-    it('should show visual indicator with pulsing dot', () => {
+    it('should show visual indicator with live ConnectionDot', () => {
       const onNavigate = jest.fn();
       const onReturnToSession = jest.fn();
-      
-      const { container } = render(
+
+      render(
         <InstructorNav
           currentView="classes"
           onNavigate={onNavigate}
@@ -198,10 +198,10 @@ describe('InstructorNav - Navigation Fixes', () => {
         />
       );
 
-      // Check for pulsing dot (animated element)
-      const pulsingDot = container.querySelector('.animate-pulse');
-      expect(pulsingDot).toBeInTheDocument();
-      expect(pulsingDot).toHaveClass('bg-green-500');
+      // The live indicator is the token-driven ConnectionDot (compact, status="live").
+      // Its compact variant renders a dot with title="Live".
+      const liveDot = screen.getByTitle('Live');
+      expect(liveDot).toBeInTheDocument();
     });
   });
 

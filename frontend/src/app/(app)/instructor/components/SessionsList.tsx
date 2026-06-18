@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { listSessionHistoryWithFilters, endSession } from '@/lib/api/sessions';
 import type { Session } from '@/types/api';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ConnectionDot } from '@/components/ui/ConnectionDot';
 
 interface SessionsListProps {
   onRejoinSession?: (session_id: string) => void;
@@ -210,7 +211,7 @@ export default function SessionsList({ onRejoinSession, onEndSession, onViewDeta
       {activeSessions.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+            <ConnectionDot status="live" compact />
             Active Now ({activeSessions.length})
           </h3>
           
