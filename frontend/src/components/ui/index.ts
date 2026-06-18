@@ -103,3 +103,6 @@ export type { ChipProps } from './Chip';
 
 export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
+
+export { Forbidden } from './Forbidden';
+export type { ForbiddenProps } from './Forbidden';

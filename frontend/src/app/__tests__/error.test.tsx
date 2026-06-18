@@ -32,7 +32,7 @@ describe('ErrorBoundary (error.tsx)', () => {
     const error = new Error('Test crash');
     const { container } = render(<ErrorBoundary error={error} reset={mockReset} />);
 
-    expect(container.querySelector('.bg-red-100')).toBeInTheDocument();
+    expect(container.querySelector('.bg-danger-soft')).toBeInTheDocument();
   });
 
   it('renders a "Try again" button', () => {

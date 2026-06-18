@@ -17,8 +17,8 @@ describe('Forbidden', () => {
     const { container } = render(<Forbidden title="No access" />);
     expect(screen.getByText(/^403 ·/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'No access' })).toBeInTheDocument();
-    // warn tone => yellow icon circle
-    expect(container.querySelector('.bg-yellow-100')).toBeInTheDocument();
+    // warn tone => warn-soft token icon circle
+    expect(container.querySelector('.bg-warn-soft')).toBeInTheDocument();
   });
 
   it('renders the provided body and actions', () => {

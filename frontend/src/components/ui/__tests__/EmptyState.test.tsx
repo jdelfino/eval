@@ -19,13 +19,7 @@ describe('EmptyState', () => {
     expect(screen.getByText('Get started by creating one.')).toBeInTheDocument();
   });
 
-  // Backward-compat alias: blurb still works
-  it('renders body text from deprecated blurb prop', () => {
-    render(<EmptyState title="No items" blurb="Blurb text here." />);
-    expect(screen.getByText('Blurb text here.')).toBeInTheDocument();
-  });
-
-  it('does not render body text when neither body nor blurb provided', () => {
+  it('does not render body text when body is not provided', () => {
     render(<EmptyState title="No items" />);
     // no <p> sibling with body text
     expect(screen.queryByRole('paragraph')).toBeNull();
@@ -37,17 +31,6 @@ describe('EmptyState', () => {
       <EmptyState
         title="No items"
         primary={<button>Create one</button>}
-      />
-    );
-    expect(screen.getByRole('button', { name: 'Create one' })).toBeInTheDocument();
-  });
-
-  // Backward-compat alias: action still works
-  it('renders primary action from deprecated action prop', () => {
-    render(
-      <EmptyState
-        title="No items"
-        action={<button>Create one</button>}
       />
     );
     expect(screen.getByRole('button', { name: 'Create one' })).toBeInTheDocument();
@@ -115,31 +98,30 @@ describe('EmptyState', () => {
     const circleOf = (container: HTMLElement) =>
       container.querySelector('[data-testid="empty-state-icon-circle"]');
 
+    // All tones use mapped token utilities (the redesign standard).
     it('defaults to neutral tone (sunken token icon circle)', () => {
       const { container } = render(<EmptyState title="No items" />);
-      expect(circleOf(container)).toHaveStyle({ background: 'var(--bg-sunken)' });
+      expect(circleOf(container)).toHaveClass('bg-bg-sunken');
     });
 
-    // info/warn/danger remain Tailwind palette utilities (out of this slice's
-    // gray/green token scope).
-    it('applies info tone (blue icon circle)', () => {
+    it('applies info tone (info-soft icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="info" />);
-      expect(circleOf(container)).toHaveClass('bg-blue-100');
+      expect(circleOf(container)).toHaveClass('bg-info-soft');
     });
 
-    it('applies ok tone (run token icon circle)', () => {
+    it('applies ok tone (run-soft token icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="ok" />);
-      expect(circleOf(container)).toHaveStyle({ background: 'var(--run-soft)' });
+      expect(circleOf(container)).toHaveClass('bg-run-soft');
     });
 
-    it('applies warn tone (yellow icon circle)', () => {
+    it('applies warn tone (warn-soft icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="warn" />);
-      expect(circleOf(container)).toHaveClass('bg-yellow-100');
+      expect(circleOf(container)).toHaveClass('bg-warn-soft');
     });
 
-    it('applies danger tone (red icon circle)', () => {
+    it('applies danger tone (danger-soft icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="danger" />);
-      expect(circleOf(container)).toHaveClass('bg-red-100');
+      expect(circleOf(container)).toHaveClass('bg-danger-soft');
     });
   });
 });

@@ -22,14 +22,10 @@ export interface EmptyStateProps {
   icon?: IconName;
   /** Short headline */
   title: string;
-  /** Supporting description text (v4 vocabulary: "body"; "blurb" is kept as alias) */
+  /** Supporting description text */
   body?: string;
-  /** @deprecated Use `body` instead */
-  blurb?: string;
   /** Primary action element (e.g. a Button or Link) */
   primary?: React.ReactNode;
-  /** @deprecated Use `primary` instead */
-  action?: React.ReactNode;
   /** Optional secondary action element */
   secondary?: React.ReactNode;
   /** Tone that drives the icon circle color. Defaults to 'neutral'. */
@@ -38,29 +34,23 @@ export interface EmptyStateProps {
   className?: string;
 }
 
-// G9 token sweep (this slice): only the gray (neutral) and green (ok) tones are
-// folded onto F1 tokens (--bg-sunken / --run, matching the Pill/Banner recipe).
-// info/warn/danger keep their blue/yellow/red Tailwind utilities — converging
-// those is out of this slice's gray/green scope (own follow-up).
+// All five tones are folded onto mapped token utilities (the redesign standard):
+// circle background → bg-* soft tokens, icon color → matching text-* token.
 const TONE_CIRCLE_BG: Record<EmptyStateTone, string> = {
-  neutral: 'var(--bg-sunken)',
-  info:    'bg-blue-100',
-  warn:    'bg-yellow-100',
-  danger:  'bg-red-100',
-  ok:      'var(--run-soft)',
+  neutral: 'bg-bg-sunken',
+  info:    'bg-info-soft',
+  warn:    'bg-warn-soft',
+  danger:  'bg-danger-soft',
+  ok:      'bg-run-soft',
 };
 
 const TONE_ICON_COLOR: Record<EmptyStateTone, string> = {
-  neutral: 'var(--fg-subtle)',
-  info:    'text-blue-500',
-  warn:    'text-yellow-500',
-  danger:  'text-red-500',
-  ok:      'var(--run)',
+  neutral: 'text-fg-subtle',
+  info:    'text-info',
+  warn:    'text-warn',
+  danger:  'text-danger',
+  ok:      'text-run',
 };
-
-// neutral/ok map to CSS-var token values applied via inline style; the other
-// tones stay Tailwind className strings. A value starting with "var(" is a token.
-const isToken = (v: string) => v.startsWith('var(');
 
 /**
  * EmptyState — shared empty-list / zero-state pattern.
@@ -82,16 +72,11 @@ export function EmptyState({
   icon = 'book',
   title,
   body,
-  blurb,
   primary,
-  action,
   secondary,
   tone = 'neutral',
   className = '',
 }: EmptyStateProps) {
-  const bodyText = body ?? blurb;
-  const primaryAction = primary ?? action;
-
   return (
     <div
       className={`flex flex-col items-center justify-center py-12 text-center ${className}`.trim()}
@@ -106,24 +91,20 @@ export function EmptyState({
       )}
       <div
         data-testid="empty-state-icon-circle"
-        className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
-          isToken(TONE_CIRCLE_BG[tone]) ? '' : TONE_CIRCLE_BG[tone]
-        }`.trim()}
-        style={isToken(TONE_CIRCLE_BG[tone]) ? { background: TONE_CIRCLE_BG[tone] } : undefined}
+        className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${TONE_CIRCLE_BG[tone]}`}
       >
         <Icon
           name={icon}
           size={28}
           stroke={1.5}
-          className={isToken(TONE_ICON_COLOR[tone]) ? undefined : TONE_ICON_COLOR[tone]}
-          style={isToken(TONE_ICON_COLOR[tone]) ? { color: TONE_ICON_COLOR[tone] } : undefined}
+          className={TONE_ICON_COLOR[tone]}
         />
       </div>
       <h2 className="mb-2 text-lg font-semibold" style={{ color: 'var(--fg)' }}>{title}</h2>
-      {bodyText && (
-        <p className="mb-6 max-w-sm text-sm" style={{ color: 'var(--fg-muted)' }}>{bodyText}</p>
+      {body && (
+        <p className="mb-6 max-w-sm text-sm" style={{ color: 'var(--fg-muted)' }}>{body}</p>
       )}
-      {primaryAction}
+      {primary}
       {secondary && <div className="mt-2">{secondary}</div>}
     </div>
   );
