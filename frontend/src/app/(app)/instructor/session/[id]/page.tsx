@@ -104,6 +104,8 @@ export default function InstructorSessionPage() {
       name: s.name,
       code: s.code,
       test_cases: s.test_cases,
+      last_update: s.last_update,
+      last_run_summary: s.last_run_summary,
     })),
     [realtimeStudents]
   );
