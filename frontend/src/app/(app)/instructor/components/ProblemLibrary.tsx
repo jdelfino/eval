@@ -20,6 +20,7 @@ import LibraryTagBar from './LibraryTagBar';
 import CreateSessionFromProblemModal from './CreateSessionFromProblemModal';
 import PublishProblemModal from './PublishProblemModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Table } from '@/components/ui/Table';
@@ -458,41 +459,30 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
 
       {/* ── Table or empty state ── */}
       {filteredProblems.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <div className="flex justify-center mb-4">
-            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            </div>
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {searchQuery || selectedTags.size > 0 ? 'No problems match your filters' : 'No problems yet'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {searchQuery || selectedTags.size > 0
-              ? 'Try adjusting your search or filters'
-              : 'Create your first problem to get started'}
-          </p>
-          {onCreateNew && !searchQuery && selectedTags.size === 0 && (
-            <button
-              onClick={onCreateNew}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Create Your First Problem
-            </button>
-          )}
-        </div>
+        searchQuery || selectedTags.size > 0 ? (
+          // Filtered: problems exist but none match — no authoring CTA.
+          <EmptyState
+            icon="search"
+            title="No problems match your filters"
+            body="Try adjusting your search or filters"
+          />
+        ) : (
+          // Unfiltered first-author empty. DEC-11: "Author a problem" only
+          // (no starter-packs secondary).
+          <EmptyState
+            icon="book"
+            tone="info"
+            title="No problems yet"
+            body="Author your first problem to get started."
+            primary={
+              onCreateNew && (
+                <Button variant="primary" onClick={onCreateNew}>
+                  Author a problem
+                </Button>
+              )
+            }
+          />
+        )
       ) : (
         <div className="overflow-hidden border border-gray-200 rounded-lg">
           <Table>

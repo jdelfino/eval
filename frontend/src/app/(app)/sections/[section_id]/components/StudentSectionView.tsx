@@ -8,6 +8,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Chip } from '@/components/ui/Chip';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { AuthHeading } from '@/components/ui/AuthHeading';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { useSectionEvents } from '@/hooks/useSectionEvents';
@@ -533,19 +534,19 @@ export default function StudentSectionView({
             })}
           </div>
         ) : (
-          <div
-            className="bg-white rounded-lg shadow p-8 text-center"
-            style={{ marginBottom: 36 }}
-          >
-            <p style={{ color: 'var(--fg-muted)', fontSize: 13 }}>
-              {filter === 'solved'
-                ? 'No solved problems yet'
-                : filter === 'in-progress'
-                  ? 'No problems in progress'
-                  : filter === 'not-started'
-                    ? 'All problems have been started'
-                    : 'No problems published yet'}
-            </p>
+          <div style={{ marginBottom: 36 }}>
+            <EmptyState
+              icon="book"
+              title={
+                filter === 'solved'
+                  ? 'No solved problems yet'
+                  : filter === 'in-progress'
+                    ? 'No problems in progress'
+                    : filter === 'not-started'
+                      ? 'All problems have been started'
+                      : 'No problems published yet'
+              }
+            />
           </div>
         )}
       </div>
@@ -583,9 +584,7 @@ export default function StudentSectionView({
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No past sessions yet</p>
-          </div>
+          <EmptyState icon="layers" title="No past sessions yet" />
         )}
       </div>
 

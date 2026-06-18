@@ -234,6 +234,66 @@ describe('ProblemLibrary', () => {
     });
   });
 
+  describe('empty-state (EmptyState migration, DEC-11)', () => {
+    /**
+     * Contract: the unfiltered empty library renders the EmptyState primitive with
+     * an "Author a problem" CTA wired to onCreateNew, and NO "Starter packs"
+     * secondary (DEC-11 dropped starter packs from G9 scope).
+     */
+    it('unfiltered empty renders "Author a problem" and NO starter-packs CTA', async () => {
+      (listProblems as jest.Mock).mockResolvedValue([]);
+      render(<ProblemLibrary onCreateNew={jest.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('No problems yet')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: 'Author a problem' })).toBeInTheDocument();
+      expect(screen.queryByText(/starter pack/i)).not.toBeInTheDocument();
+    });
+
+    it('"Author a problem" CTA fires onCreateNew', async () => {
+      (listProblems as jest.Mock).mockResolvedValue([]);
+      const onCreateNew = jest.fn();
+      render(<ProblemLibrary onCreateNew={onCreateNew} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('No problems yet')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Author a problem' }));
+      expect(onCreateNew).toHaveBeenCalled();
+    });
+
+    /**
+     * Contract: when a filter/search is active and nothing matches, the empty
+     * state shows the filter-specific copy and offers NO authoring CTA (the
+     * problems exist, they just don't match the current filter).
+     */
+    it('filtered empty shows filter copy with no authoring CTA', async () => {
+      (listProblems as jest.Mock).mockResolvedValue([
+        {
+          id: 'problem-1',
+          title: 'Two Sum',
+          tags: ['arrays'],
+          test_count: 3,
+          updated_at: '2024-01-01T00:00:00Z',
+        },
+      ]);
+      render(<ProblemLibrary onCreateNew={jest.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Two Sum')).toBeInTheDocument();
+      });
+
+      const search = screen.getByPlaceholderText(/search/i);
+      fireEvent.change(search, { target: { value: 'zzz-no-match' } });
+
+      await waitFor(() => {
+        expect(screen.getByText('No problems match your filters')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('button', { name: 'Author a problem' })).not.toBeInTheDocument();
+    });
+  });
+
   it('does not fetch problems when user is not authenticated', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       user: null,

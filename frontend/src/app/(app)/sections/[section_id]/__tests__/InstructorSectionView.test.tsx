@@ -420,6 +420,39 @@ describe('InstructorSectionView', () => {
       expect(screen.getByText('No problems published to this section yet')).toBeInTheDocument();
     });
 
+    /**
+     * Contract (DEC-11): the empty-section publish state ships exactly TWO ramps —
+     * "Browse library" and "Create new problem". The starter-pack and
+     * import/share-from-another-section ramps were dropped from G9 scope; this
+     * test fails if either reappears.
+     */
+    it('empty-section renders exactly the 2 DEC-11 ramps (Browse library + Create new)', async () => {
+      render(
+        <InstructorSectionView
+          section={sectionDetail}
+          activeSessions={[]}
+          pastSessions={[]}
+          publishedProblems={[]}
+          students={[]}
+        />
+      );
+
+      await userEvent.click(screen.getByRole('tab', { name: /Problems/i }));
+
+      const browse = screen.getByRole('link', { name: /Browse library/i });
+      expect(browse).toBeInTheDocument();
+      expect(browse).toHaveAttribute('href', '/instructor/problems');
+
+      const createNew = screen.getByRole('link', { name: /Create new problem/i });
+      expect(createNew).toBeInTheDocument();
+      expect(createNew).toHaveAttribute('href', '/instructor/problems?edit=new');
+
+      // DEC-11: dropped ramps must not appear.
+      expect(screen.queryByText(/starter pack/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/another section/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/colleague/i)).not.toBeInTheDocument();
+    });
+
     it('shows "Create Session" button on each problem', () => {
       render(
         <InstructorSectionView
