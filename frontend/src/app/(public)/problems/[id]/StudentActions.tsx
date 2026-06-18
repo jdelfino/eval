@@ -82,19 +82,18 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
         </Button>
       </div>
       {error && (
-        <p style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 16 }}>{error}</p>
+        <p className="text-danger" style={{ fontSize: 13, marginBottom: 16 }}>{error}</p>
       )}
       {showPicker && (
         <div
+          className="bg-bg-raised border border-border"
           style={{
             marginBottom: 24,
             padding: 16,
-            background: 'var(--bg-raised)',
             borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--border)',
           }}
         >
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 12 }}>
+          <p className="text-fg-muted" style={{ fontSize: 13, marginBottom: 12 }}>
             Select a section to practice in:
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -106,14 +105,12 @@ export default function StudentActions({ problem_id, class_id }: StudentActionsP
                   handleStartPractice(s.section.id);
                 }}
                 disabled={starting}
+                className="bg-bg border border-border text-fg"
                 style={{
                   padding: '8px 12px',
                   fontSize: 13,
                   textAlign: 'left',
-                  background: 'var(--bg)',
-                  border: '1px solid var(--border)',
                   borderRadius: 'var(--radius)',
-                  color: 'var(--fg)',
                   cursor: starting ? 'not-allowed' : 'pointer',
                   opacity: starting ? 0.5 : 1,
                 }}

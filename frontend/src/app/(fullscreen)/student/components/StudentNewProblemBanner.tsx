@@ -48,6 +48,7 @@ const StudentNewProblemBanner: React.FC<StudentNewProblemBannerProps> = ({
     <div
       role="status"
       data-testid="new-problem-banner"
+      className="bg-bg-inverse text-fg-inverse border border-border-inverse"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -55,21 +56,17 @@ const StudentNewProblemBanner: React.FC<StudentNewProblemBannerProps> = ({
         margin: '8px 12px',
         padding: '12px 14px',
         flexShrink: 0,
-        background: 'var(--bg-inverse)',
-        color: 'var(--fg-inverse)',
-        border: '1px solid var(--border-inverse)',
         borderRadius: 'var(--radius-lg)',
         boxShadow: 'var(--shadow-lg)',
       }}
     >
       <div
+        className="bg-accent text-accent-fg"
         style={{
           width: 32,
           height: 32,
           borderRadius: 16,
           flexShrink: 0,
-          background: 'var(--accent)',
-          color: 'var(--accent-fg)',
           display: 'grid',
           placeItems: 'center',
           fontSize: 14,
@@ -83,7 +80,7 @@ const StudentNewProblemBanner: React.FC<StudentNewProblemBannerProps> = ({
         <div style={{ fontSize: 13, fontWeight: 600 }}>
           Instructor moved on — {toProblemTitle}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--fg-inverse-muted)' }}>
+        <div className="text-fg-inverse-muted" style={{ fontSize: 12 }}>
           A new problem just opened.
           {fromProblemTitle
             ? ` Your current code on ${fromProblemTitle} will be saved.`
@@ -94,14 +91,12 @@ const StudentNewProblemBanner: React.FC<StudentNewProblemBannerProps> = ({
         type="button"
         onClick={onStayHere}
         data-testid="stay-here-button"
+        className="bg-bg-inverse-raised text-fg-inverse border border-border-inverse"
         style={{
           padding: '6px 12px',
           fontSize: 12,
           fontWeight: 500,
           borderRadius: 'var(--radius-md)',
-          background: 'var(--bg-inverse-raised)',
-          color: 'var(--fg-inverse)',
-          border: '1px solid var(--border-inverse)',
           cursor: 'pointer',
         }}
       >
@@ -111,14 +106,12 @@ const StudentNewProblemBanner: React.FC<StudentNewProblemBannerProps> = ({
         type="button"
         onClick={onJumpIn}
         data-testid="jump-in-button"
+        className="bg-accent text-accent-fg border border-accent"
         style={{
           padding: '6px 12px',
           fontSize: 12,
           fontWeight: 600,
           borderRadius: 'var(--radius-md)',
-          background: 'var(--accent)',
-          color: 'var(--accent-fg)',
-          border: '1px solid var(--accent)',
           cursor: 'pointer',
           display: 'inline-flex',
           alignItems: 'center',

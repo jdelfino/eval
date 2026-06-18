@@ -134,7 +134,8 @@ export function ErrorAlert({
             <Link
               key={index}
               href={action.href}
-              style={{ fontWeight: 600, color: 'var(--fg)', textDecoration: 'underline' }}
+              className="text-fg"
+              style={{ fontWeight: 600, textDecoration: 'underline' }}
             >
               {action.label}
             </Link>
@@ -150,10 +151,10 @@ export function ErrorAlert({
       onClick={onRetry}
       disabled={isRetrying}
       aria-label={isRetrying ? 'Retrying...' : 'Try again'}
+      className="text-fg"
       style={{
         background: 'none',
         border: 'none',
-        color: 'var(--fg)',
         fontWeight: 600,
         cursor: isRetrying ? 'default' : 'pointer',
         padding: 0,

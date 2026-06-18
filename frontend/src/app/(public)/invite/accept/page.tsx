@@ -125,8 +125,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
         gap: 16,
       }}
     >
-      <span style={{ color: 'var(--fg-subtle)', flexShrink: 0 }}>{label}</span>
-      <span style={{ textAlign: 'right', maxWidth: 260, color: 'var(--fg)' }}>{value}</span>
+      <span className="text-fg-subtle" style={{ flexShrink: 0 }}>{label}</span>
+      <span className="text-fg" style={{ textAlign: 'right', maxWidth: 260 }}>{value}</span>
     </div>
   );
 }
@@ -137,10 +137,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function DetailBox({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div
+      className="bg-bg-sunken border border-border"
       style={{
         padding: 14,
-        background: 'var(--bg-sunken)',
-        border: '1px solid var(--border)',
         borderRadius: 'var(--radius)',
         fontSize: 12,
         ...style,
@@ -342,17 +341,17 @@ function AcceptInviteContent() {
       <AuthPublicShell narrow showSignInLink={false}>
         <AuthCard style={{ marginTop: 30, textAlign: 'center' }}>
           <div
+            className="bg-run-soft"
             style={{
               width: 56,
               height: 56,
               borderRadius: 28,
-              background: 'var(--run-soft)',
               display: 'grid',
               placeItems: 'center',
               margin: '0 auto 14px',
             }}
           >
-            <Icon name="check" size={24} style={{ color: 'var(--run)' }} />
+            <Icon name="check" size={24} className="text-run" />
           </div>
           <AuthHeading sub="Redirecting to your dashboard…">
             Account created!
@@ -441,17 +440,17 @@ function AcceptInviteContent() {
           {/* Header row: warn circle + heading */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <div
+              className="bg-warn-soft"
               style={{
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                background: 'var(--warn-soft)',
                 display: 'grid',
                 placeItems: 'center',
                 flexShrink: 0,
               }}
             >
-              <Icon name="alert" size={18} style={{ color: 'var(--warn)' }} />
+              <Icon name="alert" size={18} className="text-warn" />
             </div>
             <div style={{ flex: 1 }}>
               <AuthHeading
@@ -472,7 +471,7 @@ function AcceptInviteContent() {
             <Row
               label="You signed in as"
               value={
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--danger)' }}>
+                <span className="text-danger" style={{ fontFamily: 'var(--font-mono)' }}>
                   {signedInEmail}
                 </span>
               }
@@ -499,10 +498,10 @@ function AcceptInviteContent() {
 
           {/* Footnote */}
           <p
+            className="text-fg-subtle"
             style={{
               marginTop: 10,
               fontSize: 11.5,
-              color: 'var(--fg-subtle)',
               textAlign: 'center',
               lineHeight: 1.5,
             }}
@@ -540,12 +539,12 @@ function AcceptInviteContent() {
       <AuthCard style={{ marginTop: 20 }}>
         {/* Kicker */}
         <div
+          className="text-accent-ink"
           style={{
             fontSize: 11,
             fontWeight: 600,
             letterSpacing: 0.6,
             textTransform: 'uppercase',
-            color: 'var(--accent-ink)',
           }}
         >
           You&apos;ve been invited
@@ -557,7 +556,7 @@ function AcceptInviteContent() {
         </AuthHeading>
 
         {/* Expiry sub */}
-        <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 0 }}>
+        <p className="text-fg-muted" style={{ fontSize: 13, marginTop: 0 }}>
           This invitation expires {formatDate(inv.expiresAt)}.
         </p>
 
@@ -596,8 +595,8 @@ function AcceptInviteContent() {
         </Field>
 
         {/* Sign in section */}
-        <div style={{ fontSize: 13, color: 'var(--fg)', fontWeight: 500 }}>Sign in to accept</div>
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, marginBottom: 12 }}>
+        <div className="text-fg" style={{ fontSize: 13, fontWeight: 500 }}>Sign in to accept</div>
+        <div className="text-fg-muted" style={{ fontSize: 12, marginTop: 2, marginBottom: 12 }}>
           Use the account that matches{' '}
           <span style={{ fontFamily: 'var(--font-mono)' }}>{inv.email}</span>.
         </div>

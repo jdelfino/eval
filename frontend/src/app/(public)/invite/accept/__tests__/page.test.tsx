@@ -508,7 +508,7 @@ describe('AcceptInvitePage', () => {
      * and the warning loses its visual weight.
      * Breaks if: the span color is removed or changed from var(--danger).
      */
-    it('L3 "You signed in as" email renders with var(--danger) color', async () => {
+    it('L3 "You signed in as" email renders with the danger text token utility', async () => {
       render(<AcceptInvitePage />);
 
       await waitFor(() => {
@@ -522,9 +522,9 @@ describe('AcceptInvitePage', () => {
         expect(screen.getByText('This invitation is for a different email')).toBeInTheDocument();
       });
 
-      // The signed-in email should be styled with var(--danger)
+      // The signed-in email should be styled with the danger text token utility
       const signedInEmail = screen.getByText('different@example.com');
-      expect(signedInEmail).toHaveStyle({ color: 'var(--danger)' });
+      expect(signedInEmail).toHaveClass('text-danger');
     });
 
     /**

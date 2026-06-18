@@ -92,10 +92,10 @@ function TestRow({ test, last }: { test: PublicTestCaseSummary; last: boolean })
       <span style={{ flex: 1 }} />
       {test.summary && (
         <span
+          className="text-fg-muted"
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11.5,
-            color: 'var(--fg-muted)',
             maxWidth: 480,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -125,11 +125,10 @@ export default async function PublicProblemPage({ params }: Params) {
     <div>
       {/* Hero */}
       <div
+        className="border-b border-border bg-bg"
         style={{
           // Horizontal padding collapses on small screens so the hero fits 420px.
           padding: '32px clamp(16px, 6vw, 64px) 28px',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg)',
         }}
       >
         <div style={{ maxWidth: 1100 }}>
@@ -150,7 +149,7 @@ export default async function PublicProblemPage({ params }: Params) {
           </AuthHeading>
 
           {/* Meta line */}
-          <div style={{ fontSize: 13.5, color: 'var(--fg-muted)', marginTop: 6 }}>
+          <div className="text-fg-muted" style={{ fontSize: 13.5, marginTop: 6 }}>
             {metaLine}
           </div>
 
@@ -158,7 +157,8 @@ export default async function PublicProblemPage({ params }: Params) {
           <div style={{ marginTop: 8 }}>
             <a
               href={publicUrl}
-              style={{ fontSize: 12, color: 'var(--fg-muted)', textDecoration: 'none' }}
+              className="text-fg-muted"
+              style={{ fontSize: 12, textDecoration: 'none' }}
             >
               Link to this problem
             </a>
@@ -202,9 +202,8 @@ export default async function PublicProblemPage({ params }: Params) {
           <section style={{ marginBottom: 32 }}>
             <SectionLabel style={{ marginBottom: 10 }}>Statement</SectionLabel>
             <div
+              className="bg-bg-raised border border-border"
               style={{
-                background: 'var(--bg-raised)',
-                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-lg)',
                 padding: '22px 28px',
               }}
@@ -219,9 +218,8 @@ export default async function PublicProblemPage({ params }: Params) {
           <SectionLabel style={{ marginBottom: 10 }}>Tests</SectionLabel>
           {problem.test_cases.length > 0 ? (
             <div
+              className="bg-bg-raised border border-border"
               style={{
-                background: 'var(--bg-raised)',
-                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-lg)',
                 overflow: 'hidden',
               }}
@@ -235,7 +233,7 @@ export default async function PublicProblemPage({ params }: Params) {
               ))}
             </div>
           ) : (
-            <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No test cases.</div>
+            <div className="text-fg-muted" style={{ fontSize: 13 }}>No test cases.</div>
           )}
         </section>
       </div>
