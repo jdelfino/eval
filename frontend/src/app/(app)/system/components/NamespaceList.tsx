@@ -137,7 +137,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
                     <h3 className="text-lg font-semibold mb-1">
                       {namespace.display_name}
                     </h3>
-                    <div className="text-sm text-fg-muted font-mono">
+                    <div className="text-sm text-fg-muted font-mono" data-testid="namespace-id">
                       {namespace.id}
                     </div>
                   </div>

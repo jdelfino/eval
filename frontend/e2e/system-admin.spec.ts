@@ -50,7 +50,7 @@ test.describe('System Admin Core Flows', () => {
 
     // Click "Manage Users" for the new namespace
     // Find the namespace ID text in the card, then navigate up to the card container
-    const namespaceCard = page.locator('div.text-sm.text-gray-500.font-mono', { hasText: namespaceId });
+    const namespaceCard = page.locator('[data-testid="namespace-id"]', { hasText: namespaceId });
     await namespaceCard.scrollIntoViewIfNeeded();
 
     // Find the Manage Users button in the same card as our namespace ID
@@ -69,7 +69,7 @@ test.describe('System Admin Core Flows', () => {
     await expect(page).toHaveURL('/system');
 
     // Verify namespace still shows in the list
-    await expect(page.locator('div.text-sm.text-gray-500.font-mono', { hasText: namespaceId })).toBeVisible();
+    await expect(page.locator('[data-testid="namespace-id"]', { hasText: namespaceId })).toBeVisible();
 
     // Navigate to User Management via sidebar
     await navigateToUserManagement(page);
