@@ -11,6 +11,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { createSession } from '@/lib/api/sessions';
 import { formatTimeAgo } from '@/lib/format';
+import { toPlainText } from '@/lib/markdown';
 import type { SectionDetail } from '../page';
 
 interface InstructorSectionViewProps {
@@ -172,7 +173,7 @@ export default function InstructorSectionView({
                         </h3>
                         {session.problem?.description && (
                           <p className="mb-2 line-clamp-2 text-fg-muted">
-                            {session.problem.description}
+                            {toPlainText(session.problem.description)}
                           </p>
                         )}
                         <div className="flex items-center gap-4 text-sm text-fg-muted">
@@ -237,7 +238,7 @@ export default function InstructorSectionView({
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold mb-1 text-fg">{problem.problem.title}</h3>
                         {problem.problem.description && (
-                          <p className="mb-2 line-clamp-2 text-sm text-fg-muted">{problem.problem.description}</p>
+                          <p className="mb-2 line-clamp-2 text-sm text-fg-muted">{toPlainText(problem.problem.description)}</p>
                         )}
                         <div className="flex items-center gap-2">
                           {(problem.problem.tags || []).map((tag) => (
@@ -314,7 +315,7 @@ export default function InstructorSectionView({
                           </h3>
                           {session.problem?.description && (
                             <p className="mb-2 line-clamp-1 text-sm text-fg-muted">
-                              {session.problem.description}
+                              {toPlainText(session.problem.description)}
                             </p>
                           )}
                           <div className="flex items-center gap-4 text-sm text-fg-muted">
