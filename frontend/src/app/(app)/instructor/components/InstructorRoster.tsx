@@ -273,7 +273,7 @@ export function InstructorRoster({
           {joinCode ? (
             <p className="text-xs text-gray-500 mt-2 m-0">
               Students join with code{' '}
-              <span className="font-mono font-bold bg-gray-100 px-1.5 py-0.5 rounded text-blue-600">
+              <span className="font-mono font-bold bg-gray-100 px-1.5 py-0.5 rounded text-accent-ink">
                 {joinCode}
               </span>
             </p>
@@ -293,7 +293,7 @@ export function InstructorRoster({
                 onClick={() => onFocusStudent(entry.user_id)}
                 className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer border-l-2 ${
                   isFocused
-                    ? 'border-blue-500 bg-blue-50'
+                    ? 'border-accent bg-accent-soft'
                     : 'border-transparent hover:bg-gray-50'
                 } ${!entry.joined ? 'opacity-55' : ''}`}
               >

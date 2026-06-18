@@ -166,7 +166,7 @@ export default function InstructorProblemViewPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" />
+        <div className="animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -234,8 +234,8 @@ export default function InstructorProblemViewPage() {
           onSelectSection={setSelectedSectionId}
           optionsSlot={
             selectedSectionId && publish.loaded && !publish.isPublished ? (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                <label className="flex items-center gap-2 text-sm text-blue-900">
+              <div className="p-3 bg-info-soft border border-info rounded-lg space-y-2">
+                <label className="flex items-center gap-2 text-sm text-info">
                   <input
                     type="checkbox"
                     checked={true}
@@ -246,7 +246,7 @@ export default function InstructorProblemViewPage() {
                   />
                   <span>Publish to section</span>
                 </label>
-                <label className="flex items-center gap-2 text-sm text-blue-800 ml-5">
+                <label className="flex items-center gap-2 text-sm text-info ml-5">
                   <input
                     type="checkbox"
                     checked={publish.showSolution}

@@ -82,7 +82,7 @@ export function Panel({
         <div className="p-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-accent" />
             </div>
           ) : (
             children

@@ -205,7 +205,7 @@ export function SignalsPanel({
             </p>
             <button
               onClick={handleAnalyze}
-              className="text-sm font-medium text-blue-600 hover:text-blue-800"
+              className="text-sm font-medium text-accent-ink hover:underline"
             >
               Try Again
             </button>
@@ -214,7 +214,7 @@ export function SignalsPanel({
           <button
             onClick={handleAnalyze}
             disabled={realtimeStudents.length === 0 || analysisState === 'loading'}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="analyze-button"
           >
             {analysisState === 'loading' && (
@@ -312,7 +312,7 @@ export function SignalsPanel({
               key={userId}
               type="button"
               onClick={() => onFocusStudent(userId)}
-              className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+              className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs text-gray-700 hover:border-accent hover:bg-accent-soft hover:text-accent-ink"
             >
               {nameById.get(userId) ?? userId}
             </button>

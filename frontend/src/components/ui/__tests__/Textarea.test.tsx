@@ -36,7 +36,7 @@ describe('Textarea', () => {
       render(<Textarea data-testid="textarea" />);
       const textarea = screen.getByTestId('textarea');
       expect(textarea).toHaveClass('border-gray-300');
-      expect(textarea).toHaveClass('focus:ring-indigo-500');
+      expect(textarea).toHaveClass('focus:ring-accent');
     });
 
     it('applies resize-y class for vertical resizing', () => {

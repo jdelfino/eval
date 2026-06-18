@@ -131,10 +131,10 @@ export default function SessionDetails({ session_id, onClose, onExecuteCode }: S
               <p><span className="font-medium">Participants:</span> {session.participant_count} {session.participant_count === 1 ? 'student' : 'students'}</p>
             </div>
             {session.problem_title && session.problem_title !== 'Untitled Session' && (
-              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <p className="font-medium text-blue-900">{session.problem_title}</p>
+              <div className="mt-4 p-4 bg-info-soft rounded-lg">
+                <p className="font-medium text-info">{session.problem_title}</p>
                 {session.problem_description && (
-                  <p className="text-sm text-blue-700 mt-1">{session.problem_description}</p>
+                  <p className="text-sm text-info mt-1">{session.problem_description}</p>
                 )}
               </div>
             )}
@@ -157,7 +157,7 @@ export default function SessionDetails({ session_id, onClose, onExecuteCode }: S
                   onClick={() => setSelectedStudentId(student.id)}
                   className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
                     selectedStudentId === student.id
-                      ? 'bg-blue-100 text-blue-900 font-medium'
+                      ? 'bg-accent-soft text-accent-ink font-medium'
                       : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                   }`}
                 >

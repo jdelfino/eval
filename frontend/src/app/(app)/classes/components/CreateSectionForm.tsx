@@ -59,7 +59,7 @@ export default function CreateSectionForm({ class_id: _classId, className, onSub
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g., Section A, Morning Session"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             disabled={submitting}
             required
           />
@@ -75,7 +75,7 @@ export default function CreateSectionForm({ class_id: _classId, className, onSub
             value={semester}
             onChange={(e) => setSemester(e.target.value)}
             placeholder="e.g., Fall 2025, Spring 2026"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent"
             disabled={submitting}
           />
         </div>
@@ -92,7 +92,7 @@ export default function CreateSectionForm({ class_id: _classId, className, onSub
           <button
             type="submit"
             disabled={submitting || !name.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-accent text-accent-fg rounded-md hover:brightness-110 disabled:opacity-50"
           >
             {submitting ? 'Creating...' : 'Create Section'}
           </button>

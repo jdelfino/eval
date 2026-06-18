@@ -62,7 +62,7 @@ export default function ClassList({ classes, onCreateNew, onCreateSection, onEdi
                     </div>
                     <Link
                       href={`/sections/${section.id}`}
-                      className="text-xs text-blue-600 hover:text-blue-800 ml-3"
+                      className="text-xs text-accent-ink hover:underline ml-3"
                     >
                       Open →
                     </Link>

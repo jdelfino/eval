@@ -15,13 +15,13 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4">
+    <div className="min-h-screen bg-accent-soft py-12 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-8 md:p-12">
         {/* Header */}
         <div className="text-center mb-8">
           <Link
             href="/"
-            className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg mb-4"
+            className="inline-flex items-center justify-center w-12 h-12 bg-accent text-accent-fg rounded-xl shadow-lg mb-4"
           >
             <svg
               className="w-7 h-7 text-white"
@@ -37,7 +37,7 @@ export default function PrivacyPolicyPage() {
               />
             </svg>
           </Link>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl font-bold text-accent">
             Privacy Policy
           </h1>
           <p className="mt-2 text-sm text-gray-500">Last updated: January 2026</p>
@@ -217,13 +217,13 @@ export default function PrivacyPolicyPage() {
           <div className="flex justify-center gap-6 text-sm">
             <Link
               href="/"
-              className="text-indigo-600 hover:text-indigo-500 transition-colors"
+              className="text-accent-ink hover:underline transition-colors"
             >
               Back to Home
             </Link>
             <Link
               href="/terms"
-              className="text-indigo-600 hover:text-indigo-500 transition-colors"
+              className="text-accent-ink hover:underline transition-colors"
             >
               Terms of Service
             </Link>

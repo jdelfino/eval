@@ -212,7 +212,7 @@ export function FocusedStudentPanel({
       <div className="flex items-center gap-2 min-w-0">
         <div
           data-testid="focused-avatar"
-          className="w-[22px] h-[22px] rounded-full grid place-items-center bg-blue-100 text-blue-700 text-[9.5px] font-bold flex-shrink-0"
+          className="w-[22px] h-[22px] rounded-full grid place-items-center bg-info-soft text-info text-[9.5px] font-bold flex-shrink-0"
         >
           {initials(focusedName)}
         </div>
@@ -243,7 +243,7 @@ export function FocusedStudentPanel({
           onClick={() => onShowOnPublicView(focusedStudentId)}
           className={
             isFeatured
-              ? 'px-2.5 py-1 text-xs font-medium rounded border border-blue-600 bg-blue-600 text-white'
+              ? 'px-2.5 py-1 text-xs font-medium rounded border border-accent bg-accent text-accent-fg'
               : 'px-2.5 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
           }
         >

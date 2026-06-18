@@ -66,7 +66,7 @@ export function BackButton({
     'font-medium',
     'focus:outline-none',
     'focus:ring-2',
-    'focus:ring-indigo-500',
+    'focus:ring-accent',
     'focus:ring-offset-2',
     'rounded',
   ].join(' ');

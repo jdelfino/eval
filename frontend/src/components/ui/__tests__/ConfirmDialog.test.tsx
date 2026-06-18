@@ -75,8 +75,8 @@ describe('ConfirmDialog', () => {
       render(<ConfirmDialog {...defaultProps} />);
 
       const confirmButton = screen.getByRole('button', { name: 'Confirm' });
-      expect(confirmButton).toHaveClass('bg-gradient-to-r');
-      expect(confirmButton).toHaveClass('from-indigo-600');
+      // Canonical primary is the brand accent (token-driven inline style).
+      expect(confirmButton).toHaveStyle({ background: 'var(--accent)' });
     });
 
     it('should render with danger variant (red confirm button)', () => {
@@ -524,7 +524,8 @@ describe('ConfirmDialog', () => {
       );
 
       const confirmButton = screen.getByRole('button', { name: 'Submit' });
-      expect(confirmButton).toHaveClass('from-indigo-600');
+      // Default variant uses primary (brand accent), not danger.
+      expect(confirmButton).toHaveStyle({ background: 'var(--accent)' });
       expect(confirmButton).not.toHaveClass('bg-red-600');
     });
   });

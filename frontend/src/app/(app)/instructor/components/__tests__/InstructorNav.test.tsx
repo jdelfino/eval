@@ -38,8 +38,8 @@ describe('InstructorNav', () => {
     );
 
     const problemsButton = screen.getByText('Problems').closest('button');
-    expect(problemsButton).toHaveClass('bg-blue-600');
-    expect(problemsButton).toHaveClass('text-white');
+    expect(problemsButton).toHaveClass('bg-accent');
+    expect(problemsButton).toHaveClass('text-accent-fg');
   });
 
   it('calls onNavigate when clicking a nav item', () => {

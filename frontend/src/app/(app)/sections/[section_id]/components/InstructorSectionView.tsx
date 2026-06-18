@@ -389,7 +389,7 @@ export default function InstructorSectionView({
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link
                           href={`/sections/${section.id}/students/${student.user_id}`}
-                          className="block text-sm font-medium text-blue-600 hover:text-blue-800"
+                          className="block text-sm font-medium text-accent-ink hover:underline"
                         >
                           {student.display_name || student.email}
                         </Link>

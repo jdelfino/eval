@@ -34,7 +34,7 @@ const InstructorNav: React.FC<InstructorNavProps> = ({
             className={`
               flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all
               ${isActive 
-                ? 'bg-blue-600 text-white shadow-sm' 
+                ? 'bg-accent text-accent-fg shadow-sm'
                 : 'text-gray-600 hover:bg-gray-100'
               }
               cursor-pointer

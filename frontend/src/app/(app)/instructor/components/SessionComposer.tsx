@@ -105,7 +105,7 @@ export default function SessionComposer({
                   }}
                   disabled={starting || sectionLocked}
                   className={`w-full flex items-center gap-3 text-left p-3 rounded-lg border-2 transition-colors ${
-                    selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    selected ? 'border-accent bg-accent-soft' : 'border-gray-200 hover:border-gray-300'
                   } ${starting ? 'opacity-50 cursor-not-allowed' : ''} ${
                     sectionLocked ? 'cursor-default' : ''
                   }`}
@@ -113,7 +113,7 @@ export default function SessionComposer({
                   <span
                     aria-hidden="true"
                     className={`w-4 h-4 rounded-full flex-shrink-0 border-2 ${
-                      selected ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'
+                      selected ? 'border-accent bg-accent' : 'border-gray-300 bg-white'
                     }`}
                   />
                   <span className="flex flex-col flex-1 min-w-0">

@@ -33,7 +33,7 @@ export function PanelToggle({
       }}
       aria-expanded={isExpanded}
       aria-label={ariaLabel}
-      className="p-1 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
+      className="p-1 rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 transition-colors"
     >
       <Icon className="h-4 w-4 text-gray-500" />
     </button>
