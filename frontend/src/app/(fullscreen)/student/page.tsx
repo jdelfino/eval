@@ -716,7 +716,15 @@ function StudentPage() {
           </div>
         </div>
       )}
-      {connectionError && mode === 'live' && (
+      {/* Legacy connection-error strip. ReconnectingBanner (below) now OWNS the
+          lost-link surface in live mode for the 'failed'/'disconnected' states —
+          and useRealtimeSession only ever sets connectionError alongside
+          connectionStatus==='failed' — so suppress this alert whenever the banner
+          would cover it, to avoid a double banner. */}
+      {connectionError &&
+        mode === 'live' &&
+        connectionStatus !== 'failed' &&
+        connectionStatus !== 'disconnected' && (
         <ErrorAlert
           error={connectionError}
           variant="warning"

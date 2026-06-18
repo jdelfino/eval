@@ -66,11 +66,13 @@ export function ReconnectingBanner({
     </>
   );
 
-  const action = onRetry ? (
+  const action = dismissed || !onRetry ? undefined : (
     <Button variant="quiet" size="xs" onClick={onRetry}>
       Retry now
     </Button>
-  ) : undefined;
+  );
+
+  const onDismiss = dismissed ? undefined : () => setDismissed(true);
 
   return (
     <div className={className}>
@@ -79,8 +81,8 @@ export function ReconnectingBanner({
         icon="wifi"
         title="Reconnecting to the live session…"
         body={body}
-        action={dismissed ? undefined : action}
-        onDismiss={dismissed ? undefined : () => setDismissed(true)}
+        action={action}
+        onDismiss={onDismiss}
       />
     </div>
   );

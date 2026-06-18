@@ -211,6 +211,37 @@ describe('Student page ReconnectingBanner integration', () => {
   });
 
   /**
+   * G9 double-banner guard: useRealtimeSession sets BOTH connectionStatus='failed'
+   * AND connectionError on a subscription error. ReconnectingBanner now OWNS the
+   * lost-link surface in live+joined mode, so the legacy connectionError ErrorAlert
+   * must be suppressed when it would overlap. Exactly ONE lost-link strip (the
+   * ReconnectingBanner) must render, not two. Both strips render with role="alert"
+   * (warn tone), so counting role="alert" pins the double-banner regression: it is
+   * 2 against the buggy code and 1 against the fix.
+   */
+  it('shows exactly one lost-link strip (ReconnectingBanner) when failed + connectionError are both set', async () => {
+    mockUseRealtimeSession.mockReturnValue(
+      makeRealtimeReturn('failed', {
+        connectionError: 'Failed to connect to real-time server',
+      })
+    );
+
+    render(<StudentPageWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+    });
+
+    // The ReconnectingBanner owns the lost-link surface and must be present.
+    await waitFor(() => {
+      expect(screen.getByText(/Reconnecting to the live session/i)).toBeInTheDocument();
+    });
+
+    // Exactly one lost-link strip — not the banner AND the legacy ErrorAlert.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
+  /**
    * Test Case 4 (online half): when connected, the dot renders but the banner does NOT.
    * Catches the banner leaking into the normal online workspace.
    */
