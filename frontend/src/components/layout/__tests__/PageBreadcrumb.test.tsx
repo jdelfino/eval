@@ -12,8 +12,8 @@ jest.mock('@/hooks/useBreadcrumbs', () => ({
 }));
 
 jest.mock('next/link', () => {
-  const MockLink = ({ href, children, style }: { href: string; children: React.ReactNode; style?: React.CSSProperties }) => (
-    <a href={href} style={style}>{children}</a>
+  const MockLink = ({ href, children, style, className }: { href: string; children: React.ReactNode; style?: React.CSSProperties; className?: string }) => (
+    <a href={href} style={style} className={className}>{children}</a>
   );
   MockLink.displayName = 'Link';
   return MockLink;
@@ -49,11 +49,13 @@ describe('PageBreadcrumb (v4 reskin)', () => {
 
     // Current page item (last) should have fg color and fontWeight 500
     const currentPage = screen.getByText('CS101');
-    expect(currentPage).toHaveStyle({ color: 'var(--fg)', fontWeight: 500 });
+    expect(currentPage).toHaveClass('text-fg');
+    expect(currentPage).toHaveStyle({ fontWeight: 500 });
 
     // Non-last item (Classes) should have fg-muted color
     const classesLink = screen.getByRole('link', { name: 'Classes' });
-    expect(classesLink).toHaveStyle({ color: 'var(--fg-muted)', fontWeight: 400 });
+    expect(classesLink).toHaveClass('text-fg-muted');
+    expect(classesLink).toHaveStyle({ fontWeight: 400 });
   });
 
   it('uses slash separator between items instead of ChevronRight', () => {

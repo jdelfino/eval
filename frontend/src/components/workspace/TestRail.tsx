@@ -78,17 +78,17 @@ export function TestRail({
   return (
     <aside
       data-testid="workspace-test-rail"
+      className="bg-bg-raised border-l border-border"
       style={{
         width: '100%',
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
-        background: 'var(--bg-raised)',
-        borderLeft: '1px solid var(--border)',
       }}
     >
       {/* Rail header */}
       <div
+        className="border-b border-border bg-bg-sunken"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -96,24 +96,22 @@ export function TestRail({
           padding: '0 10px',
           height: 32,
           flexShrink: 0,
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-sunken)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span
+            className="text-fg-muted"
             style={{
               fontSize: 11.5,
               fontWeight: 600,
               letterSpacing: 0.4,
               textTransform: 'uppercase',
-              color: 'var(--fg-muted)',
             }}
           >
             {title}
           </span>
           {selectedSummary && (
-            <span style={{ fontSize: 11, color: 'var(--fg-subtle)' }}>
+            <span className="text-fg-subtle" style={{ fontSize: 11 }}>
               {selectedSummary}
             </span>
           )}
@@ -148,9 +146,9 @@ export function TestRail({
         ))}
         {tests.length === 0 && (
           <div
+            className="text-fg-subtle"
             style={{
               padding: '24px 16px',
-              color: 'var(--fg-subtle)',
               fontSize: 12,
               textAlign: 'center',
             }}
@@ -162,11 +160,11 @@ export function TestRail({
         {/* Split-button add-test row — only when railShowAdd=true */}
         {railShowAdd && (
           <div
+            className="border-b border-border"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 4,
-              borderBottom: '1px solid var(--border)',
               padding: '8px 10px',
             }}
           >
@@ -220,11 +218,11 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, onEdit, testId 
     <div
       data-testid={testId}
       onClick={onSelect}
+      className="border-b border-border"
       style={{
         display: 'flex',
         alignItems: 'stretch',
         gap: 0,
-        borderBottom: '1px solid var(--border)',
         background: active ? 'var(--bg)' : 'transparent',
         cursor: 'pointer',
         position: 'relative',
@@ -233,13 +231,13 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, onEdit, testId 
       {/* Active indicator bar */}
       {active && (
         <div
+          className="bg-accent"
           style={{
             position: 'absolute',
             left: 0,
             top: 0,
             bottom: 0,
             width: 2,
-            background: 'var(--accent)',
           }}
         />
       )}
@@ -260,10 +258,10 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, onEdit, testId 
             <StateDot state={test.state} />
           </span>
           <span
+            className="text-fg"
             style={{
               fontSize: 12.5,
               fontWeight: active ? 600 : 500,
-              color: 'var(--fg)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -277,10 +275,10 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, onEdit, testId 
             {test.kind}
           </Pill>
           <span
+            className="text-fg-subtle"
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: 10.5,
-              color: 'var(--fg-subtle)',
               flexShrink: 0,
             }}
           >
@@ -290,10 +288,10 @@ function TestRow({ test, active, mode, onSelect, onRun, onDebug, onEdit, testId 
 
         {/* Kind preview line */}
         <div
+          className="text-fg-muted"
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            color: 'var(--fg-muted)',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',

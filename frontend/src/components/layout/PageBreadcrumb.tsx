@@ -23,7 +23,8 @@ export function PageBreadcrumb({ items }: PageBreadcrumbProps) {
 
   return (
     <nav
-      style={{ display: 'flex', alignItems: 'center', fontSize: 12.5, color: 'var(--fg-muted)' }}
+      className="text-fg-muted"
+      style={{ display: 'flex', alignItems: 'center', fontSize: 12.5 }}
       aria-label="Breadcrumb"
     >
       <ol style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0, padding: 0, listStyle: 'none' }}>
@@ -37,7 +38,8 @@ export function PageBreadcrumb({ items }: PageBreadcrumbProps) {
               )}
               {isLast || !item.href ? (
                 <span
-                  style={{ color: 'var(--fg)', fontWeight: 500 }}
+                  className="text-fg"
+                  style={{ fontWeight: 500 }}
                   aria-current={isLast ? 'page' : undefined}
                 >
                   {item.label}
@@ -45,7 +47,8 @@ export function PageBreadcrumb({ items }: PageBreadcrumbProps) {
               ) : (
                 <Link
                   href={item.href}
-                  style={{ color: 'var(--fg-muted)', fontWeight: 400, textDecoration: 'none' }}
+                  className="text-fg-muted"
+                  style={{ fontWeight: 400, textDecoration: 'none' }}
                 >
                   {item.label}
                 </Link>

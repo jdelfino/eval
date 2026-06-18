@@ -302,7 +302,7 @@ describe('Drawer', () => {
       // The type+message appear in a single div — find the div with danger color
       const allNameError = screen.getAllByText(/NameError/);
       // The danger-styled element should be the type+message div (not the trace pre)
-      const typeEl = allNameError.find(el => el.style?.color === 'var(--danger)');
+      const typeEl = allNameError.find(el => el.classList.contains('text-danger'));
       expect(typeEl).toBeTruthy();
       expect(screen.getByText(/name 'x' is undefined/)).toBeInTheDocument();
       expect(screen.getByText(/File "main.py"/)).toBeInTheDocument();

@@ -31,7 +31,7 @@ export function AuthLoading({ caption }: AuthLoadingProps): React.ReactElement {
       >
         <Spinner size="lg" />
         {caption && (
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)', margin: 0 }}>{caption}</p>
+          <p className="text-fg-muted" style={{ fontSize: 13, margin: 0 }}>{caption}</p>
         )}
       </div>
     </AuthPublicShell>
