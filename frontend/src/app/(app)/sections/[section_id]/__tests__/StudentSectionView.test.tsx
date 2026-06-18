@@ -60,6 +60,21 @@ jest.mock('@/hooks/useSectionEvents', () => ({
   LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
+// Mobile responsiveness (G8 T3): the live card swaps its primary "Join now"
+// navigate-to-workspace action for an OpenOnLaptop nudge when isMobile. Default
+// to desktop so the existing suite's Join-button assertions hold; the mobile
+// suite overrides this per-test.
+const mockUseMobileViewport = jest.fn(() => ({
+  isMobile: false,
+  isTablet: false,
+  isVerySmall: false,
+  isDesktop: true,
+  width: 1280,
+}));
+jest.mock('@/hooks/useResponsiveLayout', () => ({
+  useMobileViewport: () => mockUseMobileViewport(),
+}));
+
 const mockPush = jest.fn();
 
 const SECTION_ID = 'section-xyz-789';
@@ -354,6 +369,15 @@ describe('StudentSectionView', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetRevisions.mockResolvedValue([]);
+    // Reset to desktop viewport between tests (clearAllMocks wipes the default
+    // implementation set at jest.fn() creation time).
+    mockUseMobileViewport.mockReturnValue({
+      isMobile: false,
+      isTablet: false,
+      isVerySmall: false,
+      isDesktop: true,
+      width: 1280,
+    });
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
     // Default: hook echoes the initial pointer/problem/activity passed to the
     // component, so tests drive the live card via props.
@@ -1578,6 +1602,136 @@ describe('StudentSectionView', () => {
       expect(headingRow).not.toBeNull();
       expect(headingRow!.className).toContain('flex-wrap');
       expect(headingRow!.className).toContain('gap-2');
+    });
+  });
+
+  describe('mobile live-card behavior (G8 T3)', () => {
+    const setMobile = () =>
+      mockUseMobileViewport.mockReturnValue({
+        isMobile: true,
+        isTablet: false,
+        isVerySmall: true,
+        isDesktop: false,
+        width: 420,
+      });
+
+    it('mobile: live card nudges to laptop instead of presenting Join as the primary action', () => {
+      /**
+       * Contract (Test Case 1): on a mobile viewport the live card must NOT offer
+       * the "Join now"/"Jump in" navigate-to-workspace button as its primary
+       * action; it shows the laptop nudge ("Open this session on your laptop")
+       * plus the OpenOnLaptop Copy-link affordance. The real block stays the T1
+       * /student guard; this is copy only. Catches: mobile live pull-in.
+       */
+      setMobile();
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
+          publishedProblems={[]}
+          pastSessions={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      // Laptop nudge copy + Copy-link affordance present (heading is the
+      // OpenOnLaptop title; the live card subhead echoes the laptop nudge too).
+      expect(
+        screen.getByRole('heading', { name: /Open this session on your laptop/i })
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Copy link/i })).toBeInTheDocument();
+
+      // The navigate-to-workspace primary action is NOT presented on mobile.
+      expect(screen.queryByRole('button', { name: /Join now/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Jump in/i })).not.toBeInTheDocument();
+    });
+
+    it('mobile: still shows the live state (does not fall back to the idle card)', () => {
+      /**
+       * Contract: a live pointer on mobile still reads as live (the student should
+       * know class is live, just on the wrong device) — the nudge replaces the
+       * Join button, it does not suppress the live card entirely. Catches: live
+       * card incorrectly hidden on mobile.
+       */
+      setMobile();
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
+          publishedProblems={[]}
+          pastSessions={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      expect(screen.queryByText(/No session live/i)).not.toBeInTheDocument();
+    });
+
+    it('mobile: renders the problem list and past sessions without throwing', () => {
+      /**
+       * Contract (Test Case 3): the problem list + past sessions render at 420px
+       * read-only. Catches: layout/crash regression at mobile width.
+       */
+      setMobile();
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId={null}
+          publishedProblems={publishedProblems}
+          pastSessions={pastSessions}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      expect(screen.getAllByTestId('problem-row').length).toBe(publishedProblems.length);
+      // FizzBuzz / Binary Search appear in both a problem row and a past session row.
+      expect(screen.getAllByText('FizzBuzz').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Binary Search').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByRole('button', { name: 'Replay' })).toHaveLength(pastSessions.length);
+    });
+
+    it('desktop (Test Case 2): live card keeps the Join button wired to the join handler', async () => {
+      /**
+       * Contract (Test Case 2): on desktop the existing Join/Jump-in button and its
+       * getOrCreateStudentWork → router.push wiring are unchanged (no nudge).
+       * Catches: desktop live-join regression from the mobile branch.
+       */
+      (getOrCreateStudentWork as jest.Mock).mockResolvedValue({
+        id: WORK_ID_1,
+        user_id: 'user-1',
+        section_id: SECTION_ID,
+        problem_id: PROBLEM_ID_1,
+        code: '',
+        last_update: '2026-02-20T10:00:00Z',
+        created_at: '2026-02-20T10:00:00Z',
+      });
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
+          publishedProblems={[]}
+          pastSessions={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      // No laptop nudge on desktop.
+      expect(screen.queryByText(/Open this session on your laptop/i)).not.toBeInTheDocument();
+
+      const joinButton = screen.getByRole('button', { name: /Join now/i });
+      await userEvent.click(joinButton);
+
+      await waitFor(() => {
+        expect(getOrCreateStudentWork).toHaveBeenCalledWith(SECTION_ID, PROBLEM_ID_1);
+        expect(mockPush).toHaveBeenCalledWith(`/student?work_id=${WORK_ID_1}&section_id=${SECTION_ID}`);
+      });
     });
   });
 });
