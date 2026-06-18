@@ -7,7 +7,7 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Session as ApiSession, Problem, IOTestCase } from './api';
+import type { Session as ApiSession, Problem, IOTestCase, RunSummary } from './api';
 
 export interface CallFrame {
   function_name: string;
@@ -50,6 +50,11 @@ export interface Student {
   code: string;
   last_update: Date;
   test_cases?: IOTestCase[];
+  /**
+   * Most recent client-reported run-all summary (G4 F8), or undefined if the
+   * student has not run-all this session. Classroom-grade — not server-verified.
+   */
+  last_run_summary?: RunSummary;
 }
 
 /**

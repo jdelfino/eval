@@ -52,9 +52,10 @@ func (m *mockSessionRepo) UpdateSessionProblem(ctx context.Context, id uuid.UUID
 
 // mockSessionStudentRepo implements store.SessionStudentRepository for testing.
 type mockSessionStudentRepo struct {
-	joinSessionFn        func(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error)
-	listSessionStudentFn func(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error)
-	getSessionStudentFn  func(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error)
+	joinSessionFn                 func(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error)
+	listSessionStudentFn          func(ctx context.Context, sessionID uuid.UUID) ([]store.SessionStudent, error)
+	getSessionStudentFn           func(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error)
+	setSessionStudentRunSummaryFn func(ctx context.Context, sessionID, userID uuid.UUID, summary json.RawMessage) error
 }
 
 func (m *mockSessionStudentRepo) JoinSession(ctx context.Context, params store.JoinSessionParams) (*store.SessionStudent, error) {
@@ -67,6 +68,13 @@ func (m *mockSessionStudentRepo) ListSessionStudents(ctx context.Context, sessio
 
 func (m *mockSessionStudentRepo) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*store.SessionStudent, error) {
 	return m.getSessionStudentFn(ctx, sessionID, userID)
+}
+
+func (m *mockSessionStudentRepo) SetSessionStudentRunSummary(ctx context.Context, sessionID, userID uuid.UUID, summary json.RawMessage) error {
+	if m.setSessionStudentRunSummaryFn != nil {
+		return m.setSessionStudentRunSummaryFn(ctx, sessionID, userID, summary)
+	}
+	return nil
 }
 
 // --- Shared mock publisher ---
@@ -93,6 +101,7 @@ type studentJoinedCall struct {
 type codeUpdatedCall struct {
 	sessionID, userID, code string
 	testCases               json.RawMessage
+	runSummary              json.RawMessage
 }
 type sessionEndedCall struct {
 	sessionID, reason string
@@ -144,9 +153,9 @@ func (m *mockSessionPublisher) StudentJoined(_ context.Context, sessionID, userI
 	m.done <- struct{}{}
 	return m.err
 }
-func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
+func (m *mockSessionPublisher) CodeUpdated(_ context.Context, sessionID, userID, code string, testCases, runSummary json.RawMessage) error {
 	m.mu.Lock()
-	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code, testCases})
+	m.codeUpdatedCalls = append(m.codeUpdatedCalls, codeUpdatedCall{sessionID, userID, code, testCases, runSummary})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err
@@ -344,6 +353,9 @@ func (stubRepos) ListSessionStudents(context.Context, uuid.UUID) ([]store.Sessio
 }
 func (stubRepos) GetSessionStudent(context.Context, uuid.UUID, uuid.UUID) (*store.SessionStudent, error) {
 	panic("stubRepos: unexpected GetSessionStudent call")
+}
+func (stubRepos) SetSessionStudentRunSummary(context.Context, uuid.UUID, uuid.UUID, json.RawMessage) error {
+	panic("stubRepos: unexpected SetSessionStudentRunSummary call")
 }
 func (stubRepos) ListRevisions(context.Context, uuid.UUID, *uuid.UUID) ([]store.Revision, error) {
 	panic("stubRepos: unexpected ListRevisions call")

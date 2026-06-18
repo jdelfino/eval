@@ -2,17 +2,18 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 )
 
-const sessionStudentColumns = `id, session_id, user_id, name, joined_at, student_work_id`
+const sessionStudentColumns = `id, session_id, user_id, name, joined_at, student_work_id, last_run_summary`
 
 func scanSessionStudent(row interface{ Scan(dest ...any) error }) (*SessionStudent, error) {
 	var ss SessionStudent
 	err := row.Scan(
 		&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
-		&ss.JoinedAt, &ss.StudentWorkID,
+		&ss.JoinedAt, &ss.StudentWorkID, &ss.LastRunSummary,
 	)
 	if err != nil {
 		return nil, err
@@ -59,7 +60,7 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 	query := `SELECT
 		ss.id, ss.session_id, ss.user_id, ss.name,
 		sw.code, sw.test_cases,
-		ss.joined_at, ss.student_work_id
+		ss.joined_at, ss.student_work_id, ss.last_run_summary, sw.last_update
 		FROM session_students ss
 		JOIN student_work sw ON ss.student_work_id = sw.id
 		WHERE ss.session_id = $1
@@ -77,7 +78,7 @@ func (s *Store) ListSessionStudents(ctx context.Context, sessionID uuid.UUID) ([
 		err := rows.Scan(
 			&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
 			&ss.Code, &ss.TestCases,
-			&ss.JoinedAt, &ss.StudentWorkID,
+			&ss.JoinedAt, &ss.StudentWorkID, &ss.LastRunSummary, &ss.LastActivity,
 		)
 		if err != nil {
 			return nil, err
@@ -94,7 +95,7 @@ func (s *Store) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UU
 	query := `SELECT
 		ss.id, ss.session_id, ss.user_id, ss.name,
 		sw.code, sw.test_cases,
-		ss.joined_at, ss.student_work_id
+		ss.joined_at, ss.student_work_id, ss.last_run_summary, sw.last_update
 		FROM session_students ss
 		JOIN student_work sw ON ss.student_work_id = sw.id
 		WHERE ss.session_id = $1 AND ss.user_id = $2`
@@ -102,12 +103,30 @@ func (s *Store) GetSessionStudent(ctx context.Context, sessionID, userID uuid.UU
 	err := s.q.QueryRow(ctx, query, sessionID, userID).Scan(
 		&ss.ID, &ss.SessionID, &ss.UserID, &ss.Name,
 		&ss.Code, &ss.TestCases,
-		&ss.JoinedAt, &ss.StudentWorkID,
+		&ss.JoinedAt, &ss.StudentWorkID, &ss.LastRunSummary, &ss.LastActivity,
 	)
 	if err != nil {
 		return nil, HandleNotFound(err)
 	}
 	return &ss, nil
+}
+
+// SetSessionStudentRunSummary persists a student's most recent run-all summary
+// (G4 F8). The summary is CLIENT-REPORTED and is NOT verified by the server —
+// this is classroom-grade signal for the live dashboard, never a grading source.
+// Returns ErrNotFound if no matching (session_id, user_id) row exists.
+func (s *Store) SetSessionStudentRunSummary(ctx context.Context, sessionID, userID uuid.UUID, summary json.RawMessage) error {
+	tag, err := s.q.Exec(ctx,
+		`UPDATE session_students SET last_run_summary = $3 WHERE session_id = $1 AND user_id = $2`,
+		sessionID, userID, summary,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // Compile-time check that Store implements SessionStudentRepository.

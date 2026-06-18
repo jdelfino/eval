@@ -33,10 +33,15 @@ type StudentJoinedData struct {
 }
 
 // StudentCodeUpdatedData is the payload for EventStudentCodeUpdated.
+// RunSummary (G4 F8) carries the student's most recent run-all summary
+// ({passed,failed,errors,total,at}) when the update was triggered by a run-all;
+// it is omitted for plain code/test-case autosaves. CLIENT-REPORTED and never
+// server-verified (classroom-grade; not for grading).
 type StudentCodeUpdatedData struct {
-	UserID    string          `json:"user_id"`
-	Code      string          `json:"code"`
-	TestCases json.RawMessage `json:"test_cases,omitempty"`
+	UserID     string          `json:"user_id"`
+	Code       string          `json:"code"`
+	TestCases  json.RawMessage `json:"test_cases,omitempty"`
+	RunSummary json.RawMessage `json:"run_summary,omitempty"`
 }
 
 // SessionEndedData is the payload for EventSessionEnded.

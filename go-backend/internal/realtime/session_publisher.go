@@ -12,7 +12,7 @@ import (
 // SessionPublisher provides typed methods for publishing session events.
 type SessionPublisher interface {
 	StudentJoined(ctx context.Context, sessionID, userID, displayName string) error
-	CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error
+	CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases, runSummary json.RawMessage) error
 	SessionEnded(ctx context.Context, sessionID, reason string) error
 	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error
 	ProblemUpdated(ctx context.Context, sessionID, problemID string) error
@@ -70,11 +70,12 @@ func (s *sessionPublisher) StudentJoined(ctx context.Context, sessionID, userID,
 	})
 }
 
-func (s *sessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
+func (s *sessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases, runSummary json.RawMessage) error {
 	return s.publish(ctx, sessionID, EventStudentCodeUpdated, StudentCodeUpdatedData{
-		UserID:    userID,
-		Code:      code,
-		TestCases: testCases,
+		UserID:     userID,
+		Code:       code,
+		TestCases:  testCases,
+		RunSummary: runSummary,
 	})
 }
 

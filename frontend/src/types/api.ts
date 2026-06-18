@@ -114,6 +114,24 @@ export interface Session {
   ended_at: string | null;
 }
 
+/**
+ * RunSummary — client-reported per-student run-all summary (G4 F8).
+ *
+ * Sent by the student workspace on PUT /sessions/{id}/code after a run-all (only),
+ * persisted on session_students, and fanned out on student_code_updated. Matches
+ * the {passed,failed,errors,total,at} shape persisted in last_run_summary.
+ *
+ * CLASSROOM-GRADE: this value is client-reported and NOT server-verified. Use it
+ * only for live-dashboard glyphs/counts, never for grading.
+ */
+export interface RunSummary {
+  passed: number;
+  failed: number;
+  errors: number;
+  total: number;
+  at: string; // ISO-8601 timestamp of the run
+}
+
 export interface SessionStudent {
   id: string;
   session_id: string;
@@ -123,6 +141,8 @@ export interface SessionStudent {
   test_cases: IOTestCase[] | null; // Matches Go TestCases json.RawMessage (IOTestCase[] from student_work)
   joined_at: string;
   student_work_id?: string; // omitempty in Go — present when student has linked work
+  last_run_summary?: RunSummary; // G4 F8 — client-reported run-all summary; omitted when never run
+  last_activity?: string; // student_work.last_update — honest last-activity for "idle Nm" on initial load
 }
 
 export interface SectionMembership {

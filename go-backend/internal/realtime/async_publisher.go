@@ -49,9 +49,9 @@ func (a *AsyncSessionPublisher) StudentJoined(ctx context.Context, sessionID, us
 	return nil
 }
 
-func (a *AsyncSessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
+func (a *AsyncSessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases, runSummary json.RawMessage) error {
 	a.runAsync(ctx, "CodeUpdated", func(ctx context.Context) error {
-		return a.inner.CodeUpdated(ctx, sessionID, userID, code, testCases)
+		return a.inner.CodeUpdated(ctx, sessionID, userID, code, testCases, runSummary)
 	})
 	return nil
 }

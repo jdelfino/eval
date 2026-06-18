@@ -50,6 +50,7 @@ import {
   updateStudentCode,
   updateCode,
   featureStudent,
+  getSessionState,
 } from '@/lib/api/realtime';
 
 // ---------------------------------------------------------------------------
@@ -447,6 +448,39 @@ describe('Realtime event contract tests', () => {
 
         // Ensure execution_settings does NOT appear (wrong field name)
         expect('execution_settings' in data).toBe(false);
+      } finally {
+        unsubscribe();
+        resetAuthProvider();
+      }
+    });
+
+    it('publishes run_summary field and reflects it on GET /sessions/{id}/state (G4 F8)', async () => {
+      /**
+       * F8: Verifies that a run_summary sent on PUT /sessions/{id}/code is carried
+       * on the student_code_updated event AND persisted so a fresh state fetch
+       * exposes last_run_summary. Guards FE/BE drift on the run-summary contract.
+       */
+      const { sessionId } = setupState;
+
+      const sessionChannel = `session:${sessionId}`;
+      const { collectNext, unsubscribe } = await subscribeAndCollect(client, sessionChannel, OBSERVER_USER_ID);
+
+      try {
+        const runSummary = { passed: 2, failed: 1, errors: 0, total: 3, at: new Date().toISOString() };
+
+        configureTestAuth(STUDENT_TOKEN);
+        await updateStudentCode(sessionId, 'print("with-run-summary")', runSummary);
+
+        const envelope = await collectNext();
+        expect(envelope.type).toBe('student_code_updated');
+        const data = envelope.data as StudentCodeUpdatedData;
+        validateStudentCodeUpdatedShape(data);
+        expect(data.run_summary).toEqual(runSummary);
+
+        // A fresh state fetch must reflect the persisted summary.
+        const state = await getSessionState(sessionId);
+        const me = state.students.find((s) => s.user_id === joinedStudentUserId);
+        expect(me?.last_run_summary).toEqual(runSummary);
       } finally {
         unsubscribe();
         resetAuthProvider();

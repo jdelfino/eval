@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"testing"
@@ -65,7 +66,7 @@ func TestStudentJoined(t *testing.T) {
 func TestCodeUpdated(t *testing.T) {
 	mock, sp := newTestPublisher()
 	testCases := json.RawMessage(`[{"name":"t1","input":"world","match_type":"exact"}]`)
-	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", testCases)
+	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", testCases, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -87,7 +88,7 @@ func TestCodeUpdated(t *testing.T) {
 
 func TestCodeUpdated_NilTestCases(t *testing.T) {
 	mock, sp := newTestPublisher()
-	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", nil)
+	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -95,6 +96,51 @@ func TestCodeUpdated_NilTestCases(t *testing.T) {
 	data := event.Data.(StudentCodeUpdatedData)
 	if data.TestCases != nil {
 		t.Errorf("expected nil test_cases, got %q", string(data.TestCases))
+	}
+}
+
+// TestCodeUpdated_RunSummary verifies the G4 F8 run_summary is forwarded into
+// the StudentCodeUpdatedData payload and serializes under the "run_summary" key.
+// What contract: a run-all summary supplied by the student must reach dashboard
+// subscribers verbatim. Why it matters: roster glyphs/minimap/signals depend on
+// it. What breaks if violated: instructors see no pass/fail state for students.
+func TestCodeUpdated_RunSummary(t *testing.T) {
+	mock, sp := newTestPublisher()
+	summary := json.RawMessage(`{"passed":2,"failed":1,"errors":0,"total":3,"at":"2026-06-18T00:00:00Z"}`)
+	if err := sp.CodeUpdated(context.Background(), "sess-9", "user-9", "code", nil, summary); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	event := mock.data.(Event)
+	data := event.Data.(StudentCodeUpdatedData)
+	if string(data.RunSummary) != string(summary) {
+		t.Errorf("run_summary = %q, want %q", string(data.RunSummary), string(summary))
+	}
+	// run_summary must be present in the wire JSON.
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Contains(raw, []byte(`"run_summary"`)) {
+		t.Errorf("expected run_summary key in wire JSON, got %s", raw)
+	}
+}
+
+// TestCodeUpdated_RunSummary_OmittedWhenNil verifies run_summary is omitted from
+// the wire JSON when no summary is supplied (plain autosaves), so dashboards do
+// not misread a missing summary as an empty one.
+func TestCodeUpdated_RunSummary_OmittedWhenNil(t *testing.T) {
+	mock, sp := newTestPublisher()
+	if err := sp.CodeUpdated(context.Background(), "sess-9", "user-9", "code", nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	event := mock.data.(Event)
+	data := event.Data.(StudentCodeUpdatedData)
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if bytes.Contains(raw, []byte(`"run_summary"`)) {
+		t.Errorf("expected run_summary omitted when nil, got %s", raw)
 	}
 }
 

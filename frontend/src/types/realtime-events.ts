@@ -8,7 +8,7 @@
  * collision with the discriminated union defined in lib/api/realtime-events.ts (PLAT-pp4r.2).
  */
 
-import type { IOTestCase, Problem as ApiProblem } from './api';
+import type { IOTestCase, Problem as ApiProblem, RunSummary } from './api';
 
 // ---------------------------------------------------------------------------
 // Event type string literals (match Go EventType constants)
@@ -50,6 +50,7 @@ export interface StudentCodeUpdatedData {
   user_id: string;
   code: string;
   test_cases?: IOTestCase[]; // json.RawMessage → IOTestCase[] (student's test cases)
+  run_summary?: RunSummary; // G4 F8 — present only when triggered by a run-all
 }
 
 /** Payload for session_ended — matches Go SessionEndedData. */

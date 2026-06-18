@@ -11,7 +11,7 @@ import {
   joinSession as apiJoinSession,
 } from '@/lib/api/realtime';
 import { Session, Student } from '@/types/session';
-import type { IOTestCase } from '@/types/api';
+import type { IOTestCase, RunSummary } from '@/types/api';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 import type { RealtimeStatus } from '@/lib/connectionStatus';
 
@@ -110,6 +110,7 @@ export function useRealtimeSession({
     code: string;
     test_cases?: IOTestCase[];
     last_update?: string;
+    last_run_summary?: RunSummary;
   }>>(new Map());
 
   /**
@@ -119,8 +120,16 @@ export function useRealtimeSession({
     user_id: s.user_id,
     name: s.name,
     code: s.code || '',
-    last_update: new Date(s.joined_at),
+    // Honest last-activity (G4 F8 / plan-review #13): prefer the real last-activity
+    // value from the state payload (student_work.last_update via `last_activity`),
+    // else the run summary's `at`, and only fall back to joined_at if neither is
+    // present. Deriving freshness from joined_at alone would read falsely fresh on
+    // first paint before any websocket update.
+    last_update: new Date(
+      s.last_activity ?? s.last_run_summary?.at ?? s.joined_at
+    ),
     test_cases: s.test_cases ?? [],
+    last_run_summary: s.last_run_summary,
   }), []);
 
   /**
@@ -246,6 +255,7 @@ export function useRealtimeSession({
                 code: pendingUpdate.code,
                 last_update: pendingUpdate.last_update ? new Date(pendingUpdate.last_update) : new Date(),
                 test_cases: pendingUpdate.test_cases ?? [],
+                last_run_summary: pendingUpdate.last_run_summary,
               });
               pendingCodeUpdatesRef.current.delete(userId);
             } else {
@@ -263,8 +273,10 @@ export function useRealtimeSession({
         }
 
         case 'student_code_updated': {
-          // data: StudentCodeUpdatedData{user_id, code, test_cases?}
-          const { user_id: studentId, code, test_cases } = parsed.data;
+          // data: StudentCodeUpdatedData{user_id, code, test_cases?, run_summary?}
+          // run_summary (G4 F8) is present only when the update was a run-all; when
+          // absent we must NOT clear a previously stored summary.
+          const { user_id: studentId, code, test_cases, run_summary } = parsed.data;
           setStudents(prev => {
             const updated = new Map(prev);
             const student = updated.get(studentId);
@@ -273,12 +285,14 @@ export function useRealtimeSession({
                 ...student,
                 code: code || '',
                 ...(test_cases !== undefined && { test_cases }),
+                ...(run_summary !== undefined && { last_run_summary: run_summary }),
                 last_update: new Date(),
               });
             } else {
               pendingCodeUpdatesRef.current.set(studentId, {
                 code: code || '',
                 ...(test_cases !== undefined && { test_cases }),
+                ...(run_summary !== undefined && { last_run_summary: run_summary }),
               });
             }
             return updated;
@@ -418,12 +432,14 @@ export function useRealtimeSession({
   const updateCodeImmediate = useCallback(async (
     studentId: string,
     code: string,
-    testCases?: IOTestCase[]
+    testCases?: IOTestCase[],
+    runSummary?: RunSummary
   ) => {
     try {
-      await apiUpdateCode(session_id, studentId, code, testCases);
+      await apiUpdateCode(session_id, studentId, code, testCases, runSummary);
 
-      // Optimistically update local state
+      // Optimistically update local state. When a runSummary is supplied (run-all),
+      // store it; when omitted (plain autosave), leave any prior summary untouched.
       setStudents(prev => {
         const updated = new Map(prev);
         const student = updated.get(studentId);
@@ -433,6 +449,7 @@ export function useRealtimeSession({
             code,
             last_update: new Date(),
             test_cases: testCases ?? student.test_cases,
+            ...(runSummary !== undefined && { last_run_summary: runSummary }),
           });
         }
         return updated;
@@ -529,6 +546,10 @@ export function useRealtimeSession({
 
     // Actions
     updateCode,
+    // updateCodeImmediate (G4 F8): non-debounced update used by the student
+    // workspace to send a one-shot run_summary right after a run-all. Exposed so
+    // run-all results are not swallowed by the autosave debounce.
+    updateCodeImmediate,
     featureStudent,
     clearFeaturedStudent,
     joinSession,

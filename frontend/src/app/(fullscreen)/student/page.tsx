@@ -155,6 +155,7 @@ function StudentPage() {
     connectionStatus,
     connectionError,
     updateCode: realtimeUpdateCode,
+    updateCodeImmediate: realtimeUpdateCodeImmediate,
     joinSession,
     replacementInfo,
   } = useRealtimeSession({
@@ -363,6 +364,23 @@ function StudentPage() {
       const result = await executeCode(code, problem.language, executeOptions);
       setExecutionResult(result);
       setIsRunning(false);
+
+      // G4 F8: in a live session, report the run-all summary so the instructor
+      // dashboard (roster glyphs / minimap / signals) can show pass/fail. This is
+      // the ONLY place a run_summary is sent — single-case runs (handleRunTest) and
+      // the debounced autosave deliberately omit it. One immediate (non-debounced)
+      // update carries the summary; the value is client-reported (classroom-grade).
+      if (mode === 'live' && joined && user?.id && activeSessionId) {
+        const { passed, failed, errors, total } = result.summary;
+        realtimeUpdateCodeImmediate(
+          user.id,
+          code,
+          studentTestCases.length > 0 ? studentTestCases : undefined,
+          { passed, failed, errors, total, at: new Date().toISOString() }
+        ).catch((sendErr: unknown) => {
+          console.error('Failed to send run summary:', sendErr);
+        });
+      }
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 503) {
         setWarmingUp(true);
@@ -372,7 +390,17 @@ function StudentPage() {
       }
       setIsRunning(false);
     }
-  }, [code, problem, studentTestCases, workId]);
+  }, [
+    code,
+    problem,
+    studentTestCases,
+    workId,
+    mode,
+    joined,
+    user?.id,
+    activeSessionId,
+    realtimeUpdateCodeImmediate,
+  ]);
 
   const handleRunTest = useCallback(
     async (testId: string) => {

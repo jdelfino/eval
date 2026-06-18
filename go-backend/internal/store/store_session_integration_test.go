@@ -898,6 +898,87 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 }
 
 // =============================================================================
+// Test: SetSessionStudentRunSummary - G4 F8 run-summary round-trip with RLS
+// =============================================================================
+
+// TestIntegration_SetSessionStudentRunSummary verifies that a student can persist
+// their own run-all summary and that it round-trips through ListSessionStudents,
+// and that an unknown (session, user) returns ErrNotFound. Contract: the F8
+// run-summary write/read path must work under RLS so the instructor dashboard can
+// read per-student pass/fail state. Breaks: dashboards never see run summaries.
+func TestIntegration_SetSessionStudentRunSummary(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	creatorID := uuid.New()
+	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
+	studentID := uuid.New()
+	db.createUser(ctx, t, studentID, "student@test.com", "student", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "CS101", creatorID)
+	sectionID := uuid.New()
+	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
+	// Enroll creator as instructor + student so both can read student_work via RLS.
+	if err := db.execAsSuperuser(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'instructor')`, creatorID, sectionID); err != nil {
+		t.Fatalf("enroll creator: %v", err)
+	}
+	if err := db.execAsSuperuser(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'student')`, studentID, sectionID); err != nil {
+		t.Fatalf("enroll student: %v", err)
+	}
+	sessionID := uuid.New()
+	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
+	db.createSessionStudent(ctx, t, sessionID, studentID, "Student 1")
+
+	studentUser := &auth.User{ID: studentID, Email: "student@test.com", NamespaceID: nsID, Role: auth.RoleStudent}
+	instructorUser := &auth.User{ID: creatorID, Email: "creator@test.com", NamespaceID: nsID, Role: auth.RoleInstructor}
+
+	summary := json.RawMessage(`{"passed": 2, "failed": 1, "errors": 0, "total": 3, "at": "2026-06-18T00:00:00Z"}`)
+
+	t.Run("student sets own run summary, round-trips via ListSessionStudents", func(t *testing.T) {
+		store, conn := db.storeWithRLS(ctx, t, studentUser)
+		defer conn.Release()
+
+		if err := store.SetSessionStudentRunSummary(ctx, sessionID, studentID, summary); err != nil {
+			t.Fatalf("SetSessionStudentRunSummary: %v", err)
+		}
+
+		// Read back via the instructor's listing (the dashboard path).
+		istore, iconn := db.storeWithRLS(ctx, t, instructorUser)
+		defer iconn.Release()
+		results, err := istore.ListSessionStudents(ctx, sessionID)
+		if err != nil {
+			t.Fatalf("ListSessionStudents: %v", err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("expected 1 student, got %d", len(results))
+		}
+		if len(results[0].LastRunSummary) == 0 {
+			t.Fatal("expected last_run_summary to be populated, got empty")
+		}
+		var got map[string]any
+		if err := json.Unmarshal(results[0].LastRunSummary, &got); err != nil {
+			t.Fatalf("unmarshal last_run_summary: %v", err)
+		}
+		if got["passed"] != float64(2) || got["total"] != float64(3) {
+			t.Errorf("unexpected summary contents: %v", got)
+		}
+	})
+
+	t.Run("unknown (session, user) returns ErrNotFound", func(t *testing.T) {
+		store, conn := db.storeWithRLS(ctx, t, studentUser)
+		defer conn.Release()
+
+		err := store.SetSessionStudentRunSummary(ctx, sessionID, uuid.New(), summary)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// =============================================================================
 // Test: GetSessionStudent - calls actual Store method with RLS
 // =============================================================================
 

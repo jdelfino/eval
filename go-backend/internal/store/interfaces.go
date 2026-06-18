@@ -419,10 +419,21 @@ type SessionStudent struct {
 	SessionID     uuid.UUID       `json:"session_id"`
 	UserID        uuid.UUID       `json:"user_id"`
 	Name          string          `json:"name"`
-	Code          string          `json:"code"`                      // From student_work
-	TestCases     json.RawMessage `json:"test_cases"`                // From student_work
-	JoinedAt      time.Time       `json:"joined_at"`                 // When student joined session
-	StudentWorkID *uuid.UUID      `json:"student_work_id,omitempty"` // Link to student_work
+	Code          string          `json:"code"`                       // From student_work
+	TestCases     json.RawMessage `json:"test_cases"`                 // From student_work
+	JoinedAt      time.Time       `json:"joined_at"`                  // When student joined session
+	StudentWorkID *uuid.UUID      `json:"student_work_id,omitempty"`  // Link to student_work
+	// LastRunSummary is the student's most recent run-all summary
+	// ({passed,failed,errors,total,at}). G4 F8 — CLIENT-REPORTED and never
+	// server-verified (classroom-grade; not for grading). NULL/omitted = never ran.
+	LastRunSummary json.RawMessage `json:"last_run_summary,omitempty"`
+	// LastActivity is the student's most recent code-write timestamp, sourced from
+	// student_work.last_update via JOIN. Exposed so the dashboard's initial-load /
+	// polling path can show honest "idle Nm" instead of deriving freshness from
+	// joined_at (which would falsely read fresh before any websocket update). Only
+	// populated by the list/get paths that JOIN student_work; zero on the bare
+	// session_students row (e.g. JoinSession).
+	LastActivity time.Time `json:"last_activity"`
 }
 
 // JoinSessionParams contains the fields for joining a session.
@@ -442,6 +453,11 @@ type SessionStudentRepository interface {
 	// GetSessionStudent retrieves a single student's record in a session.
 	// Returns ErrNotFound if the student is not in the session.
 	GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error)
+	// SetSessionStudentRunSummary persists a student's most recent run-all
+	// summary (G4 F8). The summary is CLIENT-REPORTED and never server-verified
+	// (classroom-grade; not for grading). Returns ErrNotFound if no
+	// (session_id, user_id) row exists.
+	SetSessionStudentRunSummary(ctx context.Context, sessionID, userID uuid.UUID, summary json.RawMessage) error
 }
 
 // Revision represents a code revision within a session.
