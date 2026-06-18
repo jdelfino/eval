@@ -57,7 +57,6 @@ func (h *SessionHandler) Routes() chi.Router {
 		r.Post("/", h.Create)
 		r.Patch("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
-		r.Post("/{id}/reopen", h.Reopen)
 		r.Post("/{id}/update-problem", h.UpdateProblem)
 	})
 
@@ -125,6 +124,9 @@ type createSessionRequest struct {
 	SectionID    uuid.UUID  `json:"section_id" validate:"required"`
 	ProblemID    *uuid.UUID `json:"problem_id"`    // optional - if nil, creates blank session
 	ShowSolution *bool      `json:"show_solution"` // optional - whether to show solution to students
+	// SetCurrent controls whether this session becomes the section's current
+	// (live) session via the G4 section pointer. nil → true (default).
+	SetCurrent *bool `json:"set_current"`
 }
 
 // Create handles POST /api/v1/sessions — creates a new session (instructor+).
@@ -193,8 +195,9 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Atomically end any active sessions and create the new one in a single transaction.
-	session, endedIDs, err := repos.CreateSessionReplacingActive(r.Context(), store.CreateSessionParams{
+	// G4 section-pointer model: create a plain persistent session. No session is
+	// ended, flipped, or replaced by this path.
+	session, err := repos.CreateSession(r.Context(), store.CreateSessionParams{
 		NamespaceID: authUser.NamespaceID,
 		SectionID:   req.SectionID,
 		SectionName: section.Name,
@@ -210,14 +213,22 @@ func (h *SessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Notify students on ended sessions that a replacement is available.
-	newSessionID := session.ID.String()
-	for _, oldID := range endedIDs {
-		_ = h.publisher.SessionReplaced(r.Context(), oldID.String(), newSessionID)
+	// set_current defaults to true: make this the section's current session and
+	// announce the pointer change on the section channel for late join. When
+	// set_current is explicitly false the session is created but not made live
+	// (and no section_current_changed event is published).
+	setCurrent := req.SetCurrent == nil || *req.SetCurrent
+	if setCurrent {
+		if err := repos.SetSectionCurrentSession(r.Context(), req.SectionID, session.ID); err != nil {
+			if errors.Is(err, store.ErrForbidden) {
+				httputil.WriteError(w, http.StatusForbidden, "forbidden")
+				return
+			}
+			httputil.WriteInternalError(w, r, err, "internal error")
+			return
+		}
+		_ = h.publisher.SectionCurrentChanged(r.Context(), req.SectionID.String(), &session.ID, session.Problem)
 	}
-
-	// Notify section subscribers that a new session has started.
-	_ = h.publisher.SessionStartedInSection(r.Context(), req.SectionID.String(), newSessionID, session.Problem)
 
 	// Signal executor demand so KEDA can scale from zero.
 	if h.activation != nil {
@@ -314,6 +325,12 @@ func (h *SessionHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete handles DELETE /api/v1/sessions/{id} — ends a session (instructor+).
+//
+// NOTE (G4): this handler backs the SessionsList "past sessions" flow and is NOT
+// the live lifecycle path under the section-pointer model. It intentionally
+// retains the legacy status='completed' flip and the SessionEnded /
+// SessionEndedInSection publishes for that out-of-G4-scope surface. Do not
+// confuse it with the live path, which is driven by sections.current_session_id.
 func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpbind.ParseUUIDParam(w, r, "id")
 	if !ok {
@@ -358,62 +375,6 @@ func (h *SessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	_ = h.publisher.SessionEnded(r.Context(), id.String(), "completed")
 	_ = h.publisher.SessionEndedInSection(r.Context(), existing.SectionID.String(), id.String())
-
-	httputil.WriteJSON(w, http.StatusOK, session)
-}
-
-// Reopen handles POST /api/v1/sessions/{id}/reopen — reopens a completed session (instructor+).
-func (h *SessionHandler) Reopen(w http.ResponseWriter, r *http.Request) {
-	id, ok := httpbind.ParseUUIDParam(w, r, "id")
-	if !ok {
-		return
-	}
-
-	repos := store.ReposFromContext(r.Context())
-	existing, err := repos.GetSession(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			httputil.WriteError(w, http.StatusNotFound, "session not found")
-			return
-		}
-		httputil.WriteInternalError(w, r, err, "internal error")
-		return
-	}
-
-	if existing.Status != "completed" {
-		httputil.WriteError(w, http.StatusConflict, "session is not completed")
-		return
-	}
-
-	// Atomically end any other active sessions and reopen this one in a single transaction.
-	session, endedIDs, err := repos.ReopenSessionReplacingActive(r.Context(), id, existing.SectionID)
-	if err != nil {
-		if errors.Is(err, store.ErrForbidden) {
-			httputil.WriteError(w, http.StatusForbidden, "forbidden")
-			return
-		}
-		httputil.WriteInternalError(w, r, err, "internal error")
-		return
-	}
-
-	// Notify students on ended sessions that a replacement is available.
-	newSessionID := session.ID.String()
-	for _, oldID := range endedIDs {
-		_ = h.publisher.SessionReplaced(r.Context(), oldID.String(), newSessionID)
-	}
-
-	// Notify section subscribers that the session has been reopened.
-	_ = h.publisher.SessionStartedInSection(r.Context(), existing.SectionID.String(), newSessionID, session.Problem)
-
-	// Signal executor demand so KEDA can scale from zero.
-	if h.activation != nil {
-		ctx := context.WithoutCancel(r.Context())
-		go func() {
-			if err := h.activation.SignalDemand(ctx); err != nil {
-				slog.Error("activation: SignalDemand failed", "handler", "session.Reopen", "error", err)
-			}
-		}()
-	}
 
 	httputil.WriteJSON(w, http.StatusOK, session)
 }

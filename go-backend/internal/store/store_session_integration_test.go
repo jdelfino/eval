@@ -157,6 +157,184 @@ func TestIntegration_CreateSession(t *testing.T) {
 }
 
 // =============================================================================
+// Test: Section current-session pointer (G4) - SetSectionCurrentSession,
+// ClearSectionCurrentSession, and read-path exposure across GetSection,
+// ListSectionsByClass, ListMySections.
+// =============================================================================
+
+func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	instructorID := uuid.New()
+	db.createUser(ctx, t, instructorID, "ptr-instr@test.com", "instructor", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "Pointer Class", instructorID)
+	sectionID := uuid.New()
+	db.createSection(ctx, t, sectionID, nsID, classID, "Pointer Section", "PTR1")
+	// Instructor must be a section instructor for can_manage_section RLS on UPDATE.
+	db.createMembership(ctx, t, instructorID, sectionID, "instructor")
+	sessionID := uuid.New()
+	db.createSession(ctx, t, sessionID, nsID, sectionID, "Pointer Section", instructorID)
+
+	authInstructor := &auth.User{
+		ID:          instructorID,
+		Email:       "ptr-instr@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("set then read across all section read paths", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.SetSectionCurrentSession(ctx, sectionID, sessionID); err != nil {
+			t.Fatalf("SetSectionCurrentSession: %v", err)
+		}
+
+		sec, err := s.GetSection(ctx, sectionID)
+		if err != nil {
+			t.Fatalf("GetSection: %v", err)
+		}
+		if sec.CurrentSessionID == nil || *sec.CurrentSessionID != sessionID {
+			t.Errorf("GetSection pointer = %v, want %v", sec.CurrentSessionID, sessionID)
+		}
+
+		secs, err := s.ListSectionsByClass(ctx, classID)
+		if err != nil {
+			t.Fatalf("ListSectionsByClass: %v", err)
+		}
+		var foundList bool
+		for _, x := range secs {
+			if x.ID == sectionID {
+				foundList = true
+				if x.CurrentSessionID == nil || *x.CurrentSessionID != sessionID {
+					t.Errorf("ListSectionsByClass pointer = %v, want %v", x.CurrentSessionID, sessionID)
+				}
+			}
+		}
+		if !foundList {
+			t.Error("section not found in ListSectionsByClass")
+		}
+
+		mine, err := s.ListMySections(ctx, instructorID)
+		if err != nil {
+			t.Fatalf("ListMySections: %v", err)
+		}
+		var foundMine bool
+		for _, info := range mine {
+			if info.Section.ID == sectionID {
+				foundMine = true
+				if info.Section.CurrentSessionID == nil || *info.Section.CurrentSessionID != sessionID {
+					t.Errorf("ListMySections pointer = %v, want %v", info.Section.CurrentSessionID, sessionID)
+				}
+			}
+		}
+		if !foundMine {
+			t.Error("section not found in ListMySections")
+		}
+	})
+
+	t.Run("clear nulls the pointer", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.ClearSectionCurrentSession(ctx, sectionID); err != nil {
+			t.Fatalf("ClearSectionCurrentSession: %v", err)
+		}
+		sec, err := s.GetSection(ctx, sectionID)
+		if err != nil {
+			t.Fatalf("GetSection after clear: %v", err)
+		}
+		if sec.CurrentSessionID != nil {
+			t.Errorf("expected nil pointer after clear, got %v", *sec.CurrentSessionID)
+		}
+	})
+
+	t.Run("set unknown section returns ErrNotFound", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.SetSectionCurrentSession(ctx, uuid.New(), sessionID); !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("clear unknown section returns ErrNotFound", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.ClearSectionCurrentSession(ctx, uuid.New()); !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// TestIntegration_CreateSessionDoesNotFlipOthers verifies the G4 plain create:
+// CreateSession inserts a new row and does not flip any other session's status
+// to 'completed' (no leftover replacement behavior).
+func TestIntegration_CreateSessionDoesNotFlipOthers(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	creatorID := uuid.New()
+	db.createUser(ctx, t, creatorID, "noflip@test.com", "instructor", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "NoFlip Class", creatorID)
+	sectionID := uuid.New()
+	db.createSection(ctx, t, sectionID, nsID, classID, "NoFlip Section", "NOFLIP")
+	// Pre-existing active session in the section.
+	existingID := uuid.New()
+	db.createSession(ctx, t, existingID, nsID, sectionID, "NoFlip Section", creatorID)
+
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "noflip@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	s, conn := db.storeWithRLS(ctx, t, authUser)
+	defer conn.Release()
+
+	_, err := s.CreateSession(ctx, CreateSessionParams{
+		NamespaceID: nsID,
+		SectionID:   sectionID,
+		SectionName: "NoFlip Section",
+		Problem:     json.RawMessage(`{"title":"New"}`),
+		CreatorID:   creatorID,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	// The pre-existing session must be untouched (not flipped to completed).
+	var status string
+	if err := db.pool.QueryRow(ctx, `SELECT status FROM sessions WHERE id = $1`, existingID).Scan(&status); err != nil {
+		t.Fatalf("query existing status: %v", err)
+	}
+	if status == "completed" {
+		t.Errorf("CreateSession must not flip other sessions; existing session status = %q", status)
+	}
+
+	// No session in the section should have been completed by the create.
+	var completedCount int
+	if err := db.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM sessions WHERE section_id = $1 AND status = 'completed'`, sectionID).Scan(&completedCount); err != nil {
+		t.Fatalf("count completed: %v", err)
+	}
+	if completedCount != 0 {
+		t.Errorf("expected 0 completed sessions after create, got %d", completedCount)
+	}
+}
+
+// =============================================================================
 // Test: GetSession - calls actual Store method with RLS
 // =============================================================================
 

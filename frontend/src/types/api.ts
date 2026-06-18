@@ -68,6 +68,15 @@ export interface Section {
   semester: string | null;
   join_code: string;
   active: boolean;
+  /**
+   * G4 section pointer: the section's current (live) session, or null.
+   * Never auto-cleared (G4-R3); a stale value is the correct late-join target.
+   *
+   * Optional on the client type only to avoid forcing every existing Section
+   * test fixture to set it; the backend always serializes the key (null when
+   * unset). The contract test asserts presence against the real response.
+   */
+  current_session_id?: string | null;
   created_at: string;
   updated_at: string;
 }

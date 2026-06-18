@@ -257,8 +257,12 @@ type Section struct {
 	Semester    *string   `json:"semester"`
 	JoinCode    string    `json:"join_code"`
 	Active      bool      `json:"active"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	// CurrentSessionID is the G4 section pointer: the section's current (live)
+	// session, or nil if none is set. Per G4-R3 it is never auto-cleared — a
+	// stale value is the correct late-join target. Exposed for late join.
+	CurrentSessionID *uuid.UUID `json:"current_session_id"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 // CreateSectionParams contains the fields for creating a section.
@@ -303,6 +307,15 @@ type SectionRepository interface {
 	// DeleteSection deletes a section by ID.
 	// Returns ErrNotFound if the section does not exist.
 	DeleteSection(ctx context.Context, id uuid.UUID) error
+	// SetSectionCurrentSession sets the section's current-session pointer
+	// (G4 section-pointer model). Returns ErrNotFound if the section does
+	// not exist.
+	SetSectionCurrentSession(ctx context.Context, sectionID, sessionID uuid.UUID) error
+	// ClearSectionCurrentSession clears the section's current-session pointer
+	// (sets it to NULL). G4-R3: this is the ONLY path that clears the pointer;
+	// it must never be called automatically from session create/end/delete.
+	// Returns ErrNotFound if the section does not exist.
+	ClearSectionCurrentSession(ctx context.Context, sectionID uuid.UUID) error
 }
 
 // Session represents a coding session within a section.
@@ -363,11 +376,10 @@ type SessionRepository interface {
 	// GetSession retrieves a session by ID.
 	// Returns ErrNotFound if the session does not exist.
 	GetSession(ctx context.Context, id uuid.UUID) (*Session, error)
-	// CreateSession creates a new session and returns it.
+	// CreateSession creates a new session and returns it. Under the G4
+	// section-pointer model this is a plain persistent-document create; the
+	// section pointer is set separately via SetSectionCurrentSession.
 	CreateSession(ctx context.Context, params CreateSessionParams) (*Session, error)
-	// EndActiveSessions marks all active sessions in a section as completed
-	// and returns their IDs. Used to auto-end old sessions when a new one starts.
-	EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error)
 	// UpdateSession updates a session's mutable fields and returns the updated session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error)
@@ -377,14 +389,6 @@ type SessionRepository interface {
 	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
-	// CreateSessionReplacingActive atomically ends any active sessions in the section
-	// and creates a new session, all within a single transaction.
-	// Returns the new session and the IDs of ended sessions.
-	CreateSessionReplacingActive(ctx context.Context, params CreateSessionParams) (*Session, []uuid.UUID, error)
-	// ReopenSessionReplacingActive atomically ends any other active sessions in the section
-	// and reopens the given completed session, all within a single transaction.
-	// Returns the reopened session and the IDs of ended sessions.
-	ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*Session, []uuid.UUID, error)
 }
 
 // MembershipRepository defines the interface for section membership data access.
@@ -478,12 +482,17 @@ type RevisionRepository interface {
 
 // DashboardSection represents a section summary in the instructor dashboard.
 type DashboardSection struct {
-	ID              uuid.UUID  `json:"id"`
-	Name            string     `json:"name"`
-	JoinCode        string     `json:"join_code"`
-	Semester        *string    `json:"semester,omitempty"`
-	StudentCount    int        `json:"studentCount"`
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	JoinCode     string    `json:"join_code"`
+	Semester     *string   `json:"semester,omitempty"`
+	StudentCount int       `json:"studentCount"`
+	// ActiveSessionID is the legacy status='active'-derived session id. T13
+	// switches the dashboard SQL to derive from the section pointer; T1 only
+	// adds CurrentSessionID alongside it.
 	ActiveSessionID *uuid.UUID `json:"activeSessionId,omitempty"`
+	// CurrentSessionID is the G4 section pointer (sections.current_session_id).
+	CurrentSessionID *uuid.UUID `json:"currentSessionId,omitempty"`
 }
 
 // DashboardClass represents a class summary in the instructor dashboard.

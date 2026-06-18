@@ -22,6 +22,7 @@ import type {
   ProblemUpdatedData,
   SessionStartedInSectionData,
   SessionEndedInSectionData,
+  SectionCurrentChangedData,
 } from '@/types/realtime-events';
 
 // ---------------------------------------------------------------------------
@@ -146,4 +147,9 @@ export function validateSessionStartedInSectionShape(obj: SessionStartedInSectio
 /** Validate the shape of a session_ended_in_section event payload. */
 export function validateSessionEndedInSectionShape(obj: SessionEndedInSectionData): void {
   typia.assertEquals<SessionEndedInSectionData>(obj);
+}
+
+/** Validate the shape of a section_current_changed event payload. */
+export function validateSectionCurrentChangedShape(obj: SectionCurrentChangedData): void {
+  typia.assertEquals<SectionCurrentChangedData>(obj);
 }

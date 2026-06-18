@@ -12,11 +12,11 @@ const (
 	EventStudentJoined           EventType = "student_joined"
 	EventStudentCodeUpdated      EventType = "student_code_updated"
 	EventSessionEnded            EventType = "session_ended"
-	EventSessionReplaced         EventType = "session_replaced"
 	EventFeaturedStudentChanged  EventType = "featured_student_changed"
 	EventProblemUpdated          EventType = "problem_updated"
 	EventSessionStartedInSection EventType = "session_started_in_section"
 	EventSessionEndedInSection   EventType = "session_ended_in_section"
+	EventSectionCurrentChanged   EventType = "section_current_changed"
 )
 
 // Event is the envelope sent over Centrifugo channels.
@@ -45,11 +45,6 @@ type SessionEndedData struct {
 	Reason    string `json:"reason"`
 }
 
-// SessionReplacedData is the payload for EventSessionReplaced.
-type SessionReplacedData struct {
-	NewSessionID string `json:"new_session_id"`
-}
-
 // FeaturedStudentChangedData is the payload for EventFeaturedStudentChanged.
 type FeaturedStudentChangedData struct {
 	UserID    string          `json:"user_id"`
@@ -71,4 +66,14 @@ type SessionStartedInSectionData struct {
 // SessionEndedInSectionData is the payload for EventSessionEndedInSection.
 type SessionEndedInSectionData struct {
 	SessionID string `json:"session_id"`
+}
+
+// SectionCurrentChangedData is the payload for EventSectionCurrentChanged.
+// Published on the section channel when the section's current-session pointer
+// changes (G4 section-pointer model): SessionID is the new current session id,
+// or nil when the pointer was cleared. Problem carries the new session's
+// problem snapshot for late join and is omitted when the pointer is cleared.
+type SectionCurrentChangedData struct {
+	SessionID *string         `json:"session_id"`
+	Problem   json.RawMessage `json:"problem,omitempty"`
 }

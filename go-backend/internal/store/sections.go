@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const sectionColumns = `id, namespace_id, class_id, name, semester, join_code, active, created_at, updated_at`
+const sectionColumns = `id, namespace_id, class_id, name, semester, join_code, active, current_session_id, created_at, updated_at`
 
 func scanSection(row interface{ Scan(dest ...any) error }) (*Section, error) {
 	var sec Section
@@ -18,6 +18,7 @@ func scanSection(row interface{ Scan(dest ...any) error }) (*Section, error) {
 		&sec.Semester,
 		&sec.JoinCode,
 		&sec.Active,
+		&sec.CurrentSessionID,
 		&sec.CreatedAt,
 		&sec.UpdatedAt,
 	)
@@ -114,7 +115,7 @@ func (s *Store) DeleteSection(ctx context.Context, id uuid.UUID) error {
 func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySectionInfo, error) {
 	const query = `
 		SELECT s.id, s.namespace_id, s.class_id, s.name, s.semester, s.join_code, s.active,
-		       s.created_at, s.updated_at, c.name
+		       s.current_session_id, s.created_at, s.updated_at, c.name
 		FROM sections s
 		JOIN section_memberships sm ON sm.section_id = s.id
 		JOIN classes c ON c.id = s.class_id
@@ -134,7 +135,8 @@ func (s *Store) ListMySections(ctx context.Context, userID uuid.UUID) ([]MySecti
 		if err := rows.Scan(
 			&info.Section.ID, &info.Section.NamespaceID, &info.Section.ClassID,
 			&info.Section.Name, &info.Section.Semester, &info.Section.JoinCode,
-			&info.Section.Active, &info.Section.CreatedAt, &info.Section.UpdatedAt,
+			&info.Section.Active, &info.Section.CurrentSessionID,
+			&info.Section.CreatedAt, &info.Section.UpdatedAt,
 			&info.ClassName,
 		); err != nil {
 			return nil, err
@@ -159,6 +161,50 @@ func (s *Store) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCod
 		return nil, HandleNotFound(err)
 	}
 	return sec, nil
+}
+
+// SetSectionCurrentSession sets the section's current-session pointer to the
+// given session (G4 section-pointer model). Returns ErrNotFound if the section
+// does not exist.
+func (s *Store) SetSectionCurrentSession(ctx context.Context, sectionID, sessionID uuid.UUID) error {
+	tag, err := s.q.Exec(ctx,
+		`UPDATE sections SET current_session_id = $2, updated_at = now() WHERE id = $1`,
+		sectionID, sessionID)
+	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return e
+		}
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ClearSectionCurrentSession clears the section's current-session pointer
+// (SET current_session_id = NULL). Returns ErrNotFound if the section does not
+// exist.
+//
+// G4-R3 (staleness rule): this is the ONLY code path that clears the pointer.
+// It is wired exclusively to DELETE /sections/{id}/current (the explicit,
+// optional end-of-class action). It must NEVER be called automatically from any
+// session create/end/delete path — a stale pointer is the correct late-join
+// target and is left in place on purpose.
+func (s *Store) ClearSectionCurrentSession(ctx context.Context, sectionID uuid.UUID) error {
+	tag, err := s.q.Exec(ctx,
+		`UPDATE sections SET current_session_id = NULL, updated_at = now() WHERE id = $1`,
+		sectionID)
+	if err != nil {
+		if e := HandleForbidden(err); e != err {
+			return e
+		}
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // Compile-time check that Store implements SectionRepository.

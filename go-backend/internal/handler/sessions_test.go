@@ -20,10 +20,11 @@ import (
 // sessionTestRepos embeds stubRepos for session handler tests.
 type sessionTestRepos struct {
 	stubRepos
-	sess                  *mockSessionRepo
-	getSectionFn          func(ctx context.Context, id uuid.UUID) (*store.Section, error)
-	getProblemFn          func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
-	ensureSectionProblemFn func(ctx context.Context, params store.CreateSectionProblemParams) error
+	sess                       *mockSessionRepo
+	getSectionFn               func(ctx context.Context, id uuid.UUID) (*store.Section, error)
+	getProblemFn               func(ctx context.Context, id uuid.UUID) (*store.Problem, error)
+	ensureSectionProblemFn     func(ctx context.Context, params store.CreateSectionProblemParams) error
+	setSectionCurrentSessionFn func(ctx context.Context, sectionID, sessionID uuid.UUID) error
 }
 
 var _ store.Repos = (*sessionTestRepos)(nil)
@@ -37,9 +38,6 @@ func (r *sessionTestRepos) GetSession(ctx context.Context, id uuid.UUID) (*store
 func (r *sessionTestRepos) CreateSession(ctx context.Context, params store.CreateSessionParams) (*store.Session, error) {
 	return r.sess.CreateSession(ctx, params)
 }
-func (r *sessionTestRepos) EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error) {
-	return r.sess.EndActiveSessions(ctx, sectionID)
-}
 func (r *sessionTestRepos) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
 	return r.sess.UpdateSession(ctx, id, params)
 }
@@ -49,11 +47,11 @@ func (r *sessionTestRepos) UpdateSessionProblem(ctx context.Context, id uuid.UUI
 func (r *sessionTestRepos) ListSessionHistory(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error) {
 	return r.sess.ListSessionHistory(ctx, userID, isCreator, filters)
 }
-func (r *sessionTestRepos) CreateSessionReplacingActive(ctx context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-	return r.sess.CreateSessionReplacingActive(ctx, params)
-}
-func (r *sessionTestRepos) ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error) {
-	return r.sess.ReopenSessionReplacingActive(ctx, id, sectionID)
+func (r *sessionTestRepos) SetSectionCurrentSession(ctx context.Context, sectionID, sessionID uuid.UUID) error {
+	if r.setSectionCurrentSessionFn != nil {
+		return r.setSectionCurrentSessionFn(ctx, sectionID, sessionID)
+	}
+	return nil
 }
 func (r *sessionTestRepos) GetSection(ctx context.Context, id uuid.UUID) (*store.Section, error) {
 	if r.getSectionFn != nil {
@@ -337,7 +335,7 @@ func TestCreateSession_Success(t *testing.T) {
 	}
 
 	repo := &mockSessionRepo{
-		createSessionReplacingActiveFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+		createSessionFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, error) {
 			if params.SectionName != "Section A" {
 				t.Fatalf("unexpected section_name: %v", params.SectionName)
 			}
@@ -347,7 +345,7 @@ func TestCreateSession_Success(t *testing.T) {
 			if params.CreatorID != userID {
 				t.Fatalf("unexpected creator_id: %v", params.CreatorID)
 			}
-			return sess, nil, nil
+			return sess, nil
 		},
 	}
 
@@ -381,21 +379,34 @@ func TestCreateSession_Success(t *testing.T) {
 	}
 }
 
-func TestCreateSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
+// TestCreateSession_DefaultSetsPointerAndPublishes verifies the G4 default
+// (set_current omitted → true): the new session becomes the section's current
+// session via SetSectionCurrentSession and a section_current_changed event is
+// published carrying the new session id + problem. It also asserts the retired
+// events (SessionReplaced / SessionStartedInSection) are NOT published.
+func TestCreateSession_DefaultSetsPointerAndPublishes(t *testing.T) {
 	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-	oldSessionID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
 	newSess := testSession()
 
 	section := &store.Section{ID: sectionID, Name: "Section A"}
 
+	var setCalled bool
+	var setSectionID, setSessionID uuid.UUID
 	repo := &mockSessionRepo{
-		createSessionReplacingActiveFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
+		createSessionFn: func(_ context.Context, params store.CreateSessionParams) (*store.Session, error) {
 			if params.SectionID != sectionID {
 				t.Fatalf("expected section_id %v, got %v", sectionID, params.SectionID)
 			}
-			return newSess, []uuid.UUID{oldSessionID}, nil
+			return newSess, nil
 		},
+	}
+	repos := sessReposWithSection(repo, section)
+	repos.setSectionCurrentSessionFn = func(_ context.Context, secID, sessID uuid.UUID) error {
+		setCalled = true
+		setSectionID = secID
+		setSessionID = sessID
+		return nil
 	}
 
 	pub := newMockPublisher()
@@ -407,7 +418,7 @@ func TestCreateSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: userID, Role: auth.RoleInstructor, NamespaceID: "test-ns",
 	})
-	ctx = store.WithRepos(ctx, sessReposWithSection(repo, section))
+	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -417,32 +428,42 @@ func TestCreateSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	pub.waitForCalls(t, 2)
+	if !setCalled {
+		t.Fatal("expected SetSectionCurrentSession to be called")
+	}
+	if setSectionID != sectionID {
+		t.Errorf("expected pointer set on section %q, got %q", sectionID, setSectionID)
+	}
+	if setSessionID != newSess.ID {
+		t.Errorf("expected pointer set to session %q, got %q", newSess.ID, setSessionID)
+	}
+
+	pub.waitForCalls(t, 1)
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
-	if len(pub.sessionReplacedCalls) != 1 {
-		t.Fatalf("expected 1 SessionReplaced call, got %d", len(pub.sessionReplacedCalls))
+	if len(pub.sectionCurrentChangedCalls) != 1 {
+		t.Fatalf("expected 1 SectionCurrentChanged call, got %d", len(pub.sectionCurrentChangedCalls))
 	}
-	call := pub.sessionReplacedCalls[0]
-	if call.oldSessionID != oldSessionID.String() {
-		t.Errorf("expected old session %q, got %q", oldSessionID, call.oldSessionID)
+	call := pub.sectionCurrentChangedCalls[0]
+	if call.sectionID != sectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", sectionID, call.sectionID)
 	}
-	if call.newSessionID != newSess.ID.String() {
-		t.Errorf("expected new session %q, got %q", newSess.ID, call.newSessionID)
+	if call.sessionID == nil || *call.sessionID != newSess.ID {
+		t.Errorf("expected session_id %v, got %v", newSess.ID, call.sessionID)
 	}
-	if len(pub.sessionStartedInSectionCalls) != 1 {
-		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
+	if string(call.problem) != string(newSess.Problem) {
+		t.Errorf("expected problem %q, got %q", string(newSess.Problem), string(call.problem))
 	}
-	sectionCall := pub.sessionStartedInSectionCalls[0]
-	if sectionCall.sectionID != sectionID.String() {
-		t.Errorf("expected sectionID %q, got %q", sectionID, sectionCall.sectionID)
-	}
-	if sectionCall.sessionID != newSess.ID.String() {
-		t.Errorf("expected sessionID %q, got %q", newSess.ID, sectionCall.sessionID)
+	// Retired events must not be published.
+	if len(pub.sessionStartedInSectionCalls) != 0 {
+		t.Errorf("expected no SessionStartedInSection calls, got %d", len(pub.sessionStartedInSectionCalls))
 	}
 }
 
-func TestCreateSession_NoActiveSessionsToEnd(t *testing.T) {
+// TestCreateSession_SetCurrentFalse verifies that set_current:false creates the
+// session but does NOT set the section pointer and does NOT publish
+// section_current_changed, while KEDA demand signaling still fires.
+func TestCreateSession_SetCurrentFalse(t *testing.T) {
 	userID := uuid.MustParse("cccccccc-cccc-cccc-cccc-cccccccccccc")
 	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 	newSess := testSession()
@@ -450,21 +471,28 @@ func TestCreateSession_NoActiveSessionsToEnd(t *testing.T) {
 	section := &store.Section{ID: sectionID, Name: "Section A"}
 
 	repo := &mockSessionRepo{
-		createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-			return newSess, nil, nil // no active sessions
+		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+			return newSess, nil
 		},
 	}
+	repos := sessReposWithSection(repo, section)
+	repos.setSectionCurrentSessionFn = func(_ context.Context, _, _ uuid.UUID) error {
+		t.Fatal("SetSectionCurrentSession must not be called when set_current=false")
+		return nil
+	}
 
+	svc := &countingActivationService{}
 	pub := newMockPublisher()
 	h := NewSessionHandler(pub)
+	h.SetActivation(svc)
 
-	body, _ := json.Marshal(map[string]any{"section_id": sectionID.String()})
+	body, _ := json.Marshal(map[string]any{"section_id": sectionID.String(), "set_current": false})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	ctx := auth.WithUser(req.Context(), &auth.User{
 		ID: userID, Role: auth.RoleInstructor, NamespaceID: "test-ns",
 	})
-	ctx = store.WithRepos(ctx, sessReposWithSection(repo, section))
+	ctx = store.WithRepos(ctx, repos)
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -474,22 +502,13 @@ func TestCreateSession_NoActiveSessionsToEnd(t *testing.T) {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// SessionStartedInSection is always published; no SessionReplaced since no active sessions were ended.
-	pub.waitForCalls(t, 1)
+	// KEDA demand signaling still fires (async).
+	svc.waitForCalls(t, 1)
+
 	pub.mu.Lock()
 	defer pub.mu.Unlock()
-	if len(pub.sessionReplacedCalls) != 0 {
-		t.Errorf("expected no SessionReplaced calls, got %d", len(pub.sessionReplacedCalls))
-	}
-	if len(pub.sessionStartedInSectionCalls) != 1 {
-		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
-	}
-	sectionCall := pub.sessionStartedInSectionCalls[0]
-	if sectionCall.sectionID != sectionID.String() {
-		t.Errorf("expected sectionID %q, got %q", sectionID, sectionCall.sectionID)
-	}
-	if sectionCall.sessionID != newSess.ID.String() {
-		t.Errorf("expected sessionID %q, got %q", newSess.ID, sectionCall.sessionID)
+	if len(pub.sectionCurrentChangedCalls) != 0 {
+		t.Errorf("expected no SectionCurrentChanged calls, got %d", len(pub.sectionCurrentChangedCalls))
 	}
 }
 
@@ -535,8 +554,8 @@ func TestCreateSession_InternalError(t *testing.T) {
 	section := &store.Section{ID: sectionID, Name: "Section A"}
 
 	repo := &mockSessionRepo{
-		createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-			return nil, nil, errors.New("db error")
+		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+			return nil, errors.New("db error")
 		},
 	}
 
@@ -576,8 +595,8 @@ func TestCreateSession_WithProblem_CallsEnsureSectionProblem(t *testing.T) {
 
 	repos := &sessionTestRepos{
 		sess: &mockSessionRepo{
-			createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-				return sess, nil, nil
+			createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+				return sess, nil
 			},
 		},
 		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
@@ -644,8 +663,8 @@ func TestCreateSession_WithProblem_ShowSolutionPassedThrough(t *testing.T) {
 
 	repos := &sessionTestRepos{
 		sess: &mockSessionRepo{
-			createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-				return sess, nil, nil
+			createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+				return sess, nil
 			},
 		},
 		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
@@ -697,8 +716,8 @@ func TestCreateSession_BlankSession_DoesNotCallEnsureSectionProblem(t *testing.T
 	var ensureCalled bool
 	repos := &sessionTestRepos{
 		sess: &mockSessionRepo{
-			createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-				return sess, nil, nil
+			createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+				return sess, nil
 			},
 		},
 		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
@@ -1465,270 +1484,6 @@ func TestDeleteSession_AlreadyCompleted(t *testing.T) {
 	}
 }
 
-func TestReopenSession_Success(t *testing.T) {
-	sess := testSession()
-	sess.Status = "completed"
-	now := time.Now()
-	sess.EndedAt = &now
-
-	reopenedSess := *sess
-	reopenedSess.Status = "active"
-	reopenedSess.EndedAt = nil
-
-	repo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
-			if id != sess.ID {
-				t.Fatalf("unexpected id: %v", id)
-			}
-			return sess, nil
-		},
-		reopenSessionReplacingActiveFn: func(_ context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error) {
-			if id != sess.ID {
-				t.Fatalf("unexpected id: %v", id)
-			}
-			if sectionID != sess.SectionID {
-				t.Fatalf("unexpected section_id: %v", sectionID)
-			}
-			return &reopenedSess, nil, nil
-		},
-	}
-	h := NewSessionHandler(noopPublisher())
-
-	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.Reopen(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var got store.Session
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if got.Status != "active" {
-		t.Errorf("expected status 'active', got %q", got.Status)
-	}
-}
-
-func TestReopenSession_NotFound(t *testing.T) {
-	repo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return nil, store.ErrNotFound
-		},
-	}
-	h := NewSessionHandler(noopPublisher())
-
-	id := uuid.New()
-	req := httptest.NewRequest(http.MethodPost, "/"+id.String()+"/reopen", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", id.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.Reopen(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", rec.Code)
-	}
-}
-
-func TestReopenSession_NotCompleted(t *testing.T) {
-	sess := testSession() // status "active"
-
-	repo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		},
-	}
-	h := NewSessionHandler(noopPublisher())
-
-	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.Reopen(rec, req)
-
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestReopenSession_EndsActiveSessionsAndPublishesReplaced(t *testing.T) {
-	sess := testSession()
-	sess.Status = "completed"
-	now := time.Now()
-	sess.EndedAt = &now
-
-	otherActiveID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
-
-	reopenedSess := *sess
-	reopenedSess.Status = "active"
-	reopenedSess.EndedAt = nil
-
-	repo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, id uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		},
-		reopenSessionReplacingActiveFn: func(_ context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error) {
-			return &reopenedSess, []uuid.UUID{otherActiveID}, nil
-		},
-	}
-
-	pub := newMockPublisher()
-	h := NewSessionHandler(pub)
-
-	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.Reopen(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	// Should publish SessionReplaced for the ended session (matching Create handler behavior)
-	// and SessionStartedInSection for the reopened session.
-	pub.waitForCalls(t, 2)
-	pub.mu.Lock()
-	defer pub.mu.Unlock()
-	if len(pub.sessionReplacedCalls) != 1 {
-		t.Fatalf("expected 1 SessionReplaced call, got %d", len(pub.sessionReplacedCalls))
-	}
-	call := pub.sessionReplacedCalls[0]
-	if call.oldSessionID != otherActiveID.String() {
-		t.Errorf("expected old session %q, got %q", otherActiveID, call.oldSessionID)
-	}
-	if call.newSessionID != sess.ID.String() {
-		t.Errorf("expected new session %q, got %q", sess.ID, call.newSessionID)
-	}
-	if len(pub.sessionEndedCalls) != 0 {
-		t.Errorf("expected no SessionEnded calls for replaced sessions, got %d", len(pub.sessionEndedCalls))
-	}
-	if len(pub.sessionStartedInSectionCalls) != 1 {
-		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
-	}
-	sectionCall := pub.sessionStartedInSectionCalls[0]
-	if sectionCall.sectionID != sess.SectionID.String() {
-		t.Errorf("expected sectionID %q, got %q", sess.SectionID, sectionCall.sectionID)
-	}
-	if sectionCall.sessionID != sess.ID.String() {
-		t.Errorf("expected sessionID %q, got %q", sess.ID, sectionCall.sessionID)
-	}
-}
-
-func TestReopenSession_NoActiveSessionsToEnd(t *testing.T) {
-	sess := testSession()
-	sess.Status = "completed"
-	now := time.Now()
-	sess.EndedAt = &now
-
-	reopenedSess := *sess
-	reopenedSess.Status = "active"
-	reopenedSess.EndedAt = nil
-
-	repo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		},
-		reopenSessionReplacingActiveFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Session, []uuid.UUID, error) {
-			return &reopenedSess, nil, nil // no active sessions ended
-		},
-	}
-
-	pub := newMockPublisher()
-	h := NewSessionHandler(pub)
-
-	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.Reopen(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	// SessionStartedInSection is always published on reopen; no SessionReplaced since no active sessions ended.
-	pub.waitForCalls(t, 1)
-	pub.mu.Lock()
-	defer pub.mu.Unlock()
-	if len(pub.sessionReplacedCalls) != 0 {
-		t.Errorf("expected no SessionReplaced calls, got %d", len(pub.sessionReplacedCalls))
-	}
-	if len(pub.sessionEndedCalls) != 0 {
-		t.Errorf("expected no SessionEnded calls, got %d", len(pub.sessionEndedCalls))
-	}
-	if len(pub.sessionStartedInSectionCalls) != 1 {
-		t.Fatalf("expected 1 SessionStartedInSection call, got %d", len(pub.sessionStartedInSectionCalls))
-	}
-	sectionCall := pub.sessionStartedInSectionCalls[0]
-	if sectionCall.sectionID != sess.SectionID.String() {
-		t.Errorf("expected sectionID %q, got %q", sess.SectionID, sectionCall.sectionID)
-	}
-	if sectionCall.sessionID != sess.ID.String() {
-		t.Errorf("expected sessionID %q, got %q", sess.ID, sectionCall.sessionID)
-	}
-}
-
-func TestReopenSession_InternalError(t *testing.T) {
-	sess := testSession()
-	sess.Status = "completed"
-	now := time.Now()
-	sess.EndedAt = &now
-
-	repo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		},
-		reopenSessionReplacingActiveFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Session, []uuid.UUID, error) {
-			return nil, nil, errors.New("db error")
-		},
-	}
-	h := NewSessionHandler(noopPublisher())
-
-	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.Reopen(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestHistorySession_Success(t *testing.T) {
 	sess := testSession()
 	userID := uuid.New()
@@ -1993,8 +1748,8 @@ func TestCreateSession_RLSForbidden(t *testing.T) {
 	}
 
 	repo := &mockSessionRepo{
-		createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-			return nil, nil, store.ErrForbidden
+		createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+			return nil, store.ErrForbidden
 		},
 	}
 
@@ -2008,35 +1763,6 @@ func TestCreateSession_RLSForbidden(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	h.Create(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestReopenSession_RLSForbidden(t *testing.T) {
-	sess := testSession()
-	sess.Status = "completed"
-	repo := &mockSessionRepo{
-		getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-			return sess, nil
-		},
-		reopenSessionReplacingActiveFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Session, []uuid.UUID, error) {
-			return nil, nil, store.ErrForbidden
-		},
-	}
-
-	h := NewSessionHandler(noopPublisher())
-	req := httptest.NewRequest(http.MethodPost, "/"+sess.ID.String()+"/reopen", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("id", sess.ID.String())
-	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
-	ctx = store.WithRepos(ctx, sessRepos(repo))
-	req = req.WithContext(ctx)
-	rec := httptest.NewRecorder()
-
-	h.Reopen(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())

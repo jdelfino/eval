@@ -19,6 +19,7 @@ import type {
   ProblemUpdatedData,
   SessionStartedInSectionData,
   SessionEndedInSectionData,
+  SectionCurrentChangedData,
 } from '@/types/realtime-events';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,8 @@ export type RealtimeEvent =
   | ParsedEvent<'featured_student_changed', FeaturedStudentChangedData>
   | ParsedEvent<'problem_updated', ProblemUpdatedData>
   | ParsedEvent<'session_started_in_section', SessionStartedInSectionData>
-  | ParsedEvent<'session_ended_in_section', SessionEndedInSectionData>;
+  | ParsedEvent<'session_ended_in_section', SessionEndedInSectionData>
+  | ParsedEvent<'section_current_changed', SectionCurrentChangedData>;
 
 // ---------------------------------------------------------------------------
 // Known event type set for validation
@@ -54,6 +56,7 @@ const KNOWN_EVENT_TYPES = new Set<RealtimeEventType>([
   'problem_updated',
   'session_started_in_section',
   'session_ended_in_section',
+  'section_current_changed',
 ]);
 
 function isKnownEventType(value: string): value is RealtimeEventType {

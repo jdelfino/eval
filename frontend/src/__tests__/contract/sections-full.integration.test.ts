@@ -54,6 +54,8 @@ describe('Sections API (full coverage)', () => {
       expect(sec.semester === null || typeof sec.semester === 'string').toBe(true);
       expect(typeof sec.join_code).toBe('string');
       expect(typeof sec.active).toBe('boolean');
+      // G4 section pointer: null when no current session, string id otherwise.
+      expect(sec.current_session_id === null || typeof sec.current_session_id === 'string').toBe(true);
       expect(typeof sec.created_at).toBe('string');
       expect(typeof sec.updated_at).toBe('string');
 

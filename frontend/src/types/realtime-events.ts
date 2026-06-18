@@ -22,7 +22,8 @@ export type RealtimeEventType =
   | 'featured_student_changed'
   | 'problem_updated'
   | 'session_started_in_section'
-  | 'session_ended_in_section';
+  | 'session_ended_in_section'
+  | 'section_current_changed';
 
 // ---------------------------------------------------------------------------
 // Wire envelope (matches Go Event struct)
@@ -83,4 +84,17 @@ export interface SessionStartedInSectionData {
 /** Payload for session_ended_in_section — matches Go SessionEndedInSectionData. */
 export interface SessionEndedInSectionData {
   session_id: string;
+}
+
+/**
+ * Payload for section_current_changed — matches Go SectionCurrentChangedData.
+ *
+ * G4 section-pointer event published on the section channel when the section's
+ * current-session pointer changes. session_id is null when the pointer was
+ * cleared (DELETE /sections/{id}/current); problem carries the new session's
+ * snapshot for late join and is omitted when the pointer is cleared.
+ */
+export interface SectionCurrentChangedData {
+  session_id: string | null;
+  problem?: ApiProblem;
 }

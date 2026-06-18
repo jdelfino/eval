@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func discardLogger() *slog.Logger {
@@ -55,9 +57,6 @@ func (r *recordingPublisher) CodeUpdated(_ context.Context, _, _, _ string, _ js
 func (r *recordingPublisher) SessionEnded(_ context.Context, _, _ string) error {
 	return r.record("SessionEnded")
 }
-func (r *recordingPublisher) SessionReplaced(_ context.Context, _, _ string) error {
-	return r.record("SessionReplaced")
-}
 func (r *recordingPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string, _ json.RawMessage) error {
 	return r.record("FeaturedStudentChanged")
 }
@@ -69,6 +68,9 @@ func (r *recordingPublisher) SessionStartedInSection(_ context.Context, _, _ str
 }
 func (r *recordingPublisher) SessionEndedInSection(_ context.Context, _, _ string) error {
 	return r.record("SessionEndedInSection")
+}
+func (r *recordingPublisher) SectionCurrentChanged(_ context.Context, _ string, _ *uuid.UUID, _ json.RawMessage) error {
+	return r.record("SectionCurrentChanged")
 }
 
 // Compile-time check that AsyncSessionPublisher implements SessionPublisher.
@@ -227,6 +229,24 @@ func TestAsyncSessionPublisher_SessionEndedInSection(t *testing.T) {
 	defer rec.mu.Unlock()
 	if len(rec.calls) != 1 || rec.calls[0] != "SessionEndedInSection" {
 		t.Errorf("expected [SessionEndedInSection], got %v", rec.calls)
+	}
+}
+
+func TestAsyncSessionPublisher_SectionCurrentChanged(t *testing.T) {
+	rec := newRecordingPublisher()
+	ap := NewAsyncSessionPublisher(rec, discardLogger())
+
+	sessID := uuid.New()
+	err := ap.SectionCurrentChanged(context.Background(), "sect-3", &sessID, json.RawMessage(`{"id":"p1"}`))
+	if err != nil {
+		t.Fatalf("expected nil error from async call, got %v", err)
+	}
+	rec.waitForCalls(t, 1)
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.calls) != 1 || rec.calls[0] != "SectionCurrentChanged" {
+		t.Errorf("expected [SectionCurrentChanged], got %v", rec.calls)
 	}
 }
 

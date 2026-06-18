@@ -3,6 +3,8 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/google/uuid"
 )
 
 // Compile-time interface compliance check.
@@ -16,8 +18,7 @@ func (NoOpSessionPublisher) StudentJoined(_ context.Context, _, _, _ string) err
 func (NoOpSessionPublisher) CodeUpdated(_ context.Context, _, _, _ string, _ json.RawMessage) error {
 	return nil
 }
-func (NoOpSessionPublisher) SessionEnded(_ context.Context, _, _ string) error        { return nil }
-func (NoOpSessionPublisher) SessionReplaced(_ context.Context, _, _ string) error     { return nil }
+func (NoOpSessionPublisher) SessionEnded(_ context.Context, _, _ string) error { return nil }
 func (NoOpSessionPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string, _ json.RawMessage) error {
 	return nil
 }
@@ -26,3 +27,6 @@ func (NoOpSessionPublisher) SessionStartedInSection(_ context.Context, _, _ stri
 	return nil
 }
 func (NoOpSessionPublisher) SessionEndedInSection(_ context.Context, _, _ string) error { return nil }
+func (NoOpSessionPublisher) SectionCurrentChanged(_ context.Context, _ string, _ *uuid.UUID, _ json.RawMessage) error {
+	return nil
+}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // asyncPublishTimeout is the maximum time allowed for an async publish operation.
@@ -61,13 +63,6 @@ func (a *AsyncSessionPublisher) SessionEnded(ctx context.Context, sessionID, rea
 	return nil
 }
 
-func (a *AsyncSessionPublisher) SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error {
-	a.runAsync(ctx, "SessionReplaced", func(ctx context.Context) error {
-		return a.inner.SessionReplaced(ctx, oldSessionID, newSessionID)
-	})
-	return nil
-}
-
 func (a *AsyncSessionPublisher) FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	a.runAsync(ctx, "FeaturedStudentChanged", func(ctx context.Context) error {
 		return a.inner.FeaturedStudentChanged(ctx, sessionID, userID, code, testCases)
@@ -92,6 +87,13 @@ func (a *AsyncSessionPublisher) SessionStartedInSection(ctx context.Context, sec
 func (a *AsyncSessionPublisher) SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error {
 	a.runAsync(ctx, "SessionEndedInSection", func(ctx context.Context) error {
 		return a.inner.SessionEndedInSection(ctx, sectionID, sessionID)
+	})
+	return nil
+}
+
+func (a *AsyncSessionPublisher) SectionCurrentChanged(ctx context.Context, sectionID string, sessionID *uuid.UUID, problem json.RawMessage) error {
+	a.runAsync(ctx, "SectionCurrentChanged", func(ctx context.Context) error {
+		return a.inner.SectionCurrentChanged(ctx, sectionID, sessionID, problem)
 	})
 	return nil
 }

@@ -18,15 +18,12 @@ import (
 
 // mockSessionRepo implements store.SessionRepository for testing.
 type mockSessionRepo struct {
-	listSessionsFn                    func(ctx context.Context, filters store.SessionFilters) ([]store.Session, error)
-	getSessionFn                      func(ctx context.Context, id uuid.UUID) (*store.Session, error)
-	createSessionFn                   func(ctx context.Context, params store.CreateSessionParams) (*store.Session, error)
-	endActiveSessionsFn               func(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error)
-	updateSessionFn                   func(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error)
-	listSessionHistoryFn              func(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error)
-	updateSessionProblemFn            func(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error)
-	createSessionReplacingActiveFn    func(ctx context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error)
-	reopenSessionReplacingActiveFn    func(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error)
+	listSessionsFn         func(ctx context.Context, filters store.SessionFilters) ([]store.Session, error)
+	getSessionFn           func(ctx context.Context, id uuid.UUID) (*store.Session, error)
+	createSessionFn        func(ctx context.Context, params store.CreateSessionParams) (*store.Session, error)
+	updateSessionFn        func(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error)
+	listSessionHistoryFn   func(ctx context.Context, userID uuid.UUID, isCreator bool, filters store.SessionHistoryFilters) ([]store.Session, error)
+	updateSessionProblemFn func(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error)
 }
 
 func (m *mockSessionRepo) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
@@ -41,13 +38,6 @@ func (m *mockSessionRepo) CreateSession(ctx context.Context, params store.Create
 	return m.createSessionFn(ctx, params)
 }
 
-func (m *mockSessionRepo) EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error) {
-	if m.endActiveSessionsFn != nil {
-		return m.endActiveSessionsFn(ctx, sectionID)
-	}
-	return nil, nil
-}
-
 func (m *mockSessionRepo) UpdateSession(ctx context.Context, id uuid.UUID, params store.UpdateSessionParams) (*store.Session, error) {
 	return m.updateSessionFn(ctx, id, params)
 }
@@ -58,20 +48,6 @@ func (m *mockSessionRepo) ListSessionHistory(ctx context.Context, userID uuid.UU
 
 func (m *mockSessionRepo) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*store.Session, error) {
 	return m.updateSessionProblemFn(ctx, id, problem)
-}
-
-func (m *mockSessionRepo) CreateSessionReplacingActive(ctx context.Context, params store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-	if m.createSessionReplacingActiveFn != nil {
-		return m.createSessionReplacingActiveFn(ctx, params)
-	}
-	panic("mockSessionRepo: unexpected CreateSessionReplacingActive call")
-}
-
-func (m *mockSessionRepo) ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*store.Session, []uuid.UUID, error) {
-	if m.reopenSessionReplacingActiveFn != nil {
-		return m.reopenSessionReplacingActiveFn(ctx, id, sectionID)
-	}
-	panic("mockSessionRepo: unexpected ReopenSessionReplacingActive call")
 }
 
 // mockSessionStudentRepo implements store.SessionStudentRepository for testing.
@@ -102,12 +78,12 @@ type mockSessionPublisher struct {
 	studentJoinedCalls           []studentJoinedCall
 	codeUpdatedCalls             []codeUpdatedCall
 	sessionEndedCalls            []sessionEndedCall
-	sessionReplacedCalls         []sessionReplacedCall
 	featuredStudentChangedCalls  []featuredStudentChangedCall
 	problemUpdatedCalls          []problemUpdatedCall
 	sessionStartedInSectionCalls []sessionStartedInSectionCall
 	sessionEndedInSectionCalls   []sessionEndedInSectionCall
-	err                          error        // error to return from all methods
+	sectionCurrentChangedCalls   []sectionCurrentChangedCall
+	err                          error         // error to return from all methods
 	done                         chan struct{} // closed after each call, for async sync
 }
 
@@ -121,8 +97,10 @@ type codeUpdatedCall struct {
 type sessionEndedCall struct {
 	sessionID, reason string
 }
-type sessionReplacedCall struct {
-	oldSessionID, newSessionID string
+type sectionCurrentChangedCall struct {
+	sectionID string
+	sessionID *uuid.UUID
+	problem   json.RawMessage
 }
 type featuredStudentChangedCall struct {
 	sessionID, userID, code string
@@ -180,13 +158,6 @@ func (m *mockSessionPublisher) SessionEnded(_ context.Context, sessionID, reason
 	m.done <- struct{}{}
 	return m.err
 }
-func (m *mockSessionPublisher) SessionReplaced(_ context.Context, oldSessionID, newSessionID string) error {
-	m.mu.Lock()
-	m.sessionReplacedCalls = append(m.sessionReplacedCalls, sessionReplacedCall{oldSessionID, newSessionID})
-	m.mu.Unlock()
-	m.done <- struct{}{}
-	return m.err
-}
 func (m *mockSessionPublisher) FeaturedStudentChanged(_ context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
 	m.mu.Lock()
 	m.featuredStudentChangedCalls = append(m.featuredStudentChangedCalls, featuredStudentChangedCall{sessionID, userID, code, testCases})
@@ -211,6 +182,13 @@ func (m *mockSessionPublisher) SessionStartedInSection(_ context.Context, sectio
 func (m *mockSessionPublisher) SessionEndedInSection(_ context.Context, sectionID, sessionID string) error {
 	m.mu.Lock()
 	m.sessionEndedInSectionCalls = append(m.sessionEndedInSectionCalls, sessionEndedInSectionCall{sectionID, sessionID})
+	m.mu.Unlock()
+	m.done <- struct{}{}
+	return m.err
+}
+func (m *mockSessionPublisher) SectionCurrentChanged(_ context.Context, sectionID string, sessionID *uuid.UUID, problem json.RawMessage) error {
+	m.mu.Lock()
+	m.sectionCurrentChangedCalls = append(m.sectionCurrentChangedCalls, sectionCurrentChangedCall{sectionID, sessionID, problem})
 	m.mu.Unlock()
 	m.done <- struct{}{}
 	return m.err
@@ -334,6 +312,12 @@ func (stubRepos) UpdateSection(context.Context, uuid.UUID, store.UpdateSectionPa
 func (stubRepos) DeleteSection(context.Context, uuid.UUID) error {
 	panic("stubRepos: unexpected DeleteSection call")
 }
+func (stubRepos) SetSectionCurrentSession(context.Context, uuid.UUID, uuid.UUID) error {
+	panic("stubRepos: unexpected SetSectionCurrentSession call")
+}
+func (stubRepos) ClearSectionCurrentSession(context.Context, uuid.UUID) error {
+	panic("stubRepos: unexpected ClearSectionCurrentSession call")
+}
 func (stubRepos) ListSessions(context.Context, store.SessionFilters) ([]store.Session, error) {
 	panic("stubRepos: unexpected ListSessions call")
 }
@@ -343,9 +327,6 @@ func (stubRepos) GetSession(context.Context, uuid.UUID) (*store.Session, error) 
 func (stubRepos) CreateSession(context.Context, store.CreateSessionParams) (*store.Session, error) {
 	panic("stubRepos: unexpected CreateSession call")
 }
-func (stubRepos) EndActiveSessions(context.Context, uuid.UUID) ([]uuid.UUID, error) {
-	panic("stubRepos: unexpected EndActiveSessions call")
-}
 func (stubRepos) UpdateSession(context.Context, uuid.UUID, store.UpdateSessionParams) (*store.Session, error) {
 	panic("stubRepos: unexpected UpdateSession call")
 }
@@ -354,12 +335,6 @@ func (stubRepos) ListSessionHistory(context.Context, uuid.UUID, bool, store.Sess
 }
 func (stubRepos) UpdateSessionProblem(context.Context, uuid.UUID, json.RawMessage) (*store.Session, error) {
 	panic("stubRepos: unexpected UpdateSessionProblem call")
-}
-func (stubRepos) CreateSessionReplacingActive(context.Context, store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-	panic("stubRepos: unexpected CreateSessionReplacingActive call")
-}
-func (stubRepos) ReopenSessionReplacingActive(context.Context, uuid.UUID, uuid.UUID) (*store.Session, []uuid.UUID, error) {
-	panic("stubRepos: unexpected ReopenSessionReplacingActive call")
 }
 func (stubRepos) JoinSession(context.Context, store.JoinSessionParams) (*store.SessionStudent, error) {
 	panic("stubRepos: unexpected JoinSession call")

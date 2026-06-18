@@ -356,6 +356,9 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 				sessionPub = realtime.NoOpSessionPublisher{}
 			}
 
+			// Wire the section pointer publisher (section_current_changed).
+			sectionHandler.WithPublisher(sessionPub)
+
 			// Create revision buffer for auto-creating revisions on code save.
 			// Uses a pool-backed Store (no RLS) because the buffer flushes
 			// asynchronously outside any request context.
@@ -376,7 +379,6 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 					r.With(custommw.ForCategory(rl, "sessionCreate", custommw.UserKey)).Post("/", sessionHandler.Create)
 					r.With(writeRL).Patch("/{id}", sessionHandler.Update)
 					r.With(writeRL).Delete("/{id}", sessionHandler.Delete)
-					r.With(writeRL).Post("/{id}/reopen", sessionHandler.Reopen)
 					r.With(writeRL).Post("/{id}/update-problem", sessionHandler.UpdateProblem)
 				})
 			})

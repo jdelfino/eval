@@ -255,6 +255,11 @@ export async function featureCode(
 /**
  * Reopen a completed session.
  * @param sessionId - The session ID
+ *
+ * TODO(T5): remove with instructor-page ended/reopen retirement. The backend
+ * route/handler was removed under the G4 section-pointer model (eval-cej.8.1);
+ * this client and its last caller (instructor session page) are removed by T5
+ * (eval-cej.8.5). Left as a thin dead export here to keep typecheck green.
  */
 export async function reopenSession(sessionId: string): Promise<void> {
   await apiPost(`/sessions/${sessionId}/reopen`);

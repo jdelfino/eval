@@ -20,7 +20,8 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 			sec.join_code AS section_join_code,
 			sec.semester AS section_semester,
 			COALESCE(sm.student_count, 0) AS student_count,
-			sess.active_id AS active_session_id
+			sess.active_id AS active_session_id,
+			sec.current_session_id AS current_session_id
 		FROM classes c
 		LEFT JOIN sections sec ON sec.class_id = c.id
 		LEFT JOIN LATERAL (
@@ -59,10 +60,11 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 			sectionName     *string    // nullable for classes without sections
 			sectionJoinCode *string    // nullable for classes without sections
 			sectionSemester *string    // nullable
-			studentCount    int
-			activeSessionID *uuid.UUID // nullable if no active session
+			studentCount     int
+			activeSessionID  *uuid.UUID // nullable if no active session (legacy status-derived)
+			currentSessionID *uuid.UUID // nullable G4 section pointer
 		)
-		if err := rows.Scan(&classID, &className, &sectionID, &sectionName, &sectionJoinCode, &sectionSemester, &studentCount, &activeSessionID); err != nil {
+		if err := rows.Scan(&classID, &className, &sectionID, &sectionName, &sectionJoinCode, &sectionSemester, &studentCount, &activeSessionID, &currentSessionID); err != nil {
 			return nil, err
 		}
 
@@ -80,12 +82,13 @@ func (s *Store) InstructorDashboard(ctx context.Context, userID uuid.UUID) ([]Da
 		// Only add section if one exists (sectionID is non-null)
 		if sectionID != nil && sectionName != nil && sectionJoinCode != nil {
 			dc.Sections = append(dc.Sections, DashboardSection{
-				ID:              *sectionID,
-				Name:            *sectionName,
-				JoinCode:        *sectionJoinCode,
-				Semester:        sectionSemester,
-				StudentCount:    studentCount,
-				ActiveSessionID: activeSessionID,
+				ID:               *sectionID,
+				Name:             *sectionName,
+				JoinCode:         *sectionJoinCode,
+				Semester:         sectionSemester,
+				StudentCount:     studentCount,
+				ActiveSessionID:  activeSessionID,
+				CurrentSessionID: currentSessionID,
 			})
 		}
 	}
