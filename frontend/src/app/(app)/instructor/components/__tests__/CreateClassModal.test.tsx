@@ -85,9 +85,20 @@ describe('CreateClassModal', () => {
 
     // The declarative autoFocus on the class-name input focuses it synchronously
     // on mount, so the field is the intended entry point after the shell swap.
-    // (The Modal shell's own focus management runs later on a timer; this
-    // assertion intentionally checks the synchronous mount-time focus.)
     expect(screen.getByLabelText(/class name/i)).toHaveFocus();
+  });
+
+  it('keeps focus on the class name input after the Modal focus timer runs', async () => {
+    // Modal's own focus management runs on a timer after mount. Without an
+    // explicit initialFocusSelector it would move focus to the close (X) button,
+    // overriding the field's autoFocus. CreateClassModal passes
+    // initialFocusSelector="#class-name" so the name input keeps focus — the
+    // intended entry point for the instructor onboarding flow.
+    render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/class name/i)).toHaveFocus();
+    });
   });
 
   it('shows validation error when submitting empty form', async () => {

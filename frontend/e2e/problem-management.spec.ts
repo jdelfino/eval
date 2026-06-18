@@ -253,10 +253,12 @@ test.describe('Problem Management', () => {
     await expect(startButton).toBeVisible();
     await startButton.click();
 
-    // The CreateSessionFromProblemModal opens with a "Create Session" heading.
-    // It is now powered by SessionComposer: sections are radio rows (role="radio")
+    // The CreateSessionFromProblemModal opens. G7-T4 reskinned its shell onto the
+    // shared Modal primitive, whose title heading now uses the v4 copy
+    // "Start a session" (the old hand-rolled "Create Session" heading is gone).
+    // It is powered by SessionComposer: sections are radio rows (role="radio")
     // labelled by section name, not a <select> dropdown.
-    await expect(page.locator('h2:has-text("Create Session")')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('h2:has-text("Start a session")')).toBeVisible({ timeout: 10000 });
 
     // Select the section radio row for our section.
     await page

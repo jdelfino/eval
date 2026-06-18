@@ -98,6 +98,7 @@ export default function CreateClassModal({ onClose, onSuccess }: CreateClassModa
       width={520}
       onClose={handleClose}
       footer={footer}
+      initialFocusSelector="#class-name"
     >
       <form id="create-class-form" onSubmit={handleSubmit}>
         <div className="space-y-4">

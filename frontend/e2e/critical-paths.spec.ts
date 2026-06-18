@@ -68,9 +68,13 @@ test.describe('Critical User Paths', () => {
         .locator('button:has-text("New Class"), button:has-text("Create Your First Class")')
         .first();
       await createClassButton.click();
-      await expect(instructorPage.locator('h2:has-text("Create New Class")')).toBeVisible();
+      // G7-T4 reskinned CreateClassModal onto the shared Modal primitive; the
+      // title heading now uses the v4 copy "New class" (the old hand-rolled
+      // "Create New Class" heading is gone). The footer submit button is
+      // "Create class" (matched case-insensitively below).
+      await expect(instructorPage.locator('h2:has-text("New class")')).toBeVisible();
       await instructorPage.fill('input#class-name', 'Test Class');
-      await instructorPage.click('button:has-text("Create Class")');
+      await instructorPage.click('button:has-text("Create class")');
 
       // Wait for class to appear in dashboard table
       await expect(
