@@ -48,7 +48,7 @@ export function Skeleton({
 
   return (
     <div
-      className={`animate-pulse bg-gray-200 ${roundedClass} ${className}`}
+      className={`animate-pulse bg-bg-sunken ${roundedClass} ${className}`}
       aria-hidden="true"
       role="presentation"
     />
@@ -123,7 +123,7 @@ export function SkeletonCard({
 }) {
   return (
     <div
-      className={`space-y-3 rounded-lg border border-gray-200 bg-white p-4 ${className}`.trim()}
+      className={`space-y-3 rounded-lg border border-border bg-bg-raised p-4 ${className}`.trim()}
       aria-hidden="true"
       role="presentation"
     >

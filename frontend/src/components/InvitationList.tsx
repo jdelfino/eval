@@ -194,7 +194,7 @@ export function InvitationList({
   // Loading state
   if (loading && invitations.length === 0) {
     return (
-      <div className="text-center py-8 text-[var(--fg-muted)]">
+      <div className="text-center py-8 text-fg-muted">
         Loading invitations...
       </div>
     );
@@ -203,7 +203,7 @@ export function InvitationList({
   // Empty state
   if (invitations.length === 0) {
     return (
-      <div className="text-center py-8 text-[var(--fg-muted)] bg-[var(--bg-sunken)] rounded-lg border border-[var(--border)]">
+      <div className="text-center py-8 text-fg-muted bg-bg-sunken rounded-lg border border-border">
         {emptyMessage}
       </div>
     );
@@ -250,12 +250,12 @@ export function InvitationList({
               >
                 <Table.Cell className="font-medium">{invitation.email}</Table.Cell>
                 {showNamespace && (
-                  <Table.Cell className="text-[var(--fg-muted)]">
+                  <Table.Cell className="text-fg-muted">
                     {getNamespaceName(invitation.namespace_id)}
                   </Table.Cell>
                 )}
                 {showRole && (
-                  <Table.Cell className="text-[var(--fg-muted)]">
+                  <Table.Cell className="text-fg-muted">
                     {formatRole(invitation.target_role)}
                   </Table.Cell>
                 )}
@@ -264,10 +264,10 @@ export function InvitationList({
                     {getStatusLabel(status)}
                   </StatusBadge>
                 </Table.Cell>
-                <Table.Cell className="text-[var(--fg-muted)] text-sm">
+                <Table.Cell className="text-fg-muted text-sm">
                   {formatDate(invitation.created_at)}
                 </Table.Cell>
-                <Table.Cell className="text-[var(--fg-muted)] text-sm">
+                <Table.Cell className="text-fg-muted text-sm">
                   {formatDate(invitation.expires_at)}
                 </Table.Cell>
                 <Table.Cell align="right">

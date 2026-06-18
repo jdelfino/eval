@@ -23,7 +23,7 @@ export default function LibraryLoading() {
       </div>
 
       {/* Toolbar row: search field + author button chip */}
-      <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3.5">
+      <div className="flex items-center gap-4 rounded-lg border border-border bg-bg-sunken p-3.5">
         <Skeleton className="h-9 flex-1 rounded-md" />
         <Skeleton className="h-9 w-36 rounded-md" />
       </div>

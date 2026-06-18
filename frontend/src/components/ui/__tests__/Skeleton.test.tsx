@@ -36,10 +36,10 @@ describe('Skeleton', () => {
       expect(container.querySelector('div')).toHaveClass('animate-pulse');
     });
 
-    it('should have gray background', () => {
+    it('should have sunken token background', () => {
       const { container } = render(<Skeleton />);
 
-      expect(container.querySelector('div')).toHaveClass('bg-gray-200');
+      expect(container.querySelector('div')).toHaveClass('bg-bg-sunken');
     });
   });
 

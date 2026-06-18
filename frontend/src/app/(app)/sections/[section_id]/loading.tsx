@@ -27,7 +27,7 @@ export default function SectionLoading() {
       </div>
 
       {/* Accent banner row: live/current-session strip */}
-      <div className="flex items-center gap-4 rounded-lg border border-gray-200 bg-gray-50 p-3.5">
+      <div className="flex items-center gap-4 rounded-lg border border-border bg-bg-sunken p-3.5">
         <Skeleton className="h-2.5 w-2.5 rounded-full" />
         <div className="flex flex-1 flex-col gap-1.5">
           <Skeleton className="h-3 w-52" />
@@ -38,11 +38,11 @@ export default function SectionLoading() {
 
       {/* 2fr / 1fr grid: sessions/problems list (left) + summary stats (right) */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-gray-200 bg-white p-3.5 md:col-span-2">
+        <div className="rounded-lg border border-border bg-bg-raised p-3.5 md:col-span-2">
           {[1, 2, 3, 4].map((i) => (
             <SkeletonRow
               key={i}
-              className={i > 1 ? 'border-t border-gray-200' : ''}
+              className={i > 1 ? 'border-t border-border' : ''}
             />
           ))}
         </div>
