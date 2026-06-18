@@ -17,6 +17,8 @@ import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { OpenOnLaptop } from '@/components/OpenOnLaptop';
+import { useMobileViewport } from '@/hooks/useResponsiveLayout';
 import { Button } from '@/components/ui/Button';
 import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { buildDrawerDebug } from '@/lib/debuggerAdapter';
@@ -101,6 +103,11 @@ function deriveFailure(
 
 function StudentPage() {
   const { user } = useAuth();
+  // G8 mobile read-only guard. useMobileViewport returns isMobile:false on the
+  // first (pre-hydration) render and corrects in a mount effect, so this errs
+  // toward NOT blocking for one frame but never mounts the workspace on a
+  // confirmed-mobile device.
+  const { isMobile } = useMobileViewport();
   const searchParams = useSearchParams();
   const workIdFromUrl = searchParams.get('work_id');
   const sectionIdFromUrl = searchParams.get('section_id');
@@ -613,6 +620,13 @@ function StudentPage() {
     : undefined;
 
   // ─── Early returns ────────────────────────────────────────────────────────
+
+  // Mobile read-only guard (G8): the single enforcement point. On a confirmed
+  // mobile viewport, render the "Open on laptop" affordance instead of ever
+  // mounting the WorkspaceShell editor.
+  if (isMobile) {
+    return <OpenOnLaptop title="Open this session on your laptop" />;
+  }
 
   if (!workIdFromUrl) {
     return (
