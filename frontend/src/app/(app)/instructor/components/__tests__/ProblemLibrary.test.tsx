@@ -331,6 +331,36 @@ describe('ProblemLibrary', () => {
       expect(document.querySelector('[data-testid="state-dot"]')).not.toBeInTheDocument();
     });
 
+    /**
+     * Verifies the title cell links to the new private problem view
+     * (/instructor/problems/{id}) without disturbing the Start-button modal flow.
+     * Catches: T4 library regression — title link drift or Start button hijack.
+     */
+    it('renders the title as a link to the private problem view', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Problem One')).toBeInTheDocument();
+      });
+
+      const titleLink = screen.getByRole('link', { name: 'Problem One' });
+      expect(titleLink).toHaveAttribute('href', '/instructor/problems/problem-1');
+    });
+
+    it('keeps the Start button opening the session modal (not navigating)', async () => {
+      render(<ProblemLibrary />);
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('button', { name: /start/i }).length).toBeGreaterThan(0);
+      });
+
+      fireEvent.click(screen.getAllByRole('button', { name: /start/i })[0]);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('session-modal')).toBeInTheDocument();
+      });
+    });
+
     it('renders tag chips per row with mono prefix #', async () => {
       render(<ProblemLibrary />);
 

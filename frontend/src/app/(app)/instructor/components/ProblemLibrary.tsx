@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { listClasses } from '@/lib/api/classes';
@@ -505,11 +506,15 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
             <Table.Body>
               {filteredProblems.map((problem) => (
                 <Table.Row key={problem.id}>
-                  {/* Title — serif font per design */}
+                  {/* Title — serif font per design; links to the private problem view */}
                   <Table.Cell>
-                    <span className="font-medium text-gray-900" style={TITLE_CELL_STYLE}>
+                    <Link
+                      href={`/instructor/problems/${problem.id}`}
+                      className="font-medium text-gray-900 hover:text-blue-600 hover:underline"
+                      style={TITLE_CELL_STYLE}
+                    >
                       {problem.title}
-                    </span>
+                    </Link>
                   </Table.Cell>
 
                   {/* Tags */}
