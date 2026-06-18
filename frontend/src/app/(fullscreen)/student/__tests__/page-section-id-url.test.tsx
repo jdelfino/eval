@@ -1,9 +1,10 @@
 /**
- * Tests for section_id URL param optimization on the student page.
+ * Tests for section-pointer-driven live-vs-practice resolution on the student
+ * page (G4 B1, eval-cej.8.12).
  *
- * PLAT-6y2j.1: Pass section_id in URL so getActiveSessions can start
- * immediately in parallel with getStudentWork (Step 1), instead of waiting
- * for Step 1 to complete first.
+ * The page decides live-vs-practice from the section's current_session_id
+ * pointer (via getSection), NOT from a status==='active' session list. A pointer
+ * for this problem → live mode + join; no pointer → practice.
  *
  * @jest-environment jsdom
  */
@@ -14,15 +15,15 @@ import '@testing-library/jest-dom';
 import StudentPageWrapper from '../page';
 
 const mockGetStudentWork = jest.fn();
-const mockGetActiveSessions = jest.fn();
+const mockGetSection = jest.fn();
 const mockUpdateStudentWork = jest.fn();
 const mockJoinSession = jest.fn();
 const mockUpdateCode = jest.fn();
-const mockExecuteCode = jest.fn();
 
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
+  getOrCreateStudentWork: jest.fn(),
 }));
 
 jest.mock('@/lib/api/execute', () => ({
@@ -31,11 +32,16 @@ jest.mock('@/lib/api/execute', () => ({
 }));
 
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
-  getSection: jest.fn().mockResolvedValue({
-    id: 'section-1',
-    name: 'Test Section',
+  getSection: (...args: unknown[]) => mockGetSection(...args),
+}));
+
+jest.mock('@/hooks/useSectionEvents', () => ({
+  useSectionEvents: () => ({
+    currentSessionId: 'session-1',
+    currentProblem: { id: 'problem-1', title: 'Test Problem' },
+    lastActivity: new Date().toISOString(),
   }),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 const mockUseRealtimeSession = jest.fn(() => ({
@@ -47,7 +53,6 @@ const mockUseRealtimeSession = jest.fn(() => ({
   connectionError: null,
   updateCode: mockUpdateCode,
   joinSession: mockJoinSession,
-  replacementInfo: null,
 }));
 
 jest.mock('@/hooks/useRealtimeSession', () => ({
@@ -88,11 +93,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
 
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 const fakeStudentWork = {
   id: 'work-123',
   user_id: 'user-1',
@@ -117,12 +117,11 @@ const fakeStudentWork = {
   },
 };
 
-describe('StudentPage section_id URL param (PLAT-6y2j.1)', () => {
+describe('StudentPage live-vs-practice via section pointer (G4 B1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sessionStorage.clear();
     mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-    mockGetActiveSessions.mockResolvedValue([]);
     mockJoinSession.mockResolvedValue({ code: '', test_cases: null });
     mockUseRealtimeSession.mockReturnValue({
       session: null,
@@ -133,18 +132,17 @@ describe('StudentPage section_id URL param (PLAT-6y2j.1)', () => {
       connectionError: null,
       updateCode: mockUpdateCode,
       joinSession: mockJoinSession,
-      replacementInfo: null,
     });
   });
 
-  it('starts fetching active sessions immediately when section_id is in URL (before Step 1 completes)', async () => {
-    // Delay Step 1 (getStudentWork) to simulate it being slow
+  it('fetches the section pointer using section_id from the URL (before Step 1 completes)', async () => {
+    // Delay Step 1 (getStudentWork) to confirm the pointer fetch uses the URL
+    // section_id, not the work's section_id.
     let resolveWork: (value: any) => void;
     const workPromise = new Promise((resolve) => { resolveWork = resolve; });
     mockGetStudentWork.mockReturnValue(workPromise);
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockGetSection.mockResolvedValue({ id: 'section-1', name: 'Test Section', current_session_id: null });
 
-    // URL has both work_id and section_id
     mockUseSearchParams.mockReturnValue({
       get: (key: string) => {
         if (key === 'work_id') return 'work-123';
@@ -155,43 +153,28 @@ describe('StudentPage section_id URL param (PLAT-6y2j.1)', () => {
 
     render(<StudentPageWrapper />);
 
-    // getActiveSessions should be called immediately (before Step 1 resolves)
-    // because section_id is available from the URL
+    // getSection (the pointer source) is called with the URL section id before
+    // Step 1 resolves.
     await waitFor(() => {
-      expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
+      expect(mockGetSection).toHaveBeenCalledWith('section-1');
     });
-
-    // Step 1 hasn't resolved yet (we haven't called resolveWork)
     expect(mockGetStudentWork).toHaveBeenCalledWith('work-123');
 
-    // Now resolve Step 1
     resolveWork!(fakeStudentWork);
   });
 
-  it('still works when section_id is NOT in URL (falls back to Step 1 sequential flow)', async () => {
-    // No section_id in URL — old behavior: wait for Step 1 to get sectionId
-    mockUseSearchParams.mockReturnValue({
-      get: (key: string) => {
-        if (key === 'work_id') return 'work-123';
-        return null;
-      },
+  it('enters live mode and joins the pointer session when current_session_id is set for this problem', async () => {
+    /**
+     * G4 B1 regression: under the pointer model the page must enter live mode
+     * from the section pointer, not from a (now-empty) active-session list.
+     * Catches: students stranded in practice when a session is live.
+     */
+    mockGetSection.mockResolvedValue({
+      id: 'section-1',
+      name: 'Test Section',
+      current_session_id: 'session-1',
+      current_problem_id: 'problem-1',
     });
-
-    render(<StudentPageWrapper />);
-
-    // getStudentWork resolves and provides sectionId
-    await waitFor(() => {
-      expect(mockGetStudentWork).toHaveBeenCalledWith('work-123');
-    });
-
-    // getActiveSessions should eventually be called with section-1 from student work
-    await waitFor(() => {
-      expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
-    });
-  });
-
-  it('falls back to practice mode when getActiveSessions fails (section_id from URL)', async () => {
-    mockGetActiveSessions.mockRejectedValue(new Error('Network error'));
 
     mockUseSearchParams.mockReturnValue({
       get: (key: string) => {
@@ -203,15 +186,86 @@ describe('StudentPage section_id URL param (PLAT-6y2j.1)', () => {
 
     render(<StudentPageWrapper />);
 
-    // Even on error, the page should eventually show the editor (practice mode)
+    // Live mode auto-joins the pointer's session.
     await waitFor(() => {
-      expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
+      expect(mockJoinSession).toHaveBeenCalled();
+    });
+  });
+
+  it('enters practice mode (no join) when the pointer is a DIFFERENT problem', async () => {
+    /**
+     * G4 B1 problem-identity gate: the section pointer is live but points at a
+     * DIFFERENT problem than the one the student opened. Joining the live session
+     * would autosave the student's code under the wrong problem (silent
+     * cross-problem corruption). The page must stay in practice mode and NOT join.
+     */
+    mockGetSection.mockResolvedValue({
+      id: 'section-1',
+      name: 'Test Section',
+      current_session_id: 'session-live',
+      current_problem_id: 'problem-OTHER', // pointer's problem ≠ opened work's 'problem-1'
     });
 
-    // After Step 1 also resolves, mode should be practice
+    mockUseSearchParams.mockReturnValue({
+      get: (key: string) => {
+        if (key === 'work_id') return 'work-123';
+        if (key === 'section_id') return 'section-1';
+        return null;
+      },
+    });
+
+    render(<StudentPageWrapper />);
+
+    // Wait for the section fetch + mode resolution to settle, then assert no join.
+    await waitFor(() => {
+      expect(mockGetSection).toHaveBeenCalledWith('section-1');
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockJoinSession).not.toHaveBeenCalled();
+  });
+
+  it('enters practice mode (no join) when there is no section pointer', async () => {
+    mockGetSection.mockResolvedValue({
+      id: 'section-1',
+      name: 'Test Section',
+      current_session_id: null,
+    });
+
+    mockUseSearchParams.mockReturnValue({
+      get: (key: string) => {
+        if (key === 'work_id') return 'work-123';
+        return null;
+      },
+    });
+
+    render(<StudentPageWrapper />);
+
+    // Practice mode renders the editor and never joins a session.
     await waitFor(() => {
       const shell = document.querySelector('[data-testid="workspace-shell"]');
       expect(shell).not.toBeNull();
     });
+    expect(mockJoinSession).not.toHaveBeenCalled();
+  });
+
+  it('falls back to practice mode when getSection fails', async () => {
+    mockGetSection.mockRejectedValue(new Error('Network error'));
+
+    mockUseSearchParams.mockReturnValue({
+      get: (key: string) => {
+        if (key === 'work_id') return 'work-123';
+        if (key === 'section_id') return 'section-1';
+        return null;
+      },
+    });
+
+    render(<StudentPageWrapper />);
+
+    // Even on error, the page shows the editor (practice mode) and does not join.
+    await waitFor(() => {
+      const shell = document.querySelector('[data-testid="workspace-shell"]');
+      expect(shell).not.toBeNull();
+    });
+    expect(mockJoinSession).not.toHaveBeenCalled();
   });
 });

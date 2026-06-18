@@ -96,8 +96,8 @@ func TestSessionHandler_SignalsDemandOnCreate(t *testing.T) {
 	repos := &sessionTestRepos{
 		stubRepos: stubRepos{},
 		sess: &mockSessionRepo{
-			createSessionReplacingActiveFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, []uuid.UUID, error) {
-				return newSession, nil, nil
+			createSessionFn: func(_ context.Context, _ store.CreateSessionParams) (*store.Session, error) {
+				return newSession, nil
 			},
 		},
 		getSectionFn: func(_ context.Context, _ uuid.UUID) (*store.Section, error) {
@@ -124,66 +124,6 @@ func TestSessionHandler_SignalsDemandOnCreate(t *testing.T) {
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("Create() status = %d, want 201: %s", rr.Code, rr.Body.String())
-	}
-
-	svc.waitForCalls(t, 1)
-}
-
-func TestSessionHandler_SignalsDemandOnReopen(t *testing.T) {
-	svc := &countingActivationService{}
-
-	sessID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
-	sectionID := uuid.MustParse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
-	existing := &store.Session{
-		ID:          sessID,
-		NamespaceID: "test-ns",
-		SectionID:   sectionID,
-		SectionName: "Test Section",
-		Problem:     json.RawMessage(`{}`),
-		CreatorID:   testCreatorID,
-		Status:      "completed",
-	}
-	reopened := &store.Session{
-		ID:          sessID,
-		NamespaceID: "test-ns",
-		SectionID:   sectionID,
-		SectionName: "Test Section",
-		Problem:     json.RawMessage(`{}`),
-		CreatorID:   testCreatorID,
-		Status:      "active",
-	}
-
-	repos := &sessionTestRepos{
-		stubRepos: stubRepos{},
-		sess: &mockSessionRepo{
-			getSessionFn: func(_ context.Context, _ uuid.UUID) (*store.Session, error) {
-				return existing, nil
-			},
-			reopenSessionReplacingActiveFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (*store.Session, []uuid.UUID, error) {
-				return reopened, nil, nil
-			},
-		},
-	}
-
-	h := NewSessionHandler(noopPublisher())
-	h.SetActivation(svc)
-
-	req := httptest.NewRequest(http.MethodPost, "/sessions/"+sessID.String()+"/reopen", bytes.NewReader(nil))
-	req.Header.Set("Content-Type", "application/json")
-	ctx := auth.WithUser(req.Context(), &auth.User{
-		ID:          testCreatorID,
-		NamespaceID: "test-ns",
-		Role:        auth.RoleInstructor,
-	})
-	ctx = store.WithRepos(ctx, repos)
-	ctx = withChiParam(ctx, "id", sessID.String())
-	req = req.WithContext(ctx)
-
-	rr := httptest.NewRecorder()
-	h.Reopen(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("Reopen() status = %d, want 200: %s", rr.Code, rr.Body.String())
 	}
 
 	svc.waitForCalls(t, 1)

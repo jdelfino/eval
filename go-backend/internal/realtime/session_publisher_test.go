@@ -1,10 +1,13 @@
 package realtime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type mockPublisher struct {
@@ -63,7 +66,7 @@ func TestStudentJoined(t *testing.T) {
 func TestCodeUpdated(t *testing.T) {
 	mock, sp := newTestPublisher()
 	testCases := json.RawMessage(`[{"name":"t1","input":"world","match_type":"exact"}]`)
-	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", testCases)
+	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", testCases, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -85,7 +88,7 @@ func TestCodeUpdated(t *testing.T) {
 
 func TestCodeUpdated_NilTestCases(t *testing.T) {
 	mock, sp := newTestPublisher()
-	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", nil)
+	err := sp.CodeUpdated(context.Background(), "sess-2", "user-2", "fmt.Println()", nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -93,6 +96,51 @@ func TestCodeUpdated_NilTestCases(t *testing.T) {
 	data := event.Data.(StudentCodeUpdatedData)
 	if data.TestCases != nil {
 		t.Errorf("expected nil test_cases, got %q", string(data.TestCases))
+	}
+}
+
+// TestCodeUpdated_RunSummary verifies the G4 F8 run_summary is forwarded into
+// the StudentCodeUpdatedData payload and serializes under the "run_summary" key.
+// What contract: a run-all summary supplied by the student must reach dashboard
+// subscribers verbatim. Why it matters: roster glyphs/minimap/signals depend on
+// it. What breaks if violated: instructors see no pass/fail state for students.
+func TestCodeUpdated_RunSummary(t *testing.T) {
+	mock, sp := newTestPublisher()
+	summary := json.RawMessage(`{"passed":2,"failed":1,"errors":0,"total":3,"at":"2026-06-18T00:00:00Z"}`)
+	if err := sp.CodeUpdated(context.Background(), "sess-9", "user-9", "code", nil, summary); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	event := mock.data.(Event)
+	data := event.Data.(StudentCodeUpdatedData)
+	if string(data.RunSummary) != string(summary) {
+		t.Errorf("run_summary = %q, want %q", string(data.RunSummary), string(summary))
+	}
+	// run_summary must be present in the wire JSON.
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Contains(raw, []byte(`"run_summary"`)) {
+		t.Errorf("expected run_summary key in wire JSON, got %s", raw)
+	}
+}
+
+// TestCodeUpdated_RunSummary_OmittedWhenNil verifies run_summary is omitted from
+// the wire JSON when no summary is supplied (plain autosaves), so dashboards do
+// not misread a missing summary as an empty one.
+func TestCodeUpdated_RunSummary_OmittedWhenNil(t *testing.T) {
+	mock, sp := newTestPublisher()
+	if err := sp.CodeUpdated(context.Background(), "sess-9", "user-9", "code", nil, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	event := mock.data.(Event)
+	data := event.Data.(StudentCodeUpdatedData)
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if bytes.Contains(raw, []byte(`"run_summary"`)) {
+		t.Errorf("expected run_summary omitted when nil, got %s", raw)
 	}
 }
 
@@ -111,25 +159,6 @@ func TestSessionEnded(t *testing.T) {
 	}
 	data := event.Data.(SessionEndedData)
 	if data.SessionID != "sess-3" || data.Reason != "timeout" {
-		t.Errorf("payload = %+v", data)
-	}
-}
-
-func TestSessionReplaced(t *testing.T) {
-	mock, sp := newTestPublisher()
-	err := sp.SessionReplaced(context.Background(), "old-sess", "new-sess")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if mock.channel != "session:old-sess" {
-		t.Errorf("channel = %q, want %q", mock.channel, "session:old-sess")
-	}
-	event := mock.data.(Event)
-	if event.Type != EventSessionReplaced {
-		t.Errorf("type = %q, want %q", event.Type, EventSessionReplaced)
-	}
-	data := event.Data.(SessionReplacedData)
-	if data.NewSessionID != "new-sess" {
 		t.Errorf("payload = %+v", data)
 	}
 }
@@ -198,38 +227,6 @@ func TestPublisherError(t *testing.T) {
 	}
 }
 
-func TestSessionStartedInSection(t *testing.T) {
-	mock, sp := newTestPublisher()
-	problemJSON := json.RawMessage(`{"id":"prob-1","title":"Two Sum"}`)
-	err := sp.SessionStartedInSection(context.Background(), "sect-1", "sess-10", problemJSON)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if mock.channel != "section:sect-1" {
-		t.Errorf("channel = %q, want %q", mock.channel, "section:sect-1")
-	}
-	event, ok := mock.data.(Event)
-	if !ok {
-		t.Fatalf("data is not Event")
-	}
-	if event.Type != EventSessionStartedInSection {
-		t.Errorf("type = %q, want %q", event.Type, EventSessionStartedInSection)
-	}
-	if event.Timestamp != fixedTime() {
-		t.Errorf("timestamp = %v, want %v", event.Timestamp, fixedTime())
-	}
-	data, ok := event.Data.(SessionStartedInSectionData)
-	if !ok {
-		t.Fatalf("payload is not SessionStartedInSectionData")
-	}
-	if data.SessionID != "sess-10" {
-		t.Errorf("session_id = %q, want %q", data.SessionID, "sess-10")
-	}
-	if string(data.Problem) != `{"id":"prob-1","title":"Two Sum"}` {
-		t.Errorf("problem = %q, want %q", string(data.Problem), `{"id":"prob-1","title":"Two Sum"}`)
-	}
-}
-
 func TestSessionEndedInSection(t *testing.T) {
 	mock, sp := newTestPublisher()
 	err := sp.SessionEndedInSection(context.Background(), "sect-2", "sess-11")
@@ -255,6 +252,86 @@ func TestSessionEndedInSection(t *testing.T) {
 	}
 	if data.SessionID != "sess-11" {
 		t.Errorf("session_id = %q, want %q", data.SessionID, "sess-11")
+	}
+}
+
+// TestSectionCurrentChanged_Set verifies the section-pointer event is published
+// to the section channel with session_id as a string when the pointer is set,
+// carrying the problem snapshot for late join (G4 section-pointer contract).
+func TestSectionCurrentChanged_Set(t *testing.T) {
+	mock, sp := newTestPublisher()
+	sessID := uuid.MustParse("11111111-2222-3333-4444-555555555555")
+	problemJSON := json.RawMessage(`{"id":"prob-1","title":"Two Sum"}`)
+	err := sp.SectionCurrentChanged(context.Background(), "sect-1", &sessID, problemJSON)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mock.channel != "section:sect-1" {
+		t.Errorf("channel = %q, want %q", mock.channel, "section:sect-1")
+	}
+	event := mock.data.(Event)
+	if event.Type != EventSectionCurrentChanged {
+		t.Errorf("type = %q, want %q", event.Type, EventSectionCurrentChanged)
+	}
+	data := event.Data.(SectionCurrentChangedData)
+	if data.SessionID == nil || *data.SessionID != sessID.String() {
+		t.Errorf("session_id = %v, want %q", data.SessionID, sessID.String())
+	}
+	if string(data.Problem) != string(problemJSON) {
+		t.Errorf("problem = %q, want %q", string(data.Problem), string(problemJSON))
+	}
+
+	// Verify JSON shape: session_id present as string, problem present.
+	b, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m struct {
+		Data struct {
+			SessionID *string         `json:"session_id"`
+			Problem   json.RawMessage `json:"problem"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if m.Data.SessionID == nil || *m.Data.SessionID != sessID.String() {
+		t.Errorf("marshaled session_id = %v, want %q", m.Data.SessionID, sessID.String())
+	}
+	if len(m.Data.Problem) == 0 {
+		t.Error("expected problem present in marshaled payload")
+	}
+}
+
+// TestSectionCurrentChanged_Cleared verifies that clearing the pointer publishes
+// session_id: null and omits the problem field (omitempty), so late joiners
+// know the section has no current session.
+func TestSectionCurrentChanged_Cleared(t *testing.T) {
+	mock, sp := newTestPublisher()
+	err := sp.SectionCurrentChanged(context.Background(), "sect-2", nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	event := mock.data.(Event)
+	data := event.Data.(SectionCurrentChangedData)
+	if data.SessionID != nil {
+		t.Errorf("expected nil session_id, got %v", *data.SessionID)
+	}
+
+	b, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	dataMap := m["data"].(map[string]any)
+	if v, ok := dataMap["session_id"]; !ok || v != nil {
+		t.Errorf("expected session_id present and null, got ok=%v v=%v", ok, v)
+	}
+	if _, ok := dataMap["problem"]; ok {
+		t.Error("expected problem field omitted when empty")
 	}
 }
 

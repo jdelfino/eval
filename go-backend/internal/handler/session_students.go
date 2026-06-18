@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -114,9 +115,16 @@ func (h *SessionStudentHandler) Join(w http.ResponseWriter, r *http.Request) {
 // Code is not validated as required because empty code is valid
 // (e.g., student just joined and hasn't typed anything yet).
 // TestCases is optional; when present, it is persisted alongside the code update.
+// RunSummary (G4 F8) is optional; the student workspace sends it ONLY after a
+// run-all (graded) run, carrying {passed,failed,errors,total,at}. When present it
+// is persisted on session_students and fanned out on the student_code_updated
+// event. It is CLIENT-REPORTED and NOT verified by the server (classroom-grade;
+// not for grading). When absent, the previously persisted summary is left
+// untouched (autosaves must not clear a prior run summary).
 type updateCodeRequest struct {
-	Code      string          `json:"code"`
-	TestCases json.RawMessage `json:"test_cases"`
+	Code       string          `json:"code"`
+	TestCases  json.RawMessage `json:"test_cases"`
+	RunSummary json.RawMessage `json:"run_summary"`
 }
 
 // UpdateCode handles PUT /api/v1/sessions/{id}/code — student updates their code.
@@ -135,6 +143,14 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 	req, err := httpbind.BindJSON[updateCodeRequest](w, r)
 	if err != nil {
 		return // BindJSON already wrote the error response
+	}
+
+	// G4 F8: when a run_summary is supplied it must be a well-formed JSON object
+	// (e.g. {passed,failed,errors,total,at}). We do lightweight shape validation
+	// only — the contents are client-reported and NOT verified (classroom-grade).
+	if len(req.RunSummary) > 0 && !isJSONObject(req.RunSummary) {
+		httputil.WriteError(w, http.StatusBadRequest, "run_summary must be a JSON object")
+		return
 	}
 
 	repos := store.ReposFromContext(r.Context())
@@ -165,13 +181,22 @@ func (h *SessionStudentHandler) UpdateCode(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// G4 F8: persist the run summary when present. Absent → leave the previously
+	// stored summary untouched (autosaves never clear a prior run-all result).
+	if len(req.RunSummary) > 0 {
+		if err := repos.SetSessionStudentRunSummary(r.Context(), sessionID, authUser.ID, req.RunSummary); err != nil {
+			httputil.WriteInternalError(w, r, err, "internal error")
+			return
+		}
+	}
+
 	// Record code change in revision buffer (if configured).
 	if h.revBuffer != nil {
 		nsID := authUser.NamespaceID
 		h.revBuffer.Record(r.Context(), nsID, *sessionStudent.StudentWorkID, &sessionID, authUser.ID, req.Code)
 	}
 
-	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code, req.TestCases)
+	_ = h.publisher.CodeUpdated(r.Context(), sessionID.String(), authUser.ID.String(), req.Code, req.TestCases, req.RunSummary)
 
 	// Build response using student_work data
 	sessionStudent.Code = studentWork.Code
@@ -204,4 +229,15 @@ func (h *SessionStudentHandler) ListStudents(w http.ResponseWriter, r *http.Requ
 	}
 
 	httputil.WriteJSON(w, http.StatusOK, students)
+}
+
+// isJSONObject reports whether raw is well-formed JSON whose top-level value is
+// an object ({...}). Used for lightweight shape validation of the client-reported
+// run_summary; the object's contents are intentionally not validated.
+func isJSONObject(raw json.RawMessage) bool {
+	if !json.Valid(raw) {
+		return false
+	}
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) > 0 && trimmed[0] == '{'
 }

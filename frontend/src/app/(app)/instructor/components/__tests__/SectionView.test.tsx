@@ -10,13 +10,13 @@ import SectionView from '../SectionView';
 // Mock API functions
 const mockGetClassSections = jest.fn();
 const mockDeleteSection = jest.fn();
-const mockGetActiveSessions = jest.fn();
+const mockListSectionSessions = jest.fn();
 const mockCreateSection = jest.fn();
 
 jest.mock('@/lib/api/sections', () => ({
   getClassSections: (...args: unknown[]) => mockGetClassSections(...args),
   deleteSection: (...args: unknown[]) => mockDeleteSection(...args),
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
+  listSectionSessions: (...args: unknown[]) => mockListSectionSessions(...args),
 }));
 
 jest.mock('@/lib/api/classes', () => ({
@@ -157,7 +157,7 @@ describe('SectionView', () => {
     ];
 
     mockGetClassSections.mockResolvedValueOnce(mockSections);
-    mockGetActiveSessions.mockResolvedValueOnce([]);
+    mockListSectionSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -173,10 +173,15 @@ describe('SectionView', () => {
     });
 
     // Should fetch sessions for the selected section
-    expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
+    expect(mockListSectionSessions).toHaveBeenCalledWith('section-1');
   });
 
-  it('should display sessions for selected section', async () => {
+  /**
+   * G4 (T13): SectionView lists ALL sessions and marks the one matching the
+   * section pointer (current_session_id) as "current"; all others are "past".
+   * Catches: per-session pill drifting back to status='active' derivation.
+   */
+  it('should display sessions and mark the pointer session as current', async () => {
     const mockSections = [
       {
         id: 'section-1',
@@ -186,6 +191,8 @@ describe('SectionView', () => {
         semester: null,
         join_code: 'ABC123',
         active: true,
+        // Pointer targets session-1 → it is "current"; session-2 is "past".
+        current_session_id: 'session-1',
         created_at: '2025-01-01T00:00:00Z',
         updated_at: '2025-01-01T00:00:00Z',
       },
@@ -203,7 +210,9 @@ describe('SectionView', () => {
         featured_test_cases: null,
         creator_id: 'user-1',
         participants: ['p1', 'p2', 'p3', 'p4', 'p5'],
-        status: 'active' as const,
+        // status is legacy and must NOT drive the pill. A completed status on
+        // the pointer session must still render "current".
+        status: 'completed' as const,
         created_at: '2025-12-19T10:00:00Z',
         last_activity: '2025-12-19T10:30:00Z',
         ended_at: null,
@@ -219,7 +228,8 @@ describe('SectionView', () => {
         featured_test_cases: null,
         creator_id: 'user-1',
         participants: ['p1', 'p2', 'p3'],
-        status: 'completed' as const,
+        // status active on a non-pointer session must render "past".
+        status: 'active' as const,
         created_at: '2025-12-19T09:00:00Z',
         last_activity: '2025-12-19T09:45:00Z',
         ended_at: '2025-12-19T10:00:00Z',
@@ -227,7 +237,7 @@ describe('SectionView', () => {
     ];
 
     mockGetClassSections.mockResolvedValueOnce(mockSections);
-    mockGetActiveSessions.mockResolvedValueOnce(mockSessions);
+    mockListSectionSessions.mockResolvedValueOnce(mockSessions);
 
     render(<SectionView {...defaultProps} />);
 
@@ -237,14 +247,16 @@ describe('SectionView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Section A/ }));
 
-    // Verify sessions are displayed - component shows participant count and status
+    // Verify sessions are displayed - component shows participant count
     await waitFor(() => {
       expect(screen.getByText('5 students')).toBeInTheDocument();
       expect(screen.getByText('3 students')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('active')).toBeInTheDocument();
-    expect(screen.getByText('completed')).toBeInTheDocument();
+    // Pointer session (session-1) is "current" despite completed status; the
+    // other session is "past" despite active status.
+    expect(screen.getByText('current')).toBeInTheDocument();
+    expect(screen.getByText('past')).toBeInTheDocument();
   });
 
   it('should call onCreateSession when New Session button is clicked', async () => {
@@ -263,7 +275,7 @@ describe('SectionView', () => {
     ];
 
     mockGetClassSections.mockResolvedValueOnce(mockSections);
-    mockGetActiveSessions.mockResolvedValueOnce([]);
+    mockListSectionSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -319,7 +331,7 @@ describe('SectionView', () => {
     ];
 
     mockGetClassSections.mockResolvedValueOnce(mockSections);
-    mockGetActiveSessions.mockResolvedValueOnce(mockSessions);
+    mockListSectionSessions.mockResolvedValueOnce(mockSessions);
 
     render(<SectionView {...defaultProps} />);
 
@@ -333,7 +345,7 @@ describe('SectionView', () => {
       expect(screen.getByText('5 students')).toBeInTheDocument();
     });
 
-    // Click on the session button (contains "5 students" and "active")
+    // Click on the session button (contains "5 students")
     const sessionButton = screen.getByRole('button', { name: /5 students/ });
     fireEvent.click(sessionButton);
 
@@ -357,7 +369,7 @@ describe('SectionView', () => {
     ];
 
     mockGetClassSections.mockResolvedValueOnce(mockSections);
-    mockGetActiveSessions.mockResolvedValueOnce([]);
+    mockListSectionSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 
@@ -395,7 +407,7 @@ describe('SectionView', () => {
     ];
 
     mockGetClassSections.mockResolvedValueOnce(mockSections);
-    mockGetActiveSessions.mockResolvedValueOnce([]);
+    mockListSectionSessions.mockResolvedValueOnce([]);
 
     render(<SectionView {...defaultProps} />);
 

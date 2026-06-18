@@ -12,6 +12,7 @@ import (
 	"github.com/jdelfino/eval/go-backend/internal/auth"
 	"github.com/jdelfino/eval/go-backend/internal/httpbind"
 	custommw "github.com/jdelfino/eval/go-backend/internal/middleware"
+	"github.com/jdelfino/eval/go-backend/internal/realtime"
 	"github.com/jdelfino/eval/go-backend/internal/store"
 	"github.com/jdelfino/eval/pkg/httputil"
 )
@@ -22,6 +23,7 @@ type SectionHandler struct {
 	sectionProblemHandler *SectionProblemHandler
 	studentWorkHandler    *StudentWorkHandler
 	studentReviewHandler  *StudentReviewHandler
+	publisher             realtime.SessionPublisher
 	readRL                func(http.Handler) http.Handler
 	writeRL               func(http.Handler) http.Handler
 }
@@ -35,7 +37,17 @@ func NewSectionHandler(membershipHandler *MembershipHandler, sectionProblemHandl
 		sectionProblemHandler: sectionProblemHandler,
 		studentWorkHandler:    studentWorkHandler,
 		studentReviewHandler:  studentReviewHandler,
+		publisher:             realtime.NoOpSessionPublisher{},
 	}
+}
+
+// WithPublisher sets the realtime publisher used to announce section-pointer
+// changes (section_current_changed). Defaults to a no-op publisher.
+func (h *SectionHandler) WithPublisher(publisher realtime.SessionPublisher) *SectionHandler {
+	if publisher != nil {
+		h.publisher = publisher
+	}
+	return h
 }
 
 // WithRateLimiting returns h after configuring read/write rate-limiting
@@ -80,6 +92,7 @@ func (h *SectionHandler) Routes() chi.Router {
 			r.Use(custommw.RequirePermission(auth.PermContentManage))
 			r.With(writeRL).Patch("/", h.Update)
 			r.With(writeRL).Delete("/", h.Delete)
+			r.With(writeRL).Delete("/current", h.ClearCurrent)
 			r.With(writeRL).Post("/regenerate-code", h.RegenerateCode)
 			r.With(readRL).Get("/instructors", h.ListInstructors)
 			r.With(writeRL).Post("/instructors", h.AddInstructor)
@@ -296,6 +309,38 @@ func (h *SectionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteInternalError(w, r, err, "internal error")
 		return
 	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ClearCurrent handles DELETE /api/v1/sections/{id}/current — clears the
+// section's current-session pointer (instructor+, PermContentManage).
+//
+// G4-R3: this is the explicit, optional end-of-class action and the ONLY path
+// that clears the pointer. The pointer is never auto-cleared by session
+// create/end/delete; a stale value is the correct late-join target.
+func (h *SectionHandler) ClearCurrent(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpbind.ParseUUIDParam(w, r, "id")
+	if !ok {
+		return
+	}
+
+	repos := store.ReposFromContext(r.Context())
+	if err := repos.ClearSectionCurrentSession(r.Context(), id); err != nil {
+		if errors.Is(err, store.ErrForbidden) {
+			httputil.WriteError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			httputil.WriteError(w, http.StatusNotFound, "section not found")
+			return
+		}
+		httputil.WriteInternalError(w, r, err, "internal error")
+		return
+	}
+
+	// Announce the cleared pointer on the section channel (session_id: null).
+	_ = h.publisher.SectionCurrentChanged(r.Context(), id.String(), nil, nil)
 
 	w.WriteHeader(http.StatusNoContent)
 }

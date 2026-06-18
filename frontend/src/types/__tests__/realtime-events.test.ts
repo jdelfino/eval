@@ -9,7 +9,6 @@
 import type {
   StudentCodeUpdatedData,
   FeaturedStudentChangedData,
-  SessionStartedInSectionData,
 } from '../realtime-events';
 import type { IOTestCase } from '../api';
 
@@ -117,57 +116,6 @@ describe('Realtime event types', () => {
       };
 
       expect(data.test_cases).toBeUndefined();
-    });
-  });
-
-  describe('SessionStartedInSectionData', () => {
-    it('should have problem field with concrete type, not unknown', () => {
-      // The problem field should be typed as a Problem-like structure,
-      // not unknown. This test verifies the type accepts standard problem fields.
-      const data: SessionStartedInSectionData = {
-        session_id: 'session-1',
-        problem: {
-          id: 'prob-1',
-          namespace_id: 'ns-1',
-          title: 'Test Problem',
-          description: 'A test problem',
-          starter_code: 'print("hello")',
-          test_cases: null,
-          author_id: 'author-1',
-          class_id: null,
-          tags: [],
-          solution: null,
-          language: 'python',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-        },
-      };
-
-      expect(data.problem.title).toBe('Test Problem');
-      expect(data.problem.language).toBe('python');
-    });
-
-    it('should accept full Problem object', () => {
-      const data: SessionStartedInSectionData = {
-        session_id: 'session-1',
-        problem: {
-          id: 'prob-1',
-          namespace_id: 'ns-1',
-          title: 'Full Problem',
-          description: 'Description',
-          starter_code: 'pass',
-          test_cases: null,
-          author_id: 'author-1',
-          class_id: null,
-          tags: ['tag1'],
-          solution: null,
-          language: 'python',
-          created_at: '2024-01-01T00:00:00Z',
-          updated_at: '2024-01-01T00:00:00Z',
-        },
-      };
-
-      expect(data.problem.title).toBe('Full Problem');
     });
   });
 });

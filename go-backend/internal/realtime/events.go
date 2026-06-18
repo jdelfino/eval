@@ -12,11 +12,10 @@ const (
 	EventStudentJoined           EventType = "student_joined"
 	EventStudentCodeUpdated      EventType = "student_code_updated"
 	EventSessionEnded            EventType = "session_ended"
-	EventSessionReplaced         EventType = "session_replaced"
 	EventFeaturedStudentChanged  EventType = "featured_student_changed"
 	EventProblemUpdated          EventType = "problem_updated"
-	EventSessionStartedInSection EventType = "session_started_in_section"
 	EventSessionEndedInSection   EventType = "session_ended_in_section"
+	EventSectionCurrentChanged   EventType = "section_current_changed"
 )
 
 // Event is the envelope sent over Centrifugo channels.
@@ -33,21 +32,21 @@ type StudentJoinedData struct {
 }
 
 // StudentCodeUpdatedData is the payload for EventStudentCodeUpdated.
+// RunSummary (G4 F8) carries the student's most recent run-all summary
+// ({passed,failed,errors,total,at}) when the update was triggered by a run-all;
+// it is omitted for plain code/test-case autosaves. CLIENT-REPORTED and never
+// server-verified (classroom-grade; not for grading).
 type StudentCodeUpdatedData struct {
-	UserID    string          `json:"user_id"`
-	Code      string          `json:"code"`
-	TestCases json.RawMessage `json:"test_cases,omitempty"`
+	UserID     string          `json:"user_id"`
+	Code       string          `json:"code"`
+	TestCases  json.RawMessage `json:"test_cases,omitempty"`
+	RunSummary json.RawMessage `json:"run_summary,omitempty"`
 }
 
 // SessionEndedData is the payload for EventSessionEnded.
 type SessionEndedData struct {
 	SessionID string `json:"session_id"`
 	Reason    string `json:"reason"`
-}
-
-// SessionReplacedData is the payload for EventSessionReplaced.
-type SessionReplacedData struct {
-	NewSessionID string `json:"new_session_id"`
 }
 
 // FeaturedStudentChangedData is the payload for EventFeaturedStudentChanged.
@@ -62,13 +61,17 @@ type ProblemUpdatedData struct {
 	ProblemID string `json:"problem_id"`
 }
 
-// SessionStartedInSectionData is the payload for EventSessionStartedInSection.
-type SessionStartedInSectionData struct {
-	SessionID string          `json:"session_id"`
-	Problem   json.RawMessage `json:"problem"`
-}
-
 // SessionEndedInSectionData is the payload for EventSessionEndedInSection.
 type SessionEndedInSectionData struct {
 	SessionID string `json:"session_id"`
+}
+
+// SectionCurrentChangedData is the payload for EventSectionCurrentChanged.
+// Published on the section channel when the section's current-session pointer
+// changes (G4 section-pointer model): SessionID is the new current session id,
+// or nil when the pointer was cleared. Problem carries the new session's
+// problem snapshot for late join and is omitted when the pointer is cleared.
+type SectionCurrentChangedData struct {
+	SessionID *string         `json:"session_id"`
+	Problem   json.RawMessage `json:"problem,omitempty"`
 }

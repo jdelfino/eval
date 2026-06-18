@@ -88,9 +88,11 @@ const activeSession = {
   section_name: 'Section A',
   status: 'active',
   created_at: '2026-02-20T10:00:00Z',
-  last_activity: '2026-02-20T10:30:00Z',
+  // Recent activity so the section pointer reads as "live now" (within the
+  // 60-min liveness window).
+  last_activity: new Date().toISOString(),
   ended_at: null,
-  problem: { title: 'Active Problem', description: 'An active problem' },
+  problem: { id: PROBLEM_ID_1, title: 'Active Problem', description: 'An active problem' },
   participants: ['student-1'],
   featured_student_id: null,
   featured_code: null,
@@ -116,6 +118,11 @@ const pastSession = {
 };
 
 function mockSectionData(sessions: object[] = [], problems: object[] = []) {
+  // G4 section-pointer model: the section's current_session_id points at the
+  // first active session in the fixture (the student-side live source).
+  const activeFixture = (sessions as Array<{ id: string; status?: string }>).find(
+    (s) => s.status === 'active'
+  );
   (getSection as jest.Mock).mockResolvedValue({
     id: SECTION_ID,
     name: 'Section A',
@@ -124,6 +131,7 @@ function mockSectionData(sessions: object[] = [], problems: object[] = []) {
     namespace_id: 'ns-1',
     join_code: 'ABC-123',
     active: true,
+    current_session_id: activeFixture?.id ?? null,
     created_at: '2025-01-01T00:00:00Z',
     updated_at: '2025-01-01T00:00:00Z',
   });

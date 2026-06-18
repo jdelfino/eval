@@ -58,7 +58,8 @@ describe('StartSessionModal', () => {
       );
 
       expect(screen.getByRole('heading', { name: 'Start Session' })).toBeInTheDocument();
-      expect(screen.getByText(section_name)).toBeInTheDocument();
+      // Section name appears in the header subtitle and in the locked composer row.
+      expect(screen.getAllByText(section_name).length).toBeGreaterThanOrEqual(1);
     });
 
     it('shows loading state while fetching problems', () => {
@@ -294,7 +295,7 @@ describe('StartSessionModal', () => {
 
       await waitFor(() => {
         // Now passes showSolution=false (default) since problem is not published to section
-        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', false);
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', false, { setCurrent: true });
       });
 
       expect(mockOnSessionCreated).toHaveBeenCalledWith('session-123');
@@ -341,7 +342,7 @@ describe('StartSessionModal', () => {
 
       await waitFor(() => {
         // Blank session: no problem_id, no showSolution
-        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, undefined, undefined);
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, undefined, undefined, { setCurrent: true });
       });
 
       expect(mockOnSessionCreated).toHaveBeenCalledWith('session-456');
@@ -393,7 +394,10 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /creating/i })).toBeDisabled();
+        // Loading: Start button shows a busy spinner and is disabled.
+        const startBtn = screen.getByRole('button', { name: /start session/i });
+        expect(startBtn).toBeDisabled();
+        expect(startBtn).toHaveAttribute('aria-busy', 'true');
       });
 
       await waitFor(() => {
@@ -750,7 +754,7 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', true);
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', true, { setCurrent: true });
       });
     });
 
@@ -797,7 +801,7 @@ describe('StartSessionModal', () => {
       fireEvent.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => {
-        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', false);
+        expect(sessionsApi.createSession).toHaveBeenCalledWith(section_id, 'problem-1', false, { setCurrent: true });
       });
     });
   });

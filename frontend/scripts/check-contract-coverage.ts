@@ -28,6 +28,17 @@ export const EXCLUDED_FUNCTIONS: Record<string, string> = {
   'realtime-token/getRealtimeToken': 'Requires Centrifugo — covered by PLAT-pp4r.4',
   'system/resendSystemInvitation': 'Requires Resend email service',
   'problems/generateSolution': 'Backend endpoint implemented in PLAT-rzin.2 — contract test to be added alongside backend',
+  'sessions/reopenSession': 'Backend route retired under G4 section-pointer model (eval-cej.8.1); dead FE export removed by T5 with its instructor-page caller',
+};
+
+/**
+ * Realtime event `*Data` interfaces excluded from contract coverage because the
+ * backend no longer emits the event (G4 section-pointer cutover). The FE types
+ * are removed by follow-on tasks; until then they are excluded here so the
+ * coverage gate stays green without a contract test for an unemittable event.
+ */
+export const EXCLUDED_EVENTS: Record<string, string> = {
+  SessionReplacedData: 'Backend no longer emits session_replaced (eval-cej.8.1); FE type removed by T12',
 };
 
 // ---------------------------------------------------------------------------
@@ -459,7 +470,9 @@ function main(): void {
 
   // --- Realtime event coverage ---
   const realtimeTypesSource = fs.readFileSync(realtimeTypesFile, 'utf-8');
-  const dataInterfaces = extractDataInterfaces(realtimeTypesSource);
+  const dataInterfaces = extractDataInterfaces(realtimeTypesSource).filter(
+    (name) => !(name in EXCLUDED_EVENTS)
+  );
 
   const validatorsSource = fs.readFileSync(validatorsFile, 'utf-8');
   const validatorNames = new Set(extractExportedValidators(validatorsSource));

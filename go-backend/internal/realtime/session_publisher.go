@@ -5,18 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // SessionPublisher provides typed methods for publishing session events.
 type SessionPublisher interface {
 	StudentJoined(ctx context.Context, sessionID, userID, displayName string) error
-	CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error
+	CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases, runSummary json.RawMessage) error
 	SessionEnded(ctx context.Context, sessionID, reason string) error
-	SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error
 	FeaturedStudentChanged(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error
 	ProblemUpdated(ctx context.Context, sessionID, problemID string) error
-	SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error
 	SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error
+	// SectionCurrentChanged publishes the G4 section-pointer change on the
+	// section channel. sessionID is nil when the pointer was cleared; problem
+	// carries the new session's snapshot for late join (nil when cleared).
+	SectionCurrentChanged(ctx context.Context, sectionID string, sessionID *uuid.UUID, problem json.RawMessage) error
 }
 
 type sessionPublisher struct {
@@ -65,11 +69,12 @@ func (s *sessionPublisher) StudentJoined(ctx context.Context, sessionID, userID,
 	})
 }
 
-func (s *sessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
+func (s *sessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases, runSummary json.RawMessage) error {
 	return s.publish(ctx, sessionID, EventStudentCodeUpdated, StudentCodeUpdatedData{
-		UserID:    userID,
-		Code:      code,
-		TestCases: testCases,
+		UserID:     userID,
+		Code:       code,
+		TestCases:  testCases,
+		RunSummary: runSummary,
 	})
 }
 
@@ -77,12 +82,6 @@ func (s *sessionPublisher) SessionEnded(ctx context.Context, sessionID, reason s
 	return s.publish(ctx, sessionID, EventSessionEnded, SessionEndedData{
 		SessionID: sessionID,
 		Reason:    reason,
-	})
-}
-
-func (s *sessionPublisher) SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error {
-	return s.publish(ctx, oldSessionID, EventSessionReplaced, SessionReplacedData{
-		NewSessionID: newSessionID,
 	})
 }
 
@@ -100,15 +99,20 @@ func (s *sessionPublisher) ProblemUpdated(ctx context.Context, sessionID, proble
 	})
 }
 
-func (s *sessionPublisher) SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error {
-	return s.publishToSection(ctx, sectionID, EventSessionStartedInSection, SessionStartedInSectionData{
-		SessionID: sessionID,
-		Problem:   problem,
-	})
-}
-
 func (s *sessionPublisher) SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error {
 	return s.publishToSection(ctx, sectionID, EventSessionEndedInSection, SessionEndedInSectionData{
 		SessionID: sessionID,
+	})
+}
+
+func (s *sessionPublisher) SectionCurrentChanged(ctx context.Context, sectionID string, sessionID *uuid.UUID, problem json.RawMessage) error {
+	var sessIDStr *string
+	if sessionID != nil {
+		str := sessionID.String()
+		sessIDStr = &str
+	}
+	return s.publishToSection(ctx, sectionID, EventSectionCurrentChanged, SectionCurrentChangedData{
+		SessionID: sessIDStr,
+		Problem:   problem,
 	})
 }

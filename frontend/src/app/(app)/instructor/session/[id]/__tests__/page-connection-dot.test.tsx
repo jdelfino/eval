@@ -46,9 +46,9 @@ jest.mock('@/hooks/useSessionOperations', () => ({
 // ── SessionView: renders join_code so we can assert it's still visible ────────
 
 jest.mock('../../../components/SessionView', () => ({
-  SessionView: function MockSessionView({ join_code, session_id, students, sessionContext, onEndSession, onUpdateProblem, onFeatureStudent, forceDesktop }: any) {
+  SessionView: function MockSessionView({ join_code, session_id, students, sessionContext, onEndSession, onUpdateProblem, onFeatureStudent }: any) {
     return (
-      <div data-testid="session-view" data-force-desktop={forceDesktop ? 'true' : 'false'}>
+      <div data-testid="session-view">
         <span data-testid="session-id">{session_id}</span>
         <span data-testid="join-code">{join_code}</span>
         <span data-testid="section-name">{sessionContext?.section_name}</span>
@@ -85,8 +85,13 @@ jest.mock('@/lib/api/execute', () => ({
   ioTestCasesToCaseDefs: jest.fn((cases: unknown[]) => cases),
 }));
 
-jest.mock('@/lib/api/sessions', () => ({
-  reopenSession: jest.fn().mockResolvedValue(undefined),
+jest.mock('@/lib/api/sections', () => ({
+  getSection: jest.fn().mockResolvedValue({ id: 'section-1', current_session_id: 'session-123' }),
+}));
+
+jest.mock('@/lib/session-launch-flag', () => ({
+  peekSessionLaunched: jest.fn().mockReturnValue(false),
+  clearSessionLaunched: jest.fn(),
 }));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────

@@ -22,7 +22,9 @@ import {
   getSectionInstructors,
   deleteSection,
   listSectionSessions,
+  clearSectionCurrentSession,
 } from '@/lib/api/sections';
+import { createSession } from '@/lib/api/sessions';
 import { createClass, createSection } from '@/lib/api/classes';
 import {
   validateSessionShape,
@@ -54,6 +56,12 @@ describe('Sections API (full coverage)', () => {
       expect(sec.semester === null || typeof sec.semester === 'string').toBe(true);
       expect(typeof sec.join_code).toBe('string');
       expect(typeof sec.active).toBe('boolean');
+      // G4 section pointer: null when no current session, string id otherwise.
+      expect(sec.current_session_id === null || typeof sec.current_session_id === 'string').toBe(true);
+      // G4 B1 problem-identity gate: the backend always serializes the key,
+      // null when no pointer / no problem, string id otherwise.
+      expect('current_problem_id' in sec).toBe(true);
+      expect(sec.current_problem_id === null || typeof sec.current_problem_id === 'string').toBe(true);
       expect(typeof sec.created_at).toBe('string');
       expect(typeof sec.updated_at).toBe('string');
 
@@ -272,6 +280,60 @@ describe('Sections API (full coverage)', () => {
       for (const session of sessions) {
         validateSessionShape(session);
         expect(session.status).toBe('active');
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // clearSectionCurrentSession (G4 "End class" — clears the section pointer)
+  // -------------------------------------------------------------------------
+  describe('clearSectionCurrentSession()', () => {
+    /**
+     * Verifies the "End class" clear-pointer endpoint against the real backend:
+     * creating a session sets the section's current_session_id pointer;
+     * clearSectionCurrentSession unsets it (returns void) without completing or
+     * deleting the session. Catches: DELETE /sections/{id}/current path or
+     * pointer-clear semantics regressions. Uses a throwaway section so the shared
+     * state's active session (relied on by other tests) is untouched.
+     */
+    it('clears the section current-session pointer (void on success)', async () => {
+      const classId = state.classId;
+      expect(classId).toBeTruthy();
+
+      // Throwaway section so we never disturb the shared section's pointer.
+      const tempSection = await createSection(classId, {
+        name: `Clear Pointer Section ${Date.now()}`,
+        semester: 'Clear Pointer Test',
+      });
+
+      try {
+        // Creating a session defaults to set_current:true → pointer is set.
+        await createSession(tempSection.id);
+        const withPointer = await getSection(tempSection.id);
+        expect(typeof withPointer.current_session_id).toBe('string');
+        // The derived current_problem_id is present (string when the pointer
+        // session has a problem, null for a blank session as created here); the
+        // key is always serialized (G4 B1).
+        expect('current_problem_id' in withPointer).toBe(true);
+        expect(
+          withPointer.current_problem_id === null ||
+            typeof withPointer.current_problem_id === 'string'
+        ).toBe(true);
+
+        // End class: clear the pointer. Returns void on success.
+        await clearSectionCurrentSession(tempSection.id);
+
+        // The pointer is now unset; the session document still exists (not
+        // completed/deleted) but is no longer the section's current problem.
+        const cleared = await getSection(tempSection.id);
+        expect(cleared.current_session_id).toBeNull();
+        expect(cleared.current_problem_id).toBeNull();
+      } finally {
+        try {
+          await deleteSection(tempSection.id);
+        } catch {
+          // Best-effort cleanup; namespace teardown will catch leftovers.
+        }
       }
     });
   });

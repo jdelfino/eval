@@ -6,7 +6,7 @@
  */
 
 import { apiGet, apiPost, apiPut } from '@/lib/api-client';
-import type { SessionStudent, SessionState, IOTestCase } from '@/types/api';
+import type { SessionStudent, SessionState, IOTestCase, RunSummary } from '@/types/api';
 
 /**
  * Get the current state of a session, including session details, students, and join code.
@@ -22,19 +22,23 @@ export async function getSessionState(sessionId: string): Promise<SessionState> 
  * @param sessionId - The session ID
  * @param studentId - The student's user ID
  * @param code - The code to save
- * @param executionSettings - Optional execution settings
+ * @param testCases - Optional execution settings (test_cases)
+ * @param runSummary - Optional run-all summary (G4 F8); sent only after a run-all.
+ *   When omitted, the previously persisted summary is left untouched.
  * @returns The updated SessionStudent object
  */
 export async function updateCode(
   sessionId: string,
   studentId: string,
   code: string,
-  testCases?: IOTestCase[]
+  testCases?: IOTestCase[],
+  runSummary?: RunSummary
 ): Promise<SessionStudent> {
   return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, {
     student_id: studentId,
     code,
     test_cases: testCases,
+    run_summary: runSummary,
   });
 }
 
@@ -43,13 +47,18 @@ export async function updateCode(
  * The student is identified by the auth token; no student_id is needed.
  * @param sessionId - The session ID
  * @param code - The code to save
+ * @param runSummary - Optional run-all summary (G4 F8); sent only after a run-all.
  * @returns The updated SessionStudent object
  */
 export async function updateStudentCode(
   sessionId: string,
-  code: string
+  code: string,
+  runSummary?: RunSummary
 ): Promise<SessionStudent> {
-  return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, { code });
+  return apiPut<SessionStudent>(`/sessions/${sessionId}/code`, {
+    code,
+    run_summary: runSummary,
+  });
 }
 
 /**

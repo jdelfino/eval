@@ -14,11 +14,10 @@ import type {
   StudentJoinedData,
   StudentCodeUpdatedData,
   SessionEndedData,
-  SessionReplacedData,
   FeaturedStudentChangedData,
   ProblemUpdatedData,
-  SessionStartedInSectionData,
   SessionEndedInSectionData,
+  SectionCurrentChangedData,
 } from '@/types/realtime-events';
 
 // ---------------------------------------------------------------------------
@@ -35,11 +34,10 @@ export type RealtimeEvent =
   | ParsedEvent<'student_joined', StudentJoinedData>
   | ParsedEvent<'student_code_updated', StudentCodeUpdatedData>
   | ParsedEvent<'session_ended', SessionEndedData>
-  | ParsedEvent<'session_replaced', SessionReplacedData>
   | ParsedEvent<'featured_student_changed', FeaturedStudentChangedData>
   | ParsedEvent<'problem_updated', ProblemUpdatedData>
-  | ParsedEvent<'session_started_in_section', SessionStartedInSectionData>
-  | ParsedEvent<'session_ended_in_section', SessionEndedInSectionData>;
+  | ParsedEvent<'session_ended_in_section', SessionEndedInSectionData>
+  | ParsedEvent<'section_current_changed', SectionCurrentChangedData>;
 
 // ---------------------------------------------------------------------------
 // Known event type set for validation
@@ -49,11 +47,10 @@ const KNOWN_EVENT_TYPES = new Set<RealtimeEventType>([
   'student_joined',
   'student_code_updated',
   'session_ended',
-  'session_replaced',
   'featured_student_changed',
   'problem_updated',
-  'session_started_in_section',
   'session_ended_in_section',
+  'section_current_changed',
 ]);
 
 function isKnownEventType(value: string): value is RealtimeEventType {

@@ -27,22 +27,20 @@ import {
   validateStudentJoinedShape,
   validateStudentCodeUpdatedShape,
   validateSessionEndedShape,
-  validateSessionReplacedShape,
   validateFeaturedStudentChangedShape,
   validateProblemUpdatedShape,
-  validateSessionStartedInSectionShape,
   validateSessionEndedInSectionShape,
+  validateSectionCurrentChangedShape,
 } from './validators';
 import type {
   RealtimeEventEnvelope,
   StudentJoinedData,
   StudentCodeUpdatedData,
   SessionEndedData,
-  SessionReplacedData,
   FeaturedStudentChangedData,
   ProblemUpdatedData,
-  SessionStartedInSectionData,
   SessionEndedInSectionData,
+  SectionCurrentChangedData,
 } from '@/types/realtime-events';
 import { createProblem } from '@/lib/api/problems';
 import { createSession, endSession, updateSessionProblemPartial, featureCode } from '@/lib/api/sessions';
@@ -52,6 +50,7 @@ import {
   updateStudentCode,
   updateCode,
   featureStudent,
+  getSessionState,
 } from '@/lib/api/realtime';
 
 // ---------------------------------------------------------------------------
@@ -270,10 +269,11 @@ describe('Realtime event contract tests', () => {
   });
 
   // -------------------------------------------------------------------------
-  // session_started_in_section — create a new session triggers this on section channel
+  // section_current_changed — create a new session (set_current default true)
+  // sets the section pointer and announces it on the section channel.
   // -------------------------------------------------------------------------
-  describe('session_started_in_section', () => {
-    it('publishes correct payload to section channel when session is created', async () => {
+  describe('section_current_changed', () => {
+    it('publishes correct payload to section channel when a session becomes current', async () => {
       const { sectionId, instructorToken, classId } = setupState;
 
       // Create a new problem for the session
@@ -292,23 +292,20 @@ describe('Realtime event contract tests', () => {
       const { collectNext, unsubscribe } = await subscribeAndCollect(client, sectionChannel, OBSERVER_USER_ID);
 
       try {
-        // Create a new session (triggers session_started_in_section on the section channel)
+        // Create a new session (set_current defaults true → section_current_changed)
         const newSession = await createSession(sectionId, problem.id);
 
         const envelope = await collectNext();
 
-        expect(envelope.type).toBe('session_started_in_section');
+        expect(envelope.type).toBe('section_current_changed');
         expect(typeof envelope.timestamp).toBe('string');
-        const data = envelope.data as SessionStartedInSectionData;
-        validateSessionStartedInSectionShape(data);
+        const data = envelope.data as SectionCurrentChangedData;
+        validateSectionCurrentChangedShape(data);
         expect(data.session_id).toBe(newSession.id);
-        expect(data.problem).not.toBeNull();
+        expect(data.problem).not.toBeUndefined();
 
-        // TC4: Validate the nested problem shape matches the concrete ApiProblem type.
-        // If the backend returns problem with wrong field names or missing fields,
-        // the shape check here catches it. We check key fields directly since
-        // the full Problem is validated via SessionStartedInSectionData's typia validator.
-        const p = data.problem;
+        // Validate the nested problem shape matches the concrete ApiProblem type.
+        const p = data.problem!;
         expect(typeof p.id).toBe('string');
         expect(typeof p.namespace_id).toBe('string');
         expect(typeof p.title).toBe('string');
@@ -451,6 +448,39 @@ describe('Realtime event contract tests', () => {
 
         // Ensure execution_settings does NOT appear (wrong field name)
         expect('execution_settings' in data).toBe(false);
+      } finally {
+        unsubscribe();
+        resetAuthProvider();
+      }
+    });
+
+    it('publishes run_summary field and reflects it on GET /sessions/{id}/state (G4 F8)', async () => {
+      /**
+       * F8: Verifies that a run_summary sent on PUT /sessions/{id}/code is carried
+       * on the student_code_updated event AND persisted so a fresh state fetch
+       * exposes last_run_summary. Guards FE/BE drift on the run-summary contract.
+       */
+      const { sessionId } = setupState;
+
+      const sessionChannel = `session:${sessionId}`;
+      const { collectNext, unsubscribe } = await subscribeAndCollect(client, sessionChannel, OBSERVER_USER_ID);
+
+      try {
+        const runSummary = { passed: 2, failed: 1, errors: 0, total: 3, at: new Date().toISOString() };
+
+        configureTestAuth(STUDENT_TOKEN);
+        await updateStudentCode(sessionId, 'print("with-run-summary")', runSummary);
+
+        const envelope = await collectNext();
+        expect(envelope.type).toBe('student_code_updated');
+        const data = envelope.data as StudentCodeUpdatedData;
+        validateStudentCodeUpdatedShape(data);
+        expect(data.run_summary).toEqual(runSummary);
+
+        // A fresh state fetch must reflect the persisted summary.
+        const state = await getSessionState(sessionId);
+        const me = state.students.find((s) => s.user_id === joinedStudentUserId);
+        expect(me?.last_run_summary).toEqual(runSummary);
       } finally {
         unsubscribe();
         resetAuthProvider();
@@ -636,63 +666,8 @@ describe('Realtime event contract tests', () => {
   });
 
   // -------------------------------------------------------------------------
-  // session_replaced — creating a new session when one already exists replaces it
+  // (session_replaced removed: the G4 section-pointer model never replaces a
+  //  session on create — eval-cej.8.1. The FE session_replaced handling is
+  //  removed by T12; the backend no longer emits the event.)
   // -------------------------------------------------------------------------
-  describe('session_replaced', () => {
-    it('publishes session_replaced to old session channel when a new session replaces it', async () => {
-      const { sectionId, instructorToken, classId } = setupState;
-
-      // Create problem and first session
-      configureTestAuth(instructorToken);
-      const replaceProblem = await createProblem({
-        title: 'RT Contract Replace Problem',
-        description: 'A test problem for session_replaced',
-        class_id: classId,
-        starter_code: 'pass',
-        language: 'python',
-        tags: ['rt-contract-replace'],
-      });
-
-      // Create the first session (will be replaced)
-      const firstSession = await createSession(sectionId, replaceProblem.id);
-
-      // Subscribe to the first session's channel BEFORE triggering the replace
-      const firstSessionChannel = `session:${firstSession.id}`;
-      const { collectNext, unsubscribe } = await subscribeAndCollect(
-        client, firstSessionChannel, OBSERVER_USER_ID
-      );
-
-      try {
-        // Create a second problem for the replacement session
-        const replaceProblem2 = await createProblem({
-          title: 'RT Contract Replace Problem 2',
-          description: 'Replacement problem',
-          class_id: classId,
-          starter_code: 'pass',
-          language: 'python',
-          tags: ['rt-contract-replace2'],
-        });
-
-        // Create a new session for the SAME section while the first is still active.
-        // CreateSessionReplacingActive atomically ends the old session and publishes
-        // session_replaced to the old session's channel.
-        const newSession = await createSession(sectionId, replaceProblem2.id);
-
-        // Collect the session_replaced event from the OLD session's channel
-        const envelope = await collectNext();
-
-        expect(envelope.type).toBe('session_replaced');
-        expect(typeof envelope.timestamp).toBe('string');
-        const data = envelope.data as SessionReplacedData;
-        validateSessionReplacedShape(data);
-        expect(data.new_session_id).toBe(newSession.id);
-
-        // Clean up the replacement session
-        await endSession(newSession.id);
-      } finally {
-        unsubscribe();
-        resetAuthProvider();
-      }
-    });
-  });
 });

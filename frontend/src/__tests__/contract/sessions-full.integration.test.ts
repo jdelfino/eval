@@ -4,7 +4,7 @@
  * Covers the 10 functions not tested by sessions.integration.test.ts:
  *   createSession, endSession, completeSession, updateSessionProblem,
  *   getSessionDetails, getSessionPublicState, analyzeSession, featureCode,
- *   reopenSession, listSessionHistoryWithFilters
+ *   listSessionHistoryWithFilters
  *
  * Uses the instructor token and shared state from globalSetup.
  *
@@ -27,7 +27,6 @@ import {
   getSessionPublicState,
   analyzeSession,
   featureCode,
-  reopenSession,
   listSessionHistoryWithFilters,
   getSessionStudents,
 } from '@/lib/api/sessions';
@@ -349,23 +348,10 @@ describe('Sessions Full API', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 9. reopenSession (end first, then reopen)
+  // 9. (reopenSession removed: the backend /sessions/{id}/reopen route was
+  //    retired under the G4 section-pointer model — eval-cej.8.1. The FE
+  //    reopenSession client is removed by T5 with its instructor-page caller.)
   // -----------------------------------------------------------------------
-  describe('reopenSession()', () => {
-    it('resolves without throwing after ending a session', async () => {
-      // Create a session specifically for end/reopen lifecycle
-      const session = await createSession(ownSectionId);
-      const endReopenSessionId = session.id;
-
-      // End the session first
-      await endSession(endReopenSessionId);
-
-      // Now reopen it
-      await expect(
-        reopenSession(endReopenSessionId)
-      ).resolves.toBeUndefined();
-    });
-  });
 
   // -----------------------------------------------------------------------
   // 9. listSessionHistoryWithFilters

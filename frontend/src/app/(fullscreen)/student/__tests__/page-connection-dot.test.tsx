@@ -16,13 +16,13 @@ import StudentPageWrapper from '../page';
 // ── API mocks ─────────────────────────────────────────────────────────────────
 
 const mockGetStudentWork = jest.fn();
-const mockGetActiveSessions = jest.fn();
 const mockJoinSession = jest.fn();
 const mockUpdateCode = jest.fn();
 
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: jest.fn().mockResolvedValue(undefined),
+  getOrCreateStudentWork: jest.fn(),
 }));
 
 jest.mock('@/lib/api/execute', () => ({
@@ -31,9 +31,24 @@ jest.mock('@/lib/api/execute', () => ({
   ioTestCasesToCaseDefs: jest.fn((cases: unknown[]) => cases),
 }));
 
+// G4 section-pointer model: live mode is gated on the section's
+// current_session_id, set to the live session here.
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
-  getSection: jest.fn().mockResolvedValue({ id: 'section-1', name: 'CS 101' }),
+  getSection: jest.fn().mockResolvedValue({
+    id: 'section-1',
+    name: 'CS 101',
+    current_session_id: 'session-1',
+    current_problem_id: 'problem-1',
+  }),
+}));
+
+jest.mock('@/hooks/useSectionEvents', () => ({
+  useSectionEvents: () => ({
+    currentSessionId: 'session-1',
+    currentProblem: { id: 'problem-1', title: 'Two Sum' },
+    lastActivity: new Date().toISOString(),
+  }),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 // ── Realtime hook mock ────────────────────────────────────────────────────────
@@ -80,11 +95,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
 
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const fakeStudentWork = {
@@ -112,12 +122,6 @@ const fakeStudentWork = {
   },
 };
 
-const fakeActiveSession = {
-  id: 'session-1',
-  status: 'active',
-  problem: { id: 'problem-1' },
-};
-
 function makeRealtimeReturn(connectionStatus: string, extra = {}) {
   return {
     session: { id: 'session-1', status: 'active' },
@@ -139,7 +143,6 @@ describe('Student page inline ConnectionDot', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-    mockGetActiveSessions.mockResolvedValue([fakeActiveSession]);
     mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: [] });
   });
 

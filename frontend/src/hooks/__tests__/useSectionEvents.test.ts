@@ -3,7 +3,7 @@
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSectionEvents } from '../useSectionEvents';
-import type { Session } from '@/types/api';
+import type { Problem } from '@/types/api';
 
 // Mock centrifuge-js using the same pattern as useRealtimeSession.test.ts
 type PublicationCallback = (ctx: { data: { type: string; data: any; timestamp?: string } }) => void;
@@ -53,6 +53,11 @@ jest.mock('@/lib/centrifugo', () => ({
   getSubscriptionToken: jest.fn(async () => 'mock-token'),
 }));
 
+const mockGetSection = jest.fn();
+jest.mock('@/lib/api/sections', () => ({
+  getSection: (...args: unknown[]) => mockGetSection(...args),
+}));
+
 jest.mock('@/lib/api-client', () => ({
   getAuthHeaders: jest.fn(async () => ({ Authorization: 'Bearer mock' })),
 }));
@@ -98,68 +103,102 @@ function simulatePublication(type: string, data: any) {
   }
 }
 
-// Minimal Session fixture for tests
-function makeSession(overrides: Partial<Session> = {}): Session {
+function makeProblem(overrides: Partial<Problem> = {}): Problem {
   return {
-    id: 'session-1',
+    id: 'problem-1',
     namespace_id: 'ns-1',
-    section_id: 'section-1',
-    section_name: 'Section A',
-    problem: null,
-    featured_student_id: null,
-    featured_code: null,
-    featured_test_cases: null,
-    creator_id: 'user-1',
-    participants: [],
-    status: 'active',
+    title: 'Two Sum',
+    description: null,
+    starter_code: null,
+    test_cases: null,
+    author_id: 'user-1',
+    class_id: null,
+    tags: [],
+    solution: null,
+    language: 'python',
     created_at: '2026-01-01T00:00:00Z',
-    last_activity: '2026-01-01T00:00:00Z',
-    ended_at: null,
+    updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }
 
-describe('useSectionEvents', () => {
+describe('useSectionEvents (section-pointer model)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetMocks();
+    // Default: getSection resolves with no pointer.
+    mockGetSection.mockResolvedValue({ id: 'section-1', current_session_id: null });
   });
 
   describe('initial state', () => {
-    it('returns initialActiveSessions unchanged on mount', () => {
-      const session = makeSession({ id: 'session-1' });
-
+    it('seeds the pointer from initialCurrentSessionId', () => {
       const { result } = renderHook(() =>
         useSectionEvents({
           sectionId: 'section-1',
-          initialActiveSessions: [session],
+          initialCurrentSessionId: 'session-1',
         })
       );
 
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-1');
+      expect(result.current.currentSessionId).toBe('session-1');
     });
 
-    it('returns empty array when initialActiveSessions is empty', () => {
+    it('defaults to a null pointer when no initial value is given', () => {
+      const { result } = renderHook(() =>
+        useSectionEvents({ sectionId: 'section-1' })
+      );
+
+      expect(result.current.currentSessionId).toBeNull();
+      expect(result.current.currentProblem).toBeNull();
+    });
+
+    it('does NOT re-fetch the section on mount (caller is the single fetch path)', async () => {
+      // The hook seeds the pointer from caller-provided initial values; it must
+      // not issue a redundant getSection (G4 efficiency #2).
+      renderHook(() =>
+        useSectionEvents({ sectionId: 'section-1', initialCurrentSessionId: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
+      });
+      expect(mockGetSection).not.toHaveBeenCalled();
+    });
+
+    it('seeds the problem + last activity from the initial values', () => {
+      const problem = makeProblem();
       const { result } = renderHook(() =>
         useSectionEvents({
           sectionId: 'section-1',
-          initialActiveSessions: [],
+          initialCurrentSessionId: 'session-1',
+          initialCurrentProblem: problem,
+          initialLastActivity: '2026-06-18T00:00:00Z',
         })
       );
 
-      expect(result.current.activeSessions).toHaveLength(0);
+      expect(result.current.currentProblem).toEqual(problem);
+      expect(result.current.currentProblemId).toBe(problem.id);
+      expect(result.current.lastActivity).toBe('2026-06-18T00:00:00Z');
+    });
+
+    it('seeds currentProblemId from initialCurrentProblemId (seed-only path)', () => {
+      // The student page seeds the problem id from section.current_problem_id
+      // without the full problem snapshot.
+      const { result } = renderHook(() =>
+        useSectionEvents({
+          sectionId: 'section-1',
+          initialCurrentSessionId: 'session-1',
+          initialCurrentProblemId: 'problem-seed',
+        })
+      );
+
+      expect(result.current.currentProblemId).toBe('problem-seed');
+      expect(result.current.currentProblem).toBeNull();
     });
   });
 
   describe('Centrifugo subscription', () => {
     it('subscribes to section:{sectionId} channel on mount', async () => {
-      renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-42',
-          initialActiveSessions: [],
-        })
-      );
+      renderHook(() => useSectionEvents({ sectionId: 'section-42' }));
 
       await waitFor(() => {
         expect(mockCentrifuge.newSubscription).toHaveBeenCalledWith(
@@ -174,8 +213,7 @@ describe('useSectionEvents', () => {
 
     it('subscribes to the correct channel when sectionId changes', async () => {
       const { rerender } = renderHook(
-        ({ sectionId }: { sectionId: string }) =>
-          useSectionEvents({ sectionId, initialActiveSessions: [] }),
+        ({ sectionId }: { sectionId: string }) => useSectionEvents({ sectionId }),
         { initialProps: { sectionId: 'section-1' } }
       );
 
@@ -187,7 +225,6 @@ describe('useSectionEvents', () => {
       });
 
       resetMocks();
-
       rerender({ sectionId: 'section-2' });
 
       await waitFor(() => {
@@ -199,144 +236,43 @@ describe('useSectionEvents', () => {
     });
   });
 
-  describe('session_started_in_section event', () => {
-    it('adds session to activeSessions when session_started_in_section is received', async () => {
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [],
-        })
-      );
-
-      await waitFor(() => {
-        expect(mockCentrifuge.connect).toHaveBeenCalled();
-      });
-
-      // Wire format: { session_id, problem: full Problem object | null }
-      // No section_id or problem_id fields in the real event payload.
-      const sessionPayload = {
-        session_id: 'session-new',
-        problem: {
-          id: 'problem-1',
-          namespace_id: 'ns-1',
-          title: 'Two Sum',
-          description: null,
-          starter_code: null,
-          test_cases: null,
-          author_id: 'user-1',
-          class_id: null,
-          tags: [],
-          solution: null,
-          created_at: '2026-01-01T00:00:00Z',
-          updated_at: '2026-01-01T00:00:00Z',
-        },
-      };
-
-      act(() => {
-        simulatePublication('session_started_in_section', sessionPayload);
-      });
-
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-new');
-      // Verify the full problem object is populated from the event
-      expect(result.current.activeSessions[0].problem).not.toBeNull();
-      expect(result.current.activeSessions[0].problem?.id).toBe('problem-1');
-      expect(result.current.activeSessions[0].problem?.title).toBe('Two Sum');
-    });
-
-    it('sets problem to null when session_started_in_section has problem: null', async () => {
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [],
-        })
-      );
+  describe('section_current_changed event', () => {
+    it('sets the pointer + problem when section_current_changed reports a session', async () => {
+      /**
+       * Contract: section_current_changed {session_id, problem} sets the current
+       * pointer and surfaces the problem for late join. Catches: pointer event
+       * wiring; retired (session_started_in_section) event handling.
+       */
+      const { result } = renderHook(() => useSectionEvents({ sectionId: 'section-1' }));
 
       await waitFor(() => {
         expect(mockCentrifuge.connect).toHaveBeenCalled();
       });
 
       act(() => {
-        simulatePublication('session_started_in_section', {
-          session_id: 'session-no-problem',
-          problem: null,
-        });
-      });
-
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-no-problem');
-      expect(result.current.activeSessions[0].problem).toBeNull();
-    });
-
-    it('uses the hook sectionId param (not a payload field) for section_id', async () => {
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-42',
-          initialActiveSessions: [],
-        })
-      );
-
-      await waitFor(() => {
-        expect(mockCentrifuge.connect).toHaveBeenCalled();
-      });
-
-      act(() => {
-        simulatePublication('session_started_in_section', {
+        simulatePublication('section_current_changed', {
           session_id: 'session-new',
-          problem: null,
+          problem: makeProblem({ id: 'problem-7', title: 'FizzBuzz' }),
         });
       });
 
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].section_id).toBe('section-42');
+      expect(result.current.currentSessionId).toBe('session-new');
+      expect(result.current.currentProblem?.id).toBe('problem-7');
+      expect(result.current.currentProblem?.title).toBe('FizzBuzz');
+      expect(result.current.currentProblemId).toBe('problem-7');
+      expect(result.current.lastActivity).not.toBeNull();
     });
 
-    it('replaces existing session with same id on duplicate session_started_in_section', async () => {
-      const existingSession = makeSession({ id: 'session-1' });
-
+    it('clears the pointer when section_current_changed reports session_id: null', async () => {
+      /**
+       * Contract: {session_id: null} clears the pointer (instructor "End class").
+       * Catches: missing clear path under the pointer model.
+       */
       const { result } = renderHook(() =>
         useSectionEvents({
           sectionId: 'section-1',
-          initialActiveSessions: [existingSession],
-        })
-      );
-
-      await waitFor(() => {
-        expect(mockCentrifuge.connect).toHaveBeenCalled();
-      });
-
-      // Simulate a second session_started_in_section for the same session id
-      act(() => {
-        simulatePublication('session_started_in_section', {
-          session_id: 'session-1',
-          problem: {
-            id: 'problem-updated',
-            namespace_id: 'ns-1',
-            title: 'Updated Problem',
-            description: null,
-            starter_code: null,
-            test_cases: null,
-            author_id: 'user-1',
-            class_id: null,
-            tags: [],
-            solution: null,
-            created_at: '2026-01-01T00:00:00Z',
-            updated_at: '2026-01-01T00:00:00Z',
-          },
-        });
-      });
-
-      // Should still have exactly one session (replaced, not duplicated)
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-1');
-      expect(result.current.activeSessions[0].problem?.id).toBe('problem-updated');
-    });
-
-    it('does not duplicate sessions when session_started_in_section fires multiple times with same id', async () => {
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [],
+          initialCurrentSessionId: 'session-old',
+          initialCurrentProblem: makeProblem(),
         })
       );
 
@@ -345,116 +281,26 @@ describe('useSectionEvents', () => {
       });
 
       act(() => {
-        simulatePublication('session_started_in_section', {
-          session_id: 'session-1',
-          problem: null,
-        });
+        simulatePublication('section_current_changed', { session_id: null });
       });
 
-      act(() => {
-        simulatePublication('session_started_in_section', {
-          session_id: 'session-1',
-          problem: null,
-        });
-      });
-
-      expect(result.current.activeSessions).toHaveLength(1);
-    });
-  });
-
-  describe('session_ended_in_section event', () => {
-    it('removes session from activeSessions when session_ended_in_section is received', async () => {
-      const session = makeSession({ id: 'session-1' });
-
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [session],
-        })
-      );
-
-      await waitFor(() => {
-        expect(mockCentrifuge.connect).toHaveBeenCalled();
-      });
-
-      expect(result.current.activeSessions).toHaveLength(1);
-
-      act(() => {
-        simulatePublication('session_ended_in_section', {
-          session_id: 'session-1',
-        });
-      });
-
-      expect(result.current.activeSessions).toHaveLength(0);
-    });
-
-    it('does not affect other sessions when one session_ended_in_section fires', async () => {
-      const session1 = makeSession({ id: 'session-1' });
-      const session2 = makeSession({ id: 'session-2' });
-
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [session1, session2],
-        })
-      );
-
-      await waitFor(() => {
-        expect(mockCentrifuge.connect).toHaveBeenCalled();
-      });
-
-      act(() => {
-        simulatePublication('session_ended_in_section', {
-          session_id: 'session-1',
-        });
-      });
-
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-2');
-    });
-
-    it('handles session_ended_in_section for unknown session gracefully', async () => {
-      const session = makeSession({ id: 'session-1' });
-
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [session],
-        })
-      );
-
-      await waitFor(() => {
-        expect(mockCentrifuge.connect).toHaveBeenCalled();
-      });
-
-      act(() => {
-        simulatePublication('session_ended_in_section', {
-          session_id: 'session-nonexistent',
-        });
-      });
-
-      // Original session unaffected
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-1');
+      expect(result.current.currentSessionId).toBeNull();
+      expect(result.current.currentProblem).toBeNull();
+      expect(result.current.currentProblemId).toBeNull();
+      expect(result.current.lastActivity).toBeNull();
     });
   });
 
   describe('Resilience to malformed/unknown events', () => {
-    it('should ignore unknown event types without throwing', async () => {
-      const session = makeSession({ id: 'session-1' });
-
+    it('ignores unknown event types without throwing', async () => {
       const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [session],
-        })
+        useSectionEvents({ sectionId: 'section-1', initialCurrentSessionId: 'session-1' })
       );
 
       await waitFor(() => {
         expect(mockCentrifuge.connect).toHaveBeenCalled();
       });
 
-      // Simulate an unknown event type that parseRealtimeEvent would throw for
       expect(() => {
         act(() => {
           if (mockPublicationCallback) {
@@ -463,26 +309,41 @@ describe('useSectionEvents', () => {
         });
       }).not.toThrow();
 
-      // State should be unchanged
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-1');
+      expect(result.current.currentSessionId).toBe('session-1');
     });
 
-    it('should ignore malformed events without throwing', async () => {
-      const session = makeSession({ id: 'session-1' });
-
+    it('ignores retired session_started_in_section events', async () => {
+      /**
+       * Contract: the retired section-lifecycle events no longer mutate state.
+       * Catches: leftover session_started_in_section handling.
+       */
       const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [session],
-        })
+        useSectionEvents({ sectionId: 'section-1' })
       );
 
       await waitFor(() => {
         expect(mockCentrifuge.connect).toHaveBeenCalled();
       });
 
-      // Simulate a malformed event (null payload)
+      act(() => {
+        simulatePublication('session_started_in_section', {
+          session_id: 'session-x',
+          problem: makeProblem(),
+        });
+      });
+
+      expect(result.current.currentSessionId).toBeNull();
+    });
+
+    it('ignores malformed events without throwing', async () => {
+      const { result } = renderHook(() =>
+        useSectionEvents({ sectionId: 'section-1', initialCurrentSessionId: 'session-1' })
+      );
+
+      await waitFor(() => {
+        expect(mockCentrifuge.connect).toHaveBeenCalled();
+      });
+
       expect(() => {
         act(() => {
           if (mockPublicationCallback) {
@@ -491,50 +352,13 @@ describe('useSectionEvents', () => {
         });
       }).not.toThrow();
 
-      // State should be unchanged
-      expect(result.current.activeSessions).toHaveLength(1);
-    });
-
-    it('should continue handling valid events after an unrecognized one', async () => {
-      const { result } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [],
-        })
-      );
-
-      await waitFor(() => {
-        expect(mockCentrifuge.connect).toHaveBeenCalled();
-      });
-
-      // Send unknown event first
-      act(() => {
-        if (mockPublicationCallback) {
-          mockPublicationCallback({ data: { type: 'unknown_future_event', data: {}, timestamp: new Date().toISOString() } });
-        }
-      });
-
-      // Then send a valid event
-      act(() => {
-        simulatePublication('session_started_in_section', {
-          session_id: 'session-new',
-          problem: null,
-        });
-      });
-
-      expect(result.current.activeSessions).toHaveLength(1);
-      expect(result.current.activeSessions[0].id).toBe('session-new');
+      expect(result.current.currentSessionId).toBe('session-1');
     });
   });
 
   describe('cleanup', () => {
     it('unsubscribes and disconnects on unmount', async () => {
-      const { unmount } = renderHook(() =>
-        useSectionEvents({
-          sectionId: 'section-1',
-          initialActiveSessions: [],
-        })
-      );
+      const { unmount } = renderHook(() => useSectionEvents({ sectionId: 'section-1' }));
 
       await waitFor(() => {
         expect(mockCentrifuge.connect).toHaveBeenCalled();
@@ -548,8 +372,7 @@ describe('useSectionEvents', () => {
 
     it('cleans up previous subscription when sectionId changes', async () => {
       const { rerender } = renderHook(
-        ({ sectionId }: { sectionId: string }) =>
-          useSectionEvents({ sectionId, initialActiveSessions: [] }),
+        ({ sectionId }: { sectionId: string }) => useSectionEvents({ sectionId }),
         { initialProps: { sectionId: 'section-1' } }
       );
 
@@ -559,7 +382,6 @@ describe('useSectionEvents', () => {
 
       rerender({ sectionId: 'section-2' });
 
-      // The previous subscription should have been cleaned up
       expect(mockSubscription.unsubscribe).toHaveBeenCalled();
       expect(mockCentrifuge.disconnect).toHaveBeenCalled();
     });

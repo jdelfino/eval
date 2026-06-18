@@ -257,8 +257,18 @@ type Section struct {
 	Semester    *string   `json:"semester"`
 	JoinCode    string    `json:"join_code"`
 	Active      bool      `json:"active"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	// CurrentSessionID is the G4 section pointer: the section's current (live)
+	// session, or nil if none is set. Per G4-R3 it is never auto-cleared — a
+	// stale value is the correct late-join target. Exposed for late join.
+	CurrentSessionID *uuid.UUID `json:"current_session_id"`
+	// CurrentProblemID is the problem id of the pointer session's problem
+	// (sessions.problem->>'id'), or nil when no pointer is set. Exposed so the
+	// student late-join flow can verify the opened work's problem matches the
+	// pointer's problem before joining the live session (G4 B1 problem-identity
+	// gate) without a second fetch. Derived via LEFT JOIN on the pointer session.
+	CurrentProblemID *uuid.UUID `json:"current_problem_id"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 // CreateSectionParams contains the fields for creating a section.
@@ -303,6 +313,15 @@ type SectionRepository interface {
 	// DeleteSection deletes a section by ID.
 	// Returns ErrNotFound if the section does not exist.
 	DeleteSection(ctx context.Context, id uuid.UUID) error
+	// SetSectionCurrentSession sets the section's current-session pointer
+	// (G4 section-pointer model). Returns ErrNotFound if the section does
+	// not exist.
+	SetSectionCurrentSession(ctx context.Context, sectionID, sessionID uuid.UUID) error
+	// ClearSectionCurrentSession clears the section's current-session pointer
+	// (sets it to NULL). G4-R3: this is the ONLY path that clears the pointer;
+	// it must never be called automatically from session create/end/delete.
+	// Returns ErrNotFound if the section does not exist.
+	ClearSectionCurrentSession(ctx context.Context, sectionID uuid.UUID) error
 }
 
 // Session represents a coding session within a section.
@@ -363,11 +382,10 @@ type SessionRepository interface {
 	// GetSession retrieves a session by ID.
 	// Returns ErrNotFound if the session does not exist.
 	GetSession(ctx context.Context, id uuid.UUID) (*Session, error)
-	// CreateSession creates a new session and returns it.
+	// CreateSession creates a new session and returns it. Under the G4
+	// section-pointer model this is a plain persistent-document create; the
+	// section pointer is set separately via SetSectionCurrentSession.
 	CreateSession(ctx context.Context, params CreateSessionParams) (*Session, error)
-	// EndActiveSessions marks all active sessions in a section as completed
-	// and returns their IDs. Used to auto-end old sessions when a new one starts.
-	EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error)
 	// UpdateSession updates a session's mutable fields and returns the updated session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSession(ctx context.Context, id uuid.UUID, params UpdateSessionParams) (*Session, error)
@@ -377,14 +395,6 @@ type SessionRepository interface {
 	// UpdateSessionProblem updates the problem JSON snapshot for an active session.
 	// Returns ErrNotFound if the session does not exist.
 	UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem json.RawMessage) (*Session, error)
-	// CreateSessionReplacingActive atomically ends any active sessions in the section
-	// and creates a new session, all within a single transaction.
-	// Returns the new session and the IDs of ended sessions.
-	CreateSessionReplacingActive(ctx context.Context, params CreateSessionParams) (*Session, []uuid.UUID, error)
-	// ReopenSessionReplacingActive atomically ends any other active sessions in the section
-	// and reopens the given completed session, all within a single transaction.
-	// Returns the reopened session and the IDs of ended sessions.
-	ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*Session, []uuid.UUID, error)
 }
 
 // MembershipRepository defines the interface for section membership data access.
@@ -415,10 +425,21 @@ type SessionStudent struct {
 	SessionID     uuid.UUID       `json:"session_id"`
 	UserID        uuid.UUID       `json:"user_id"`
 	Name          string          `json:"name"`
-	Code          string          `json:"code"`                      // From student_work
-	TestCases     json.RawMessage `json:"test_cases"`                // From student_work
-	JoinedAt      time.Time       `json:"joined_at"`                 // When student joined session
-	StudentWorkID *uuid.UUID      `json:"student_work_id,omitempty"` // Link to student_work
+	Code          string          `json:"code"`                       // From student_work
+	TestCases     json.RawMessage `json:"test_cases"`                 // From student_work
+	JoinedAt      time.Time       `json:"joined_at"`                  // When student joined session
+	StudentWorkID *uuid.UUID      `json:"student_work_id,omitempty"`  // Link to student_work
+	// LastRunSummary is the student's most recent run-all summary
+	// ({passed,failed,errors,total,at}). G4 F8 — CLIENT-REPORTED and never
+	// server-verified (classroom-grade; not for grading). NULL/omitted = never ran.
+	LastRunSummary json.RawMessage `json:"last_run_summary,omitempty"`
+	// LastActivity is the student's most recent code-write timestamp, sourced from
+	// student_work.last_update via JOIN. Exposed so the dashboard's initial-load /
+	// polling path can show honest "idle Nm" instead of deriving freshness from
+	// joined_at (which would falsely read fresh before any websocket update). Only
+	// populated by the list/get paths that JOIN student_work; zero on the bare
+	// session_students row (e.g. JoinSession).
+	LastActivity time.Time `json:"last_activity"`
 }
 
 // JoinSessionParams contains the fields for joining a session.
@@ -438,6 +459,11 @@ type SessionStudentRepository interface {
 	// GetSessionStudent retrieves a single student's record in a session.
 	// Returns ErrNotFound if the student is not in the session.
 	GetSessionStudent(ctx context.Context, sessionID, userID uuid.UUID) (*SessionStudent, error)
+	// SetSessionStudentRunSummary persists a student's most recent run-all
+	// summary (G4 F8). The summary is CLIENT-REPORTED and never server-verified
+	// (classroom-grade; not for grading). Returns ErrNotFound if no
+	// (session_id, user_id) row exists.
+	SetSessionStudentRunSummary(ctx context.Context, sessionID, userID uuid.UUID, summary json.RawMessage) error
 }
 
 // Revision represents a code revision within a session.
@@ -478,12 +504,23 @@ type RevisionRepository interface {
 
 // DashboardSection represents a section summary in the instructor dashboard.
 type DashboardSection struct {
-	ID              uuid.UUID  `json:"id"`
-	Name            string     `json:"name"`
-	JoinCode        string     `json:"join_code"`
-	Semester        *string    `json:"semester,omitempty"`
-	StudentCount    int        `json:"studentCount"`
-	ActiveSessionID *uuid.UUID `json:"activeSessionId,omitempty"`
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	JoinCode     string    `json:"join_code"`
+	Semester     *string   `json:"semester,omitempty"`
+	StudentCount int       `json:"studentCount"`
+	// CurrentSessionID is the G4 section pointer (sections.current_session_id).
+	// T13 switched the dashboard SQL to derive the live indicator from this
+	// pointer instead of the retired status='active' lifecycle. A non-null
+	// value is the section's "current problem" / late-join target (G4-R3); the
+	// pointer alone does NOT imply "live now" — that additionally requires
+	// LastActivity to be recent (60-min liveness heuristic, applied client-side).
+	CurrentSessionID *uuid.UUID `json:"currentSessionId,omitempty"`
+	// LastActivity is the current pointer session's last_activity timestamp,
+	// or nil when the pointer is unset. The instructor home strip uses it for
+	// the 60-min "Live now" liveness heuristic (no server-side Centrifugo
+	// presence exists). Sourced from sessions.last_activity via the pointer join.
+	LastActivity *time.Time `json:"lastActivity,omitempty"`
 }
 
 // DashboardClass represents a class summary in the instructor dashboard.

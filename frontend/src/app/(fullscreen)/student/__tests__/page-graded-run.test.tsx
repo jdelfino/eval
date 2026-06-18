@@ -99,11 +99,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   },
 }));
 
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 const fakeTestCaseIO = {
   kind: 'io' as const,
   name: 'Case 1',

@@ -76,11 +76,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   __esModule: true,
   default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 
 // Import after mocks

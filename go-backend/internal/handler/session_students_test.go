@@ -57,6 +57,12 @@ func (r *sessionStudentTestRepos) GetSessionStudent(ctx context.Context, session
 	}
 	return nil, store.ErrNotFound
 }
+func (r *sessionStudentTestRepos) SetSessionStudentRunSummary(ctx context.Context, sessionID, userID uuid.UUID, summary json.RawMessage) error {
+	if r.students != nil {
+		return r.students.SetSessionStudentRunSummary(ctx, sessionID, userID, summary)
+	}
+	return nil
+}
 func studRepos(repo *mockSessionStudentRepo) *sessionStudentTestRepos {
 	return &sessionStudentTestRepos{students: repo}
 }
@@ -1187,6 +1193,181 @@ func TestUpdateCode_DBError_NoPublish(t *testing.T) {
 	defer pub.mu.Unlock()
 	if len(pub.codeUpdatedCalls) != 0 {
 		t.Errorf("expected no CodeUpdated calls when DB fails, got %d", len(pub.codeUpdatedCalls))
+	}
+}
+
+// --- UpdateCode run_summary (G4 F8) tests ---
+
+// TestUpdateCode_WithRunSummary_PersistsAndPublishes verifies that a run_summary
+// supplied with the code update is persisted via SetSessionStudentRunSummary and
+// forwarded on the CodeUpdated event. Contract: a student's run-all result must
+// reach both the DB (for late-join state) and live subscribers (for dashboard
+// glyphs). Breaks: instructors lose per-student pass/fail signal.
+func TestUpdateCode_WithRunSummary_PersistsAndPublishes(t *testing.T) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+	userID := ss.UserID
+	summary := json.RawMessage(`{"passed":2,"failed":1,"errors":0,"total":3,"at":"2026-06-18T00:00:00Z"}`)
+
+	var persisted json.RawMessage
+	persistCalls := 0
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return ss, nil
+		},
+		setSessionStudentRunSummaryFn: func(_ context.Context, sessID, uID uuid.UUID, s json.RawMessage) error {
+			persistCalls++
+			if sessID != ss.SessionID {
+				t.Errorf("expected session_id %v, got %v", ss.SessionID, sessID)
+			}
+			if uID != userID {
+				t.Errorf("expected user_id %v, got %v", userID, uID)
+			}
+			persisted = s
+			return nil
+		},
+	}
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			return &store.StudentWork{ID: studentWorkID, Code: *params.Code}, nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionStudentHandler(pub)
+
+	body := []byte(`{"code":"x = 1","run_summary":{"passed":2,"failed":1,"errors":0,"total":3,"at":"2026-06-18T00:00:00Z"}}`)
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: userID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistCalls != 1 {
+		t.Fatalf("expected 1 SetSessionStudentRunSummary call, got %d", persistCalls)
+	}
+	if string(persisted) != string(summary) {
+		t.Errorf("persisted summary = %q, want %q", string(persisted), string(summary))
+	}
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	call := pub.codeUpdatedCalls[0]
+	if string(call.runSummary) != string(summary) {
+		t.Errorf("published run_summary = %q, want %q", string(call.runSummary), string(summary))
+	}
+}
+
+// TestUpdateCode_WithoutRunSummary_NoWriteNoPayload verifies that a plain code
+// update (no run_summary) does NOT call SetSessionStudentRunSummary and publishes
+// no run_summary, so an autosave can never clobber a prior run-all result.
+func TestUpdateCode_WithoutRunSummary_NoWriteNoPayload(t *testing.T) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+
+	persistCalls := 0
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return ss, nil
+		},
+		setSessionStudentRunSummaryFn: func(_ context.Context, _, _ uuid.UUID, _ json.RawMessage) error {
+			persistCalls++
+			return nil
+		},
+	}
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			return &store.StudentWork{ID: studentWorkID, Code: *params.Code}, nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionStudentHandler(pub)
+
+	body := []byte(`{"code":"x = 1"}`)
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: ss.UserID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistCalls != 0 {
+		t.Errorf("expected no SetSessionStudentRunSummary calls, got %d", persistCalls)
+	}
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if call := pub.codeUpdatedCalls[0]; call.runSummary != nil {
+		t.Errorf("expected nil run_summary in payload, got %q", string(call.runSummary))
+	}
+}
+
+// TestUpdateCode_MalformedRunSummary_400 verifies a non-object run_summary is
+// rejected with 400 and nothing is persisted or published. Contract: lightweight
+// shape validation guards the column from junk while staying classroom-grade.
+func TestUpdateCode_MalformedRunSummary_400(t *testing.T) {
+	ss := testSessionStudent()
+	studentWorkID := uuid.MustParse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+	ss.StudentWorkID = &studentWorkID
+
+	persistCalls := 0
+	studentRepo := &mockSessionStudentRepo{
+		getSessionStudentFn: func(_ context.Context, _, _ uuid.UUID) (*store.SessionStudent, error) {
+			return ss, nil
+		},
+		setSessionStudentRunSummaryFn: func(_ context.Context, _, _ uuid.UUID, _ json.RawMessage) error {
+			persistCalls++
+			return nil
+		},
+	}
+	workRepo := &mockStudentWorkRepo{
+		updateStudentWorkFn: func(_ context.Context, _ uuid.UUID, params store.UpdateStudentWorkParams) (*store.StudentWork, error) {
+			return &store.StudentWork{ID: studentWorkID, Code: *params.Code}, nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSessionStudentHandler(pub)
+
+	// run_summary is a JSON array, not an object.
+	body := []byte(`{"code":"x = 1","run_summary":[1,2,3]}`)
+	req := httptest.NewRequest(http.MethodPut, "/sessions/"+ss.SessionID.String()+"/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := withChiParam(req.Context(), "id", ss.SessionID.String())
+	ctx = auth.WithUser(ctx, &auth.User{ID: ss.UserID, NamespaceID: "test-ns", Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, studReposWithAllMocks(studentRepo, nil, workRepo))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.UpdateCode(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if persistCalls != 0 {
+		t.Errorf("expected no persist on malformed run_summary, got %d", persistCalls)
+	}
+	time.Sleep(50 * time.Millisecond)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.codeUpdatedCalls) != 0 {
+		t.Errorf("expected no CodeUpdated calls on malformed run_summary, got %d", len(pub.codeUpdatedCalls))
 	}
 }
 

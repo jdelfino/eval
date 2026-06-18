@@ -9,6 +9,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func discardLogger() *slog.Logger {
@@ -49,14 +51,11 @@ func (r *recordingPublisher) waitForCalls(t *testing.T, n int) {
 func (r *recordingPublisher) StudentJoined(_ context.Context, _, _, _ string) error {
 	return r.record("StudentJoined")
 }
-func (r *recordingPublisher) CodeUpdated(_ context.Context, _, _, _ string, _ json.RawMessage) error {
+func (r *recordingPublisher) CodeUpdated(_ context.Context, _, _, _ string, _, _ json.RawMessage) error {
 	return r.record("CodeUpdated")
 }
 func (r *recordingPublisher) SessionEnded(_ context.Context, _, _ string) error {
 	return r.record("SessionEnded")
-}
-func (r *recordingPublisher) SessionReplaced(_ context.Context, _, _ string) error {
-	return r.record("SessionReplaced")
 }
 func (r *recordingPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ string, _ json.RawMessage) error {
 	return r.record("FeaturedStudentChanged")
@@ -64,11 +63,11 @@ func (r *recordingPublisher) FeaturedStudentChanged(_ context.Context, _, _, _ s
 func (r *recordingPublisher) ProblemUpdated(_ context.Context, _, _ string) error {
 	return r.record("ProblemUpdated")
 }
-func (r *recordingPublisher) SessionStartedInSection(_ context.Context, _, _ string, _ json.RawMessage) error {
-	return r.record("SessionStartedInSection")
-}
 func (r *recordingPublisher) SessionEndedInSection(_ context.Context, _, _ string) error {
 	return r.record("SessionEndedInSection")
+}
+func (r *recordingPublisher) SectionCurrentChanged(_ context.Context, _ string, _ *uuid.UUID, _ json.RawMessage) error {
+	return r.record("SectionCurrentChanged")
 }
 
 // Compile-time check that AsyncSessionPublisher implements SessionPublisher.
@@ -95,7 +94,7 @@ func TestAsyncSessionPublisher_CodeUpdated(t *testing.T) {
 	rec := newRecordingPublisher()
 	ap := NewAsyncSessionPublisher(rec, discardLogger())
 
-	err := ap.CodeUpdated(context.Background(), "sess-1", "user-1", "code", nil)
+	err := ap.CodeUpdated(context.Background(), "sess-1", "user-1", "code", nil, nil)
 	if err != nil {
 		t.Fatalf("expected nil error from async call, got %v", err)
 	}
@@ -184,7 +183,7 @@ func TestAsyncSessionPublisher_MultipleCalls(t *testing.T) {
 	ap := NewAsyncSessionPublisher(rec, discardLogger())
 
 	_ = ap.StudentJoined(context.Background(), "s1", "u1", "Alice")
-	_ = ap.CodeUpdated(context.Background(), "s1", "u1", "code", nil)
+	_ = ap.CodeUpdated(context.Background(), "s1", "u1", "code", nil, nil)
 	_ = ap.SessionEnded(context.Background(), "s1", "done")
 
 	rec.waitForCalls(t, 3)
@@ -193,23 +192,6 @@ func TestAsyncSessionPublisher_MultipleCalls(t *testing.T) {
 	defer rec.mu.Unlock()
 	if len(rec.calls) != 3 {
 		t.Errorf("expected 3 calls, got %d: %v", len(rec.calls), rec.calls)
-	}
-}
-
-func TestAsyncSessionPublisher_SessionStartedInSection(t *testing.T) {
-	rec := newRecordingPublisher()
-	ap := NewAsyncSessionPublisher(rec, discardLogger())
-
-	err := ap.SessionStartedInSection(context.Background(), "sect-1", "sess-1", json.RawMessage(`{"id":"p1"}`))
-	if err != nil {
-		t.Fatalf("expected nil error from async call, got %v", err)
-	}
-	rec.waitForCalls(t, 1)
-
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	if len(rec.calls) != 1 || rec.calls[0] != "SessionStartedInSection" {
-		t.Errorf("expected [SessionStartedInSection], got %v", rec.calls)
 	}
 }
 
@@ -227,6 +209,24 @@ func TestAsyncSessionPublisher_SessionEndedInSection(t *testing.T) {
 	defer rec.mu.Unlock()
 	if len(rec.calls) != 1 || rec.calls[0] != "SessionEndedInSection" {
 		t.Errorf("expected [SessionEndedInSection], got %v", rec.calls)
+	}
+}
+
+func TestAsyncSessionPublisher_SectionCurrentChanged(t *testing.T) {
+	rec := newRecordingPublisher()
+	ap := NewAsyncSessionPublisher(rec, discardLogger())
+
+	sessID := uuid.New()
+	err := ap.SectionCurrentChanged(context.Background(), "sect-3", &sessID, json.RawMessage(`{"id":"p1"}`))
+	if err != nil {
+		t.Fatalf("expected nil error from async call, got %v", err)
+	}
+	rec.waitForCalls(t, 1)
+
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.calls) != 1 || rec.calls[0] != "SectionCurrentChanged" {
+		t.Errorf("expected [SectionCurrentChanged], got %v", rec.calls)
 	}
 }
 

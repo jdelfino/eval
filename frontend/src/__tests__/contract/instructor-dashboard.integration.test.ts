@@ -4,9 +4,12 @@
  *
  * The InstructorDashboard response contains classes with nested sections.
  * The DashboardSection interface declares camelCase fields (studentCount,
- * activeSessionId). Since apiGet() passes JSON through without transformation,
- * the backend must be sending camelCase for these fields. The contract test
- * asserts the camelCase convention that matches the TypeScript interface.
+ * currentSessionId, lastActivity). Since apiGet() passes JSON through without
+ * transformation, the backend must be sending camelCase for these fields. The
+ * contract test asserts the camelCase convention that matches the TypeScript
+ * interface. G4 (T13): the live indicator is the section pointer
+ * (currentSessionId) plus the pointer session's lastActivity, NOT the retired
+ * status='active'-derived activeSessionId.
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { getInstructorDashboard } from '@/lib/api/instructor';
@@ -70,9 +73,15 @@ describe('getInstructorDashboard()', () => {
     // studentCount is declared as number in DashboardSection
     expect(typeof section.studentCount).toBe('number');
 
-    // activeSessionId is optional per the interface
-    if ('activeSessionId' in section && section.activeSessionId !== undefined) {
-      expect(typeof section.activeSessionId).toBe('string');
+    // currentSessionId (section pointer) is optional per the interface
+    if ('currentSessionId' in section && section.currentSessionId !== undefined) {
+      expect(typeof section.currentSessionId).toBe('string');
+    }
+
+    // lastActivity (pointer session's last_activity) is optional per the interface;
+    // present (ISO 8601 string) only when the pointer is set.
+    if ('lastActivity' in section && section.lastActivity !== undefined) {
+      expect(typeof section.lastActivity).toBe('string');
     }
   });
 });

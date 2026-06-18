@@ -90,3 +90,15 @@ export async function getSectionInstructors(sectionId: string): Promise<SectionM
 export async function deleteSection(sectionId: string): Promise<void> {
   await apiDelete(`/sections/${sectionId}`);
 }
+
+/**
+ * Clear the section's current-session pointer (G4 section-pointer model, T1).
+ *
+ * Used by the instructor "End class" action: it does NOT complete or delete the
+ * session — it only stops late-joiners from being pulled into this problem by
+ * unsetting `current_session_id`. The session document remains browsable.
+ * @param sectionId - The section ID whose pointer to clear
+ */
+export async function clearSectionCurrentSession(sectionId: string): Promise<void> {
+  await apiDelete(`/sections/${sectionId}/current`);
+}

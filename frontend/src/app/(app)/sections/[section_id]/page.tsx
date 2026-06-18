@@ -30,6 +30,12 @@ export default function SectionDetailPage() {
   const { user } = useAuth();
   const { isPreview, previewSectionId, enterPreview, exitPreview } = usePreview();
   const [section, setSection] = useState<SectionDetail | null>(null);
+  // G4 section-pointer model: the section's current-session pointer + the
+  // pointer's problem/last-activity, resolved from getSection().current_session_id
+  // and the pointer's session. Drives the student live card / "Jump in".
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentProblem, setCurrentProblem] = useState<Session['problem']>(null);
+  const [currentLastActivity, setCurrentLastActivity] = useState<string | null>(null);
   const [activeSessions, setActiveSessions] = useState<Session[]>([]);
   const [pastSessions, setPastSessions] = useState<Session[]>([]);
   const [publishedProblems, setPublishedProblems] = useState<PublishedProblemWithStatus[]>([]);
@@ -80,17 +86,29 @@ export default function SectionDetailPage() {
       };
       setSection(sectionDetail);
 
-      // Separate active and past sessions
+      // G4 section-pointer model: resolve the current-session pointer and its
+      // problem/last-activity from the section + the pointer's session. This is
+      // the student-side live/late-join source (NOT status==='active').
+      const pointerId = sectionData.current_session_id ?? null;
+      const pointerSession = pointerId
+        ? sessionsData.find((s: Session) => s.id === pointerId) ?? null
+        : null;
+      setCurrentSessionId(pointerId);
+      setCurrentProblem(pointerSession?.problem ?? null);
+      setCurrentLastActivity(pointerSession?.last_activity ?? null);
+
+      // Separate active and past sessions (instructor view still uses the legacy
+      // status split — owned by InstructorSectionView/T6).
       const active = sessionsData.filter((s: Session) => s.status === 'active');
       const past = sessionsData.filter((s: Session) => s.status !== 'active');
 
       setActiveSessions(active);
       setPastSessions(past);
 
-      // Sort problems: live session problems first, then by last_worked DESC
+      // Sort problems: the current-problem pointer first, then by last_worked DESC.
       const sortedProblems = [...problemsData].sort((a, b) => {
-        const aIsLive = active.some((s) => s.problem?.id === a.problem.id);
-        const bIsLive = active.some((s) => s.problem?.id === b.problem.id);
+        const aIsLive = pointerSession?.problem?.id === a.problem.id;
+        const bIsLive = pointerSession?.problem?.id === b.problem.id;
 
         if (aIsLive && !bIsLive) return -1;
         if (!aIsLive && bIsLive) return 1;
@@ -168,7 +186,9 @@ export default function SectionDetailPage() {
     return (
       <StudentSectionView
         section={section}
-        activeSessions={activeSessions}
+        currentSessionId={currentSessionId}
+        currentProblem={currentProblem}
+        currentLastActivity={currentLastActivity}
         publishedProblems={publishedProblems}
         pastSessions={pastSessions}
         sectionId={section_id}

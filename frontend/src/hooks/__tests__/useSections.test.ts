@@ -7,13 +7,11 @@ import { renderHook, act } from '@testing-library/react';
 const mockListMySections = jest.fn();
 const mockJoinSection = jest.fn();
 const mockLeaveSection = jest.fn();
-const mockGetActiveSessions = jest.fn();
 
 jest.mock('@/lib/api/sections', () => ({
   listMySections: (...args: unknown[]) => mockListMySections(...args),
   joinSection: (...args: unknown[]) => mockJoinSection(...args),
   leaveSection: (...args: unknown[]) => mockLeaveSection(...args),
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
 }));
 
 import { useSections } from '../useSections';
@@ -101,21 +99,13 @@ describe('useSections', () => {
     expect(mockLeaveSection).toHaveBeenCalledWith('s1');
   });
 
-  it('getActiveSessions returns only active sessions', async () => {
-    mockGetActiveSessions.mockResolvedValue([
-      { id: 'sess1', status: 'active' },
-      { id: 'sess2', status: 'completed' },
-      { id: 'sess3', status: 'active' },
-    ]);
+  it('no longer exposes getActiveSessions (retired under the section-pointer model)', () => {
+    /**
+     * Contract: the status==='active' session lifecycle is gone. "Is there a
+     * current problem" is derived from the section pointer at call sites, not via
+     * this hook. Catches: reintroduction of the dead getActiveSessions helper.
+     */
     const { result } = renderHook(() => useSections());
-
-    let sessions: unknown;
-    await act(async () => { sessions = await result.current.getActiveSessions('s1'); });
-
-    expect(sessions).toEqual([
-      { id: 'sess1', status: 'active' },
-      { id: 'sess3', status: 'active' },
-    ]);
-    expect(mockGetActiveSessions).toHaveBeenCalledWith('s1');
+    expect((result.current as unknown as Record<string, unknown>).getActiveSessions).toBeUndefined();
   });
 });

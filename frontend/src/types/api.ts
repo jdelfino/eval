@@ -68,6 +68,26 @@ export interface Section {
   semester: string | null;
   join_code: string;
   active: boolean;
+  /**
+   * G4 section pointer: the section's current (live) session, or null.
+   * Never auto-cleared (G4-R3); a stale value is the correct late-join target.
+   *
+   * Optional on the client type only to avoid forcing every existing Section
+   * test fixture to set it; the backend always serializes the key (null when
+   * unset). The contract test asserts presence against the real response.
+   */
+  current_session_id?: string | null;
+  /**
+   * G4 B1 problem-identity gate: the problem id of the pointer session's problem,
+   * or null when no pointer is set. Derived by the backend via a LEFT JOIN on the
+   * pointer session. Lets the student late-join flow verify the opened work's
+   * problem matches the pointer's problem before joining the live session, and
+   * lets useSectionEvents seed currentProblemId without a second fetch.
+   *
+   * Optional on the client type only to avoid forcing every existing Section test
+   * fixture to set it; the backend always serializes the key (null when unset).
+   */
+  current_problem_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -105,6 +125,24 @@ export interface Session {
   ended_at: string | null;
 }
 
+/**
+ * RunSummary — client-reported per-student run-all summary (G4 F8).
+ *
+ * Sent by the student workspace on PUT /sessions/{id}/code after a run-all (only),
+ * persisted on session_students, and fanned out on student_code_updated. Matches
+ * the {passed,failed,errors,total,at} shape persisted in last_run_summary.
+ *
+ * CLASSROOM-GRADE: this value is client-reported and NOT server-verified. Use it
+ * only for live-dashboard glyphs/counts, never for grading.
+ */
+export interface RunSummary {
+  passed: number;
+  failed: number;
+  errors: number;
+  total: number;
+  at: string; // ISO-8601 timestamp of the run
+}
+
 export interface SessionStudent {
   id: string;
   session_id: string;
@@ -114,6 +152,8 @@ export interface SessionStudent {
   test_cases: IOTestCase[] | null; // Matches Go TestCases json.RawMessage (IOTestCase[] from student_work)
   joined_at: string;
   student_work_id?: string; // omitempty in Go — present when student has linked work
+  last_run_summary?: RunSummary; // G4 F8 — client-reported run-all summary; omitted when never run
+  last_activity?: string; // student_work.last_update — honest last-activity for "idle Nm" on initial load
 }
 
 export interface SectionMembership {

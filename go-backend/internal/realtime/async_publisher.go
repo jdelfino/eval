@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // asyncPublishTimeout is the maximum time allowed for an async publish operation.
@@ -47,9 +49,9 @@ func (a *AsyncSessionPublisher) StudentJoined(ctx context.Context, sessionID, us
 	return nil
 }
 
-func (a *AsyncSessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases json.RawMessage) error {
+func (a *AsyncSessionPublisher) CodeUpdated(ctx context.Context, sessionID, userID, code string, testCases, runSummary json.RawMessage) error {
 	a.runAsync(ctx, "CodeUpdated", func(ctx context.Context) error {
-		return a.inner.CodeUpdated(ctx, sessionID, userID, code, testCases)
+		return a.inner.CodeUpdated(ctx, sessionID, userID, code, testCases, runSummary)
 	})
 	return nil
 }
@@ -57,13 +59,6 @@ func (a *AsyncSessionPublisher) CodeUpdated(ctx context.Context, sessionID, user
 func (a *AsyncSessionPublisher) SessionEnded(ctx context.Context, sessionID, reason string) error {
 	a.runAsync(ctx, "SessionEnded", func(ctx context.Context) error {
 		return a.inner.SessionEnded(ctx, sessionID, reason)
-	})
-	return nil
-}
-
-func (a *AsyncSessionPublisher) SessionReplaced(ctx context.Context, oldSessionID, newSessionID string) error {
-	a.runAsync(ctx, "SessionReplaced", func(ctx context.Context) error {
-		return a.inner.SessionReplaced(ctx, oldSessionID, newSessionID)
 	})
 	return nil
 }
@@ -82,16 +77,16 @@ func (a *AsyncSessionPublisher) ProblemUpdated(ctx context.Context, sessionID, p
 	return nil
 }
 
-func (a *AsyncSessionPublisher) SessionStartedInSection(ctx context.Context, sectionID, sessionID string, problem json.RawMessage) error {
-	a.runAsync(ctx, "SessionStartedInSection", func(ctx context.Context) error {
-		return a.inner.SessionStartedInSection(ctx, sectionID, sessionID, problem)
+func (a *AsyncSessionPublisher) SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error {
+	a.runAsync(ctx, "SessionEndedInSection", func(ctx context.Context) error {
+		return a.inner.SessionEndedInSection(ctx, sectionID, sessionID)
 	})
 	return nil
 }
 
-func (a *AsyncSessionPublisher) SessionEndedInSection(ctx context.Context, sectionID, sessionID string) error {
-	a.runAsync(ctx, "SessionEndedInSection", func(ctx context.Context) error {
-		return a.inner.SessionEndedInSection(ctx, sectionID, sessionID)
+func (a *AsyncSessionPublisher) SectionCurrentChanged(ctx context.Context, sectionID string, sessionID *uuid.UUID, problem json.RawMessage) error {
+	a.runAsync(ctx, "SectionCurrentChanged", func(ctx context.Context) error {
+		return a.inner.SectionCurrentChanged(ctx, sectionID, sessionID, problem)
 	})
 	return nil
 }

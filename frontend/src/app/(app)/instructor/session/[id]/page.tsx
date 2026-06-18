@@ -18,13 +18,15 @@ import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useSessionOperations } from '@/hooks/useSessionOperations';
 import { useAuth } from '@/contexts/AuthContext';
 import { SessionView } from '../../components/SessionView';
+import SessionLaunchStrip from '../../components/SessionLaunchStrip';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Spinner } from '@/components/ui/Spinner';
 import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { mapToDotStatus } from '@/lib/connectionStatus';
 import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem, IOTestCase } from '@/types/api';
-import { reopenSession } from '@/lib/api/sessions';
+import { getSection } from '@/lib/api/sections';
+import { peekSessionLaunched, clearSessionLaunched } from '@/lib/session-launch-flag';
 import { executeCode as apiExecuteCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
 /**
  * Extended session state from API that includes section info
@@ -45,11 +47,19 @@ export default function InstructorSessionPage() {
 
   // Local state
   const [error, setError] = useState<string | null>(null);
-  const [reopening, setReopening] = useState(false);
   const [sessionProblem, setSessionProblem] = useState<Problem | null>(null);
   const [sessionTestCases, setSessionTestCases] = useState<IOTestCase[]>([]);
+  // Post-launch confirmation strip: shown once when this session was just
+  // created in this tab (sessionStorage flag). Dismiss clears the flag.
+  const [showLaunchStrip, setShowLaunchStrip] = useState(false);
+  // Whether this session is still the section's current (live) problem. When the
+  // pointer no longer matches, we show a neutral read-only affordance instead of
+  // an "ended" banner — sessions are persistent under the pointer model (T1).
+  const [isCurrentForSection, setIsCurrentForSection] = useState(true);
 
-  // Realtime session hook
+  // Realtime session hook.
+  // NOTE: `replacementInfo` is intentionally NOT consumed here. The ended/reopen
+  // and session-replaced UI is retired under the section-pointer model (B2).
   const {
     session: realtimeSessionRaw,
     joinCode: join_code,
@@ -60,7 +70,6 @@ export default function InstructorSessionPage() {
     connectionError,
     featureStudent,
     clearFeaturedStudent,
-    replacementInfo,
   } = useRealtimeSession({
     session_id: session_id || '',
     user_id: user?.id,
@@ -72,7 +81,6 @@ export default function InstructorSessionPage() {
 
   // Session operations hook
   const {
-    endSession: apiEndSession,
     updateProblem: apiUpdateProblem,
   } = useSessionOperations();
 
@@ -95,6 +103,8 @@ export default function InstructorSessionPage() {
       name: s.name,
       code: s.code,
       test_cases: s.test_cases,
+      last_update: s.last_update,
+      last_run_summary: s.last_run_summary,
     })),
     [realtimeStudents]
   );
@@ -115,35 +125,50 @@ export default function InstructorSessionPage() {
     setSessionTestCases(realtimeSession.problem?.test_cases ?? []);
   }, [realtimeSession]);
 
-
-  // Handle session ended state - status is 'active' or 'completed', not 'ended'
-  const isSessionEnded = realtimeSession?.status === 'completed';
-
-  const handleReopenSession = useCallback(async () => {
-    if (!session_id) return;
-    try {
-      setReopening(true);
-      await reopenSession(session_id);
-      // Reload the page to get fresh active session state
-      window.location.reload();
-    } catch (err: any) {
-      setError(err.message || 'Failed to reopen session');
-    } finally {
-      setReopening(false);
+  // Show the post-launch confirmation strip once if this session was just
+  // created in this tab. Read-only peek so a reload before dismiss re-shows it.
+  useEffect(() => {
+    if (session_id && peekSessionLaunched(session_id)) {
+      setShowLaunchStrip(true);
     }
   }, [session_id]);
 
-  // Handlers
+  // Determine whether this session is still the section's current problem by
+  // comparing this session id against the section pointer. When it no longer
+  // matches, render a neutral read-only affordance (no reopen/replace actions).
+  useEffect(() => {
+    const sectionId = realtimeSession?.section_id;
+    if (!sectionId || !session_id) return;
+    let cancelled = false;
+    getSection(sectionId)
+      .then((section) => {
+        if (cancelled) return;
+        // Treat as current only when the pointer explicitly matches this
+        // session. A null/undefined pointer means the class is no longer
+        // pointed here.
+        setIsCurrentForSection(section.current_session_id === session_id);
+      })
+      .catch(() => {
+        // Non-fatal: default to "current" so we never falsely show the banner.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [realtimeSession?.section_id, session_id]);
+
+  const handleDismissLaunchStrip = useCallback(() => {
+    setShowLaunchStrip(false);
+    if (session_id) {
+      clearSessionLaunched(session_id);
+    }
+  }, [session_id]);
+
+  // "End class" navigates back to the instructor home. The section-pointer clear
+  // call itself is performed inside SessionControls (see clearSectionCurrentSession).
   const handleEndSession = useCallback(async () => {
     if (!session_id) return;
-
-    try {
-      await apiEndSession(session_id);
-      router.push('/instructor');
-    } catch (err: any) {
-      setError(err.message || 'Failed to end session');
-    }
-  }, [session_id, apiEndSession, router]);
+    router.push('/instructor');
+  }, [session_id, router]);
 
   const handleUpdateProblem = useCallback(async (
     problem: ApiProblem
@@ -222,54 +247,42 @@ export default function InstructorSessionPage() {
 
   return (
     <div className="space-y-6">
+      {/* Post-launch confirmation strip (shown once after session creation) */}
+      {showLaunchStrip && join_code && (
+        <SessionLaunchStrip
+          sectionName={sessionContext?.section_name || 'your class'}
+          joinCode={join_code}
+          sessionId={session_id}
+          madeCurrent={isCurrentForSection}
+          onDismiss={handleDismissLaunchStrip}
+        />
+      )}
+
       {/* Connection status indicator */}
       <div className="px-6">
         <ConnectionDot status={mapToDotStatus(connectionStatus)} />
       </div>
 
-      {/* Session ended banner with reopen option */}
-      {isSessionEnded && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center justify-between" data-testid="session-ended-banner">
-          <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-yellow-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-            <span className="text-yellow-800 font-medium">
-              {replacementInfo
-                ? 'A new session has been started.'
-                : 'This session has ended. You are viewing it in read-only mode.'}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {replacementInfo && (
-              <button
-                onClick={() => router.push(`/instructor/session/${replacementInfo.new_session_id}`)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                data-testid="go-to-new-session-btn"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                Go to New Session
-              </button>
-            )}
-            <button
-              onClick={handleReopenSession}
-              disabled={reopening}
-              className="px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              data-testid="reopen-session-btn"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              {reopening ? 'Reopening...' : 'Reopen Session'}
-            </button>
-          </div>
+      {/*
+        Neutral read-only affordance when the section pointer no longer targets
+        this session (e.g. instructor ended the class or started a new problem).
+        The session document still renders below — there are no reopen/replace
+        actions under the section-pointer model.
+      */}
+      {!isCurrentForSection && (
+        <div
+          className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-3"
+          data-testid="not-current-problem-notice"
+        >
+          <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm text-gray-600">This is no longer the current class problem.</span>
         </div>
       )}
 
       {/* Errors */}
-      {connectionError && !isSessionEnded && (
+      {connectionError && (
         <ErrorAlert error={connectionError} title="Connection Error" variant="warning" showHelpText={true} />
       )}
 
@@ -281,6 +294,7 @@ export default function InstructorSessionPage() {
       {session_id && (
         <SessionView
           session_id={session_id}
+          sectionId={realtimeSession?.section_id}
           join_code={join_code}
           sessionContext={sessionContext}
           students={students}
@@ -293,7 +307,6 @@ export default function InstructorSessionPage() {
           onClearPublicView={handleClearPublicView}
           executeCode={handleExecuteCode}
           featured_student_id={realtimeSession?.featured_student_id}
-          forceDesktop
         />
       )}
     </div>

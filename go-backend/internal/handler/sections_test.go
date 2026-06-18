@@ -26,9 +26,11 @@ type mockSectionRepo struct {
 	getSectionFn             func(ctx context.Context, id uuid.UUID) (*store.Section, error)
 	createSectionFn          func(ctx context.Context, params store.CreateSectionParams) (*store.Section, error)
 	updateSectionFn          func(ctx context.Context, id uuid.UUID, params store.UpdateSectionParams) (*store.Section, error)
-	deleteSectionFn          func(ctx context.Context, id uuid.UUID) error
-	listMySectionsFn         func(ctx context.Context, userID uuid.UUID) ([]store.MySectionInfo, error)
-	updateSectionJoinCodeFn  func(ctx context.Context, id uuid.UUID, joinCode string) (*store.Section, error)
+	deleteSectionFn             func(ctx context.Context, id uuid.UUID) error
+	listMySectionsFn            func(ctx context.Context, userID uuid.UUID) ([]store.MySectionInfo, error)
+	updateSectionJoinCodeFn     func(ctx context.Context, id uuid.UUID, joinCode string) (*store.Section, error)
+	setSectionCurrentSessionFn  func(ctx context.Context, sectionID, sessionID uuid.UUID) error
+	clearSectionCurrentSessionFn func(ctx context.Context, sectionID uuid.UUID) error
 }
 
 func (m *mockSectionRepo) ListSectionsByClass(ctx context.Context, classID uuid.UUID) ([]store.Section, error) {
@@ -63,6 +65,20 @@ func (m *mockSectionRepo) UpdateSectionJoinCode(ctx context.Context, id uuid.UUI
 		return m.updateSectionJoinCodeFn(ctx, id, joinCode)
 	}
 	return nil, nil
+}
+
+func (m *mockSectionRepo) SetSectionCurrentSession(ctx context.Context, sectionID, sessionID uuid.UUID) error {
+	if m.setSectionCurrentSessionFn != nil {
+		return m.setSectionCurrentSessionFn(ctx, sectionID, sessionID)
+	}
+	return nil
+}
+
+func (m *mockSectionRepo) ClearSectionCurrentSession(ctx context.Context, sectionID uuid.UUID) error {
+	if m.clearSectionCurrentSessionFn != nil {
+		return m.clearSectionCurrentSessionFn(ctx, sectionID)
+	}
+	return nil
 }
 
 func testSection() *store.Section {
@@ -621,6 +637,108 @@ func TestDeleteSection_RBACForbidden(t *testing.T) {
 	}
 }
 
+// TestClearCurrent_Success verifies DELETE /sections/{id}/current clears the
+// section pointer, publishes section_current_changed with session_id: null, and
+// returns 204.
+func TestClearCurrent_Success(t *testing.T) {
+	sectionID := uuid.New()
+	var cleared uuid.UUID
+	repo := &mockSectionRepo{
+		clearSectionCurrentSessionFn: func(_ context.Context, id uuid.UUID) error {
+			cleared = id
+			return nil
+		},
+	}
+
+	pub := newMockPublisher()
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil).WithPublisher(pub)
+	req := httptest.NewRequest(http.MethodDelete, "/"+sectionID.String()+"/current", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sectionID.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ClearCurrent(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if cleared != sectionID {
+		t.Errorf("expected clear on section %q, got %q", sectionID, cleared)
+	}
+
+	pub.waitForCalls(t, 1)
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sectionCurrentChangedCalls) != 1 {
+		t.Fatalf("expected 1 SectionCurrentChanged call, got %d", len(pub.sectionCurrentChangedCalls))
+	}
+	call := pub.sectionCurrentChangedCalls[0]
+	if call.sectionID != sectionID.String() {
+		t.Errorf("expected sectionID %q, got %q", sectionID, call.sectionID)
+	}
+	if call.sessionID != nil {
+		t.Errorf("expected nil session_id on clear, got %v", *call.sessionID)
+	}
+}
+
+// TestClearCurrent_NotFound verifies an unknown section returns 404 and does not
+// publish.
+func TestClearCurrent_NotFound(t *testing.T) {
+	repo := &mockSectionRepo{
+		clearSectionCurrentSessionFn: func(_ context.Context, _ uuid.UUID) error {
+			return store.ErrNotFound
+		},
+	}
+
+	pub := newMockPublisher()
+	id := uuid.New()
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil).WithPublisher(pub)
+	req := httptest.NewRequest(http.MethodDelete, "/"+id.String()+"/current", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", id.String())
+	ctx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
+	ctx = auth.WithUser(ctx, &auth.User{ID: uuid.New(), Role: auth.RoleInstructor})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.ClearCurrent(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	if len(pub.sectionCurrentChangedCalls) != 0 {
+		t.Errorf("expected no publish on not-found, got %d", len(pub.sectionCurrentChangedCalls))
+	}
+}
+
+// TestClearCurrent_RBACForbidden verifies the pointer-write gate: a student is
+// blocked by PermContentManage on DELETE /sections/{id}/current.
+func TestClearCurrent_RBACForbidden(t *testing.T) {
+	repo := &mockSectionRepo{}
+	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
+	router := h.Routes()
+
+	id := uuid.New()
+	req := httptest.NewRequest(http.MethodDelete, "/"+id.String()+"/current", nil)
+	ctx := auth.WithUser(req.Context(), &auth.User{ID: uuid.New(), Role: auth.RoleStudent})
+	ctx = store.WithRepos(ctx, secRepos(repo, nil, nil, nil))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for student DELETE current, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCreateSection_MissingName(t *testing.T) {
 	classID := uuid.New()
 	h := NewSectionHandler(NewMembershipHandler(), nil, nil, nil)
@@ -966,6 +1084,12 @@ func (r *sectionTestRepos) ListMySections(ctx context.Context, userID uuid.UUID)
 }
 func (r *sectionTestRepos) UpdateSectionJoinCode(ctx context.Context, id uuid.UUID, joinCode string) (*store.Section, error) {
 	return r.sec.UpdateSectionJoinCode(ctx, id, joinCode)
+}
+func (r *sectionTestRepos) SetSectionCurrentSession(ctx context.Context, sectionID, sessionID uuid.UUID) error {
+	return r.sec.SetSectionCurrentSession(ctx, sectionID, sessionID)
+}
+func (r *sectionTestRepos) ClearSectionCurrentSession(ctx context.Context, sectionID uuid.UUID) error {
+	return r.sec.ClearSectionCurrentSession(ctx, sectionID)
 }
 func (r *sectionTestRepos) ListSessions(ctx context.Context, filters store.SessionFilters) ([]store.Session, error) {
 	return r.sess.ListSessions(ctx, filters)

@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -154,6 +155,297 @@ func TestIntegration_CreateSession(t *testing.T) {
 			t.Error("created_at should be set")
 		}
 	})
+}
+
+// =============================================================================
+// Test: Section current-session pointer (G4) - SetSectionCurrentSession,
+// ClearSectionCurrentSession, and read-path exposure across GetSection,
+// ListSectionsByClass, ListMySections.
+// =============================================================================
+
+func TestIntegration_SectionCurrentSessionPointer(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	instructorID := uuid.New()
+	db.createUser(ctx, t, instructorID, "ptr-instr@test.com", "instructor", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "Pointer Class", instructorID)
+	sectionID := uuid.New()
+	db.createSection(ctx, t, sectionID, nsID, classID, "Pointer Section", "PTR1")
+	// Instructor must be a section instructor for can_manage_section RLS on UPDATE.
+	db.createMembership(ctx, t, instructorID, sectionID, "instructor")
+	sessionID := uuid.New()
+	db.createSession(ctx, t, sessionID, nsID, sectionID, "Pointer Section", instructorID)
+	// Give the pointer session a problem with a known id so the derived
+	// current_problem_id (sessions.problem->>'id') can be asserted on the read paths.
+	problemID := uuid.New()
+	if err := db.execAsSuperuser(ctx,
+		`UPDATE sessions SET problem = $2 WHERE id = $1`,
+		sessionID, fmt.Sprintf(`{"id":"%s","title":"Pointer Problem"}`, problemID)); err != nil {
+		t.Fatalf("set session problem: %v", err)
+	}
+
+	authInstructor := &auth.User{
+		ID:          instructorID,
+		Email:       "ptr-instr@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	t.Run("set then read across all section read paths", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.SetSectionCurrentSession(ctx, sectionID, sessionID); err != nil {
+			t.Fatalf("SetSectionCurrentSession: %v", err)
+		}
+
+		sec, err := s.GetSection(ctx, sectionID)
+		if err != nil {
+			t.Fatalf("GetSection: %v", err)
+		}
+		if sec.CurrentSessionID == nil || *sec.CurrentSessionID != sessionID {
+			t.Errorf("GetSection pointer = %v, want %v", sec.CurrentSessionID, sessionID)
+		}
+		if sec.CurrentProblemID == nil || *sec.CurrentProblemID != problemID {
+			t.Errorf("GetSection current_problem_id = %v, want %v", sec.CurrentProblemID, problemID)
+		}
+
+		secs, err := s.ListSectionsByClass(ctx, classID)
+		if err != nil {
+			t.Fatalf("ListSectionsByClass: %v", err)
+		}
+		var foundList bool
+		for _, x := range secs {
+			if x.ID == sectionID {
+				foundList = true
+				if x.CurrentSessionID == nil || *x.CurrentSessionID != sessionID {
+					t.Errorf("ListSectionsByClass pointer = %v, want %v", x.CurrentSessionID, sessionID)
+				}
+				if x.CurrentProblemID == nil || *x.CurrentProblemID != problemID {
+					t.Errorf("ListSectionsByClass current_problem_id = %v, want %v", x.CurrentProblemID, problemID)
+				}
+			}
+		}
+		if !foundList {
+			t.Error("section not found in ListSectionsByClass")
+		}
+
+		mine, err := s.ListMySections(ctx, instructorID)
+		if err != nil {
+			t.Fatalf("ListMySections: %v", err)
+		}
+		var foundMine bool
+		for _, info := range mine {
+			if info.Section.ID == sectionID {
+				foundMine = true
+				if info.Section.CurrentSessionID == nil || *info.Section.CurrentSessionID != sessionID {
+					t.Errorf("ListMySections pointer = %v, want %v", info.Section.CurrentSessionID, sessionID)
+				}
+				if info.Section.CurrentProblemID == nil || *info.Section.CurrentProblemID != problemID {
+					t.Errorf("ListMySections current_problem_id = %v, want %v", info.Section.CurrentProblemID, problemID)
+				}
+			}
+		}
+		if !foundMine {
+			t.Error("section not found in ListMySections")
+		}
+	})
+
+	t.Run("clear nulls the pointer", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.ClearSectionCurrentSession(ctx, sectionID); err != nil {
+			t.Fatalf("ClearSectionCurrentSession: %v", err)
+		}
+		sec, err := s.GetSection(ctx, sectionID)
+		if err != nil {
+			t.Fatalf("GetSection after clear: %v", err)
+		}
+		if sec.CurrentSessionID != nil {
+			t.Errorf("expected nil pointer after clear, got %v", *sec.CurrentSessionID)
+		}
+		if sec.CurrentProblemID != nil {
+			t.Errorf("expected nil current_problem_id after clear, got %v", *sec.CurrentProblemID)
+		}
+	})
+
+	t.Run("set unknown section returns ErrNotFound", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.SetSectionCurrentSession(ctx, uuid.New(), sessionID); !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("clear unknown section returns ErrNotFound", func(t *testing.T) {
+		s, conn := db.storeWithRLS(ctx, t, authInstructor)
+		defer conn.Release()
+
+		if err := s.ClearSectionCurrentSession(ctx, uuid.New()); !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound, got %v", err)
+		}
+	})
+}
+
+// TestIntegration_InstructorDashboardPointer verifies the G4 (T13) dashboard
+// live-indicator switch: InstructorDashboard derives CurrentSessionID and
+// LastActivity from the section pointer (sections.current_session_id +
+// the pointer session's last_activity), NOT from the retired status='active'
+// lifecycle.
+//
+// Contract verified:
+//   - a section with the pointer set surfaces CurrentSessionID + LastActivity;
+//   - a section with no pointer returns nil for both;
+//   - a completed-status session that is NOT the pointer does not surface
+//     (proves the SQL no longer reads status='active').
+//
+// Why it matters: the instructor home strip / status pill key on these fields;
+// a regression here either blanks live indicators or revives the dead status path.
+func TestIntegration_InstructorDashboardPointer(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	instructorID := uuid.New()
+	db.createUser(ctx, t, instructorID, "dash-instr@test.com", "instructor", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "Dashboard Class", instructorID)
+
+	// Section A: has a pointer to an active-ish session.
+	secA := uuid.New()
+	db.createSection(ctx, t, secA, nsID, classID, "Section A", "DASHA")
+	db.createMembership(ctx, t, instructorID, secA, "instructor")
+	sessA := uuid.New()
+	db.createSession(ctx, t, sessA, nsID, secA, "Section A", instructorID)
+
+	// Section B: NO pointer, but DOES have a completed session in the section.
+	// Under the old status-derived SQL this would have surfaced nothing live;
+	// under the pointer model it must surface nil because the pointer is unset.
+	secB := uuid.New()
+	db.createSection(ctx, t, secB, nsID, classID, "Section B", "DASHB")
+	db.createMembership(ctx, t, instructorID, secB, "instructor")
+	sessB := uuid.New()
+	db.createSession(ctx, t, sessB, nsID, secB, "Section B", instructorID)
+	if err := db.execAsSuperuser(ctx,
+		`UPDATE sessions SET status = 'completed' WHERE id = $1`, sessB); err != nil {
+		t.Fatalf("mark sessB completed: %v", err)
+	}
+
+	authInstructor := &auth.User{
+		ID:          instructorID,
+		Email:       "dash-instr@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	s, conn := db.storeWithRLS(ctx, t, authInstructor)
+	defer conn.Release()
+
+	// Set the pointer on Section A only.
+	if err := s.SetSectionCurrentSession(ctx, secA, sessA); err != nil {
+		t.Fatalf("SetSectionCurrentSession: %v", err)
+	}
+
+	classes, err := s.InstructorDashboard(ctx, instructorID)
+	if err != nil {
+		t.Fatalf("InstructorDashboard: %v", err)
+	}
+
+	var found bool
+	for _, c := range classes {
+		for _, sec := range c.Sections {
+			switch sec.ID {
+			case secA:
+				found = true
+				if sec.CurrentSessionID == nil || *sec.CurrentSessionID != sessA {
+					t.Errorf("Section A CurrentSessionID = %v, want %v", sec.CurrentSessionID, sessA)
+				}
+				if sec.LastActivity == nil {
+					t.Error("Section A LastActivity should be populated from the pointer session")
+				}
+			case secB:
+				if sec.CurrentSessionID != nil {
+					t.Errorf("Section B has no pointer; CurrentSessionID = %v, want nil", *sec.CurrentSessionID)
+				}
+				if sec.LastActivity != nil {
+					t.Errorf("Section B has no pointer; LastActivity = %v, want nil", *sec.LastActivity)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("Section A not present in dashboard result")
+	}
+}
+
+// TestIntegration_CreateSessionDoesNotFlipOthers verifies the G4 plain create:
+// CreateSession inserts a new row and does not flip any other session's status
+// to 'completed' (no leftover replacement behavior).
+func TestIntegration_CreateSessionDoesNotFlipOthers(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	creatorID := uuid.New()
+	db.createUser(ctx, t, creatorID, "noflip@test.com", "instructor", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "NoFlip Class", creatorID)
+	sectionID := uuid.New()
+	db.createSection(ctx, t, sectionID, nsID, classID, "NoFlip Section", "NOFLIP")
+	// Pre-existing active session in the section.
+	existingID := uuid.New()
+	db.createSession(ctx, t, existingID, nsID, sectionID, "NoFlip Section", creatorID)
+
+	authUser := &auth.User{
+		ID:          creatorID,
+		Email:       "noflip@test.com",
+		NamespaceID: nsID,
+		Role:        auth.RoleInstructor,
+	}
+
+	s, conn := db.storeWithRLS(ctx, t, authUser)
+	defer conn.Release()
+
+	_, err := s.CreateSession(ctx, CreateSessionParams{
+		NamespaceID: nsID,
+		SectionID:   sectionID,
+		SectionName: "NoFlip Section",
+		Problem:     json.RawMessage(`{"title":"New"}`),
+		CreatorID:   creatorID,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	// The pre-existing session must be untouched (not flipped to completed).
+	var status string
+	if err := db.pool.QueryRow(ctx, `SELECT status FROM sessions WHERE id = $1`, existingID).Scan(&status); err != nil {
+		t.Fatalf("query existing status: %v", err)
+	}
+	if status == "completed" {
+		t.Errorf("CreateSession must not flip other sessions; existing session status = %q", status)
+	}
+
+	// No session in the section should have been completed by the create.
+	var completedCount int
+	if err := db.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM sessions WHERE section_id = $1 AND status = 'completed'`, sectionID).Scan(&completedCount); err != nil {
+		t.Fatalf("count completed: %v", err)
+	}
+	if completedCount != 0 {
+		t.Errorf("expected 0 completed sessions after create, got %d", completedCount)
+	}
 }
 
 // =============================================================================
@@ -622,6 +914,87 @@ func TestIntegration_ListSessionStudents(t *testing.T) {
 		}
 		if len(results) != 0 {
 			t.Errorf("expected 0 students, got %d", len(results))
+		}
+	})
+}
+
+// =============================================================================
+// Test: SetSessionStudentRunSummary - G4 F8 run-summary round-trip with RLS
+// =============================================================================
+
+// TestIntegration_SetSessionStudentRunSummary verifies that a student can persist
+// their own run-all summary and that it round-trips through ListSessionStudents,
+// and that an unknown (session, user) returns ErrNotFound. Contract: the F8
+// run-summary write/read path must work under RLS so the instructor dashboard can
+// read per-student pass/fail state. Breaks: dashboards never see run summaries.
+func TestIntegration_SetSessionStudentRunSummary(t *testing.T) {
+	t.Parallel()
+	db := setupIntegrationDB(t)
+
+	ctx := context.Background()
+	nsID := db.nsID
+
+	creatorID := uuid.New()
+	db.createUser(ctx, t, creatorID, "creator@test.com", "instructor", nsID)
+	studentID := uuid.New()
+	db.createUser(ctx, t, studentID, "student@test.com", "student", nsID)
+	classID := uuid.New()
+	db.createClass(ctx, t, classID, nsID, "CS101", creatorID)
+	sectionID := uuid.New()
+	db.createSection(ctx, t, sectionID, nsID, classID, "Section A", "JOIN1")
+	// Enroll creator as instructor + student so both can read student_work via RLS.
+	if err := db.execAsSuperuser(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'instructor')`, creatorID, sectionID); err != nil {
+		t.Fatalf("enroll creator: %v", err)
+	}
+	if err := db.execAsSuperuser(ctx, `INSERT INTO section_memberships (user_id, section_id, role) VALUES ($1, $2, 'student')`, studentID, sectionID); err != nil {
+		t.Fatalf("enroll student: %v", err)
+	}
+	sessionID := uuid.New()
+	db.createSession(ctx, t, sessionID, nsID, sectionID, "Section A", creatorID)
+	db.createSessionStudent(ctx, t, sessionID, studentID, "Student 1")
+
+	studentUser := &auth.User{ID: studentID, Email: "student@test.com", NamespaceID: nsID, Role: auth.RoleStudent}
+	instructorUser := &auth.User{ID: creatorID, Email: "creator@test.com", NamespaceID: nsID, Role: auth.RoleInstructor}
+
+	summary := json.RawMessage(`{"passed": 2, "failed": 1, "errors": 0, "total": 3, "at": "2026-06-18T00:00:00Z"}`)
+
+	t.Run("student sets own run summary, round-trips via ListSessionStudents", func(t *testing.T) {
+		store, conn := db.storeWithRLS(ctx, t, studentUser)
+		defer conn.Release()
+
+		if err := store.SetSessionStudentRunSummary(ctx, sessionID, studentID, summary); err != nil {
+			t.Fatalf("SetSessionStudentRunSummary: %v", err)
+		}
+
+		// Read back via the instructor's listing (the dashboard path).
+		istore, iconn := db.storeWithRLS(ctx, t, instructorUser)
+		defer iconn.Release()
+		results, err := istore.ListSessionStudents(ctx, sessionID)
+		if err != nil {
+			t.Fatalf("ListSessionStudents: %v", err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("expected 1 student, got %d", len(results))
+		}
+		if len(results[0].LastRunSummary) == 0 {
+			t.Fatal("expected last_run_summary to be populated, got empty")
+		}
+		var got map[string]any
+		if err := json.Unmarshal(results[0].LastRunSummary, &got); err != nil {
+			t.Fatalf("unmarshal last_run_summary: %v", err)
+		}
+		if got["passed"] != float64(2) || got["total"] != float64(3) {
+			t.Errorf("unexpected summary contents: %v", got)
+		}
+	})
+
+	t.Run("unknown (session, user) returns ErrNotFound", func(t *testing.T) {
+		store, conn := db.storeWithRLS(ctx, t, studentUser)
+		defer conn.Release()
+
+		err := store.SetSessionStudentRunSummary(ctx, sessionID, uuid.New(), summary)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("expected ErrNotFound, got %v", err)
 		}
 	})
 }

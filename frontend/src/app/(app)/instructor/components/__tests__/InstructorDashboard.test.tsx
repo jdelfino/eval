@@ -43,6 +43,11 @@ const mockGetInstructorDashboard = getInstructorDashboard as jest.MockedFunction
 const mockGetSessionStudents = getSessionStudents as jest.MockedFunction<typeof getSessionStudents>;
 const mockHasPermission = usePermissionsModule.hasPermission as jest.MockedFunction<typeof usePermissionsModule.hasPermission>;
 
+// Recent timestamp → within the 60-min liveness window ("Live now").
+const RECENT = new Date().toISOString();
+// Stale timestamp → outside the window (pointer set but not "live now").
+const STALE = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
 describe('InstructorDashboard', () => {
   const mockOnStartSession = jest.fn();
   const mockOnRejoinSession = jest.fn();
@@ -120,13 +125,14 @@ describe('InstructorDashboard', () => {
   });
 
   /**
-   * TC1: Section with activeSessionId renders the live strip with "Live now · 3/12 connected"
-   * given a mocked students fetch of 3 and studentCount 12.
-   * Contract: numerator = students.length from GET /sessions/{id}/students;
-   *           denominator = section.studentCount.
-   * Catches: numerator/denominator swap or missing fetch.
+   * TC1: Section with a current-session pointer (and recent activity) renders the
+   * live strip with "Live now · 3/12 connected" given a mocked students fetch of 3
+   * and studentCount 12.
+   * Contract: strip keys on currentSessionId; numerator = students.length from
+   *           GET /sessions/{id}/students; denominator = section.studentCount.
+   * Catches: numerator/denominator swap, missing fetch, or pointer-key drift.
    */
-  it('TC1: renders live strip with N/M connected when session is active', async () => {
+  it('TC1: renders live strip with N/M connected when section has a recent pointer', async () => {
     mockGetInstructorDashboard.mockResolvedValue({
       classes: [
         {
@@ -139,7 +145,8 @@ describe('InstructorDashboard', () => {
               join_code: 'K7M-2A9',
               semester: 'Fall 2025',
               studentCount: 12,
-              activeSessionId: 'session-active-1',
+              currentSessionId: 'session-active-1',
+              lastActivity: RECENT,
             },
           ],
         },
@@ -189,7 +196,8 @@ describe('InstructorDashboard', () => {
               join_code: 'K7M-2A9',
               semester: 'Fall 2025',
               studentCount: 12,
-              activeSessionId: 'session-active-1',
+              currentSessionId: 'session-active-1',
+              lastActivity: RECENT,
             },
           ],
         },
@@ -216,6 +224,57 @@ describe('InstructorDashboard', () => {
   });
 
   /**
+   * TC2b (G4-R3): a stale pointer (activity outside the 60-min window) shows the
+   * current-problem affordance (Rejoin) WITHOUT the "Live now" pulse, and the
+   * status pill is Idle. A non-stale pointer shows "Live now".
+   * Contract: liveness emphasis requires recent activity in addition to the pointer.
+   * Catches: stale-pointer-as-live regression.
+   */
+  it('TC2b: stale pointer shows current-problem affordance without the Live pulse', async () => {
+    mockGetInstructorDashboard.mockResolvedValue({
+      classes: [
+        {
+          id: 'class-1',
+          name: 'CS A',
+          sections: [
+            {
+              id: 'sec-stale',
+              name: 'Period 3',
+              join_code: 'K7M-2A9',
+              semester: 'Fall 2025',
+              studentCount: 12,
+              currentSessionId: 'session-stale-1',
+              lastActivity: STALE,
+            },
+          ],
+        },
+      ],
+    });
+    mockGetSessionStudents.mockResolvedValue([]);
+
+    render(
+      <InstructorDashboard
+        onStartSession={mockOnStartSession}
+        onRejoinSession={mockOnRejoinSession}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rejoin-session-sec-stale')).toBeInTheDocument();
+    });
+
+    // Stale pointer is the "current problem" but NOT "Live now".
+    expect(screen.getByText(/Current problem/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Live now/i)).not.toBeInTheDocument();
+
+    // Status pill is Idle (no live emphasis) despite the pointer being set.
+    expect(screen.getByTestId('status-pill-sec-stale')).toHaveTextContent('Idle');
+
+    // No Start Session button — the pointer is set, so Rejoin is the affordance.
+    expect(screen.queryByTestId('start-session-sec-stale')).not.toBeInTheDocument();
+  });
+
+  /**
    * TC3: No pass/fail/idle counts; no "Meets" column; no recent-activity/Today panel.
    * Contract: dropped affordances from v4 design spec must not creep in.
    * Catches: forbidden content rendered.
@@ -233,7 +292,8 @@ describe('InstructorDashboard', () => {
               join_code: 'ABC123',
               semester: 'Fall 2025',
               studentCount: 25,
-              activeSessionId: 'session-active-1',
+              currentSessionId: 'session-active-1',
+              lastActivity: RECENT,
             },
           ],
         },
@@ -277,16 +337,17 @@ describe('InstructorDashboard', () => {
           id: 'class-1',
           name: 'CS A',
           sections: [
-            // Idle section — should show Start
+            // Idle section (no pointer) — should show Start
             { id: 'sec-idle', name: 'Morning Section', join_code: 'ABC', semester: '', studentCount: 10 },
-            // Live section — should show Rejoin
+            // Section with a pointer — should show Rejoin
             {
               id: 'sec-live',
               name: 'Evening Section',
               join_code: 'XYZ',
               semester: '',
               studentCount: 8,
-              activeSessionId: 'session-789',
+              currentSessionId: 'session-789',
+              lastActivity: RECENT,
             },
           ],
         },
@@ -316,11 +377,12 @@ describe('InstructorDashboard', () => {
   });
 
   /**
-   * TC5: Status pill shows "Live" for sections with activeSessionId, "Idle" otherwise.
-   * Contract: status derivation must use activeSessionId.
+   * TC5: Status pill shows "Live" for sections with a recent pointer, "Idle"
+   * otherwise.
+   * Contract: status derivation uses the pointer + 60-min liveness heuristic.
    * Catches: status derivation bug.
    */
-  it('TC5: status pill is Live for active sections and Idle for inactive sections', async () => {
+  it('TC5: status pill is Live for sections with a recent pointer and Idle otherwise', async () => {
     mockGetInstructorDashboard.mockResolvedValue({
       classes: [
         {
@@ -328,7 +390,7 @@ describe('InstructorDashboard', () => {
           name: 'CS A',
           sections: [
             { id: 'sec-idle', name: 'Morning', join_code: 'A', semester: '', studentCount: 5 },
-            { id: 'sec-live', name: 'Evening', join_code: 'B', semester: '', studentCount: 5, activeSessionId: 'sess-1' },
+            { id: 'sec-live', name: 'Evening', join_code: 'B', semester: '', studentCount: 5, currentSessionId: 'sess-1', lastActivity: RECENT },
           ],
         },
       ],

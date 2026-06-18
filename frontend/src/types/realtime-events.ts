@@ -8,7 +8,7 @@
  * collision with the discriminated union defined in lib/api/realtime-events.ts (PLAT-pp4r.2).
  */
 
-import type { IOTestCase, Problem as ApiProblem } from './api';
+import type { IOTestCase, Problem as ApiProblem, RunSummary } from './api';
 
 // ---------------------------------------------------------------------------
 // Event type string literals (match Go EventType constants)
@@ -18,11 +18,10 @@ export type RealtimeEventType =
   | 'student_joined'
   | 'student_code_updated'
   | 'session_ended'
-  | 'session_replaced'
   | 'featured_student_changed'
   | 'problem_updated'
-  | 'session_started_in_section'
-  | 'session_ended_in_section';
+  | 'session_ended_in_section'
+  | 'section_current_changed';
 
 // ---------------------------------------------------------------------------
 // Wire envelope (matches Go Event struct)
@@ -49,6 +48,7 @@ export interface StudentCodeUpdatedData {
   user_id: string;
   code: string;
   test_cases?: IOTestCase[]; // json.RawMessage → IOTestCase[] (student's test cases)
+  run_summary?: RunSummary; // G4 F8 — present only when triggered by a run-all
 }
 
 /** Payload for session_ended — matches Go SessionEndedData. */
@@ -57,10 +57,9 @@ export interface SessionEndedData {
   reason: string;
 }
 
-/** Payload for session_replaced — matches Go SessionReplacedData. */
-export interface SessionReplacedData {
-  new_session_id: string;
-}
+// NOTE (G4 section-pointer model): `session_replaced` was retired — the backend
+// no longer emits it (T1) and the FE no longer handles it (T12). Sessions are
+// persistent; they are never replaced.
 
 /** Payload for featured_student_changed — matches Go FeaturedStudentChangedData. */
 export interface FeaturedStudentChangedData {
@@ -74,13 +73,20 @@ export interface ProblemUpdatedData {
   problem_id: string;
 }
 
-/** Payload for session_started_in_section — matches Go SessionStartedInSectionData. */
-export interface SessionStartedInSectionData {
-  session_id: string;
-  problem: ApiProblem; // Full problem object from the backend
-}
-
 /** Payload for session_ended_in_section — matches Go SessionEndedInSectionData. */
 export interface SessionEndedInSectionData {
   session_id: string;
+}
+
+/**
+ * Payload for section_current_changed — matches Go SectionCurrentChangedData.
+ *
+ * G4 section-pointer event published on the section channel when the section's
+ * current-session pointer changes. session_id is null when the pointer was
+ * cleared (DELETE /sections/{id}/current); problem carries the new session's
+ * snapshot for late join and is omitted when the pointer is cleared.
+ */
+export interface SectionCurrentChangedData {
+  session_id: string | null;
+  problem?: ApiProblem;
 }

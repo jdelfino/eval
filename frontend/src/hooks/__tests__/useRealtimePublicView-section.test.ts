@@ -3,11 +3,13 @@
  *
  * Tests for section-mode behavior of useRealtimePublicView.
  *
- * When section_id is provided (instead of session_id), the hook:
- * - Fetches active sessions for the section on mount
- * - Subscribes to section channel for session_started_in_section / session_ended_in_section
- * - On session start, switches to tracking that session (subscribe to session channel + fetch state)
- * - On session end, returns to waiting state (no active session)
+ * G4 (T13): When section_id is provided (instead of session_id), the hook:
+ * - Reads the section pointer on mount (getSection().current_session_id) and
+ *   follows it if set
+ * - Subscribes to the section channel for section_current_changed
+ * - On a non-null pointer change, switches to tracking that session (subscribe
+ *   to its channel + fetch state)
+ * - On a null pointer change, returns to the waiting state (no current session)
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useRealtimePublicView } from '../useRealtimePublicView';
@@ -73,14 +75,14 @@ jest.mock('@/lib/centrifugo', () => ({
 }));
 
 const mockGetSessionPublicState = jest.fn();
-const mockGetActiveSessions = jest.fn();
+const mockGetSection = jest.fn();
 
 jest.mock('@/lib/api/sessions', () => ({
   getSessionPublicState: (...args: any[]) => mockGetSessionPublicState(...args),
 }));
 
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: any[]) => mockGetActiveSessions(...args),
+  getSection: (...args: any[]) => mockGetSection(...args),
 }));
 
 jest.mock('@/lib/api-client', () => ({
@@ -94,6 +96,23 @@ const mockPublicState = {
   join_code: 'ABC-123',
   status: 'active',
 };
+
+// Builds the Section payload returned by getSection() in section mode. The hook
+// reads current_session_id to decide whether (and which session) to follow.
+function buildSection(currentSessionId: string | null) {
+  return {
+    id: 'section-1',
+    namespace_id: 'ns-1',
+    class_id: 'class-1',
+    name: 'Section 1',
+    semester: null,
+    join_code: 'ABC123',
+    active: true,
+    current_session_id: currentSessionId,
+    created_at: '2025-01-01T00:00:00Z',
+    updated_at: '2025-01-01T00:00:00Z',
+  };
+}
 
 function simulateSectionPublication(sub: MockSub, type: string, data: any) {
   sub._callbacks.publication?.({
@@ -119,12 +138,12 @@ describe('useRealtimePublicView — section mode', () => {
     jest.clearAllMocks();
     resetMocks();
     mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockGetSection.mockResolvedValue(buildSection(null));
   });
 
-  describe('Initial load with section_id', () => {
-    it('starts in loading state when no active session', async () => {
-      mockGetActiveSessions.mockResolvedValue([]);
+  describe('Initial load with section_id (pointer model — B3)', () => {
+    it('starts in loading state when the section pointer is unset', async () => {
+      mockGetSection.mockResolvedValue(buildSection(null));
 
       const { result } = renderHook(() =>
         useRealtimePublicView({ section_id: 'section-1' })
@@ -141,13 +160,13 @@ describe('useRealtimePublicView — section mode', () => {
       expect(result.current.state).toBeNull();
       expect(result.current.activeSessionId).toBeNull();
       expect(result.current.error).toBeNull();
-      expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
+      expect(mockGetSection).toHaveBeenCalledWith('section-1');
     });
 
-    it('loads active session state when section has an active session', async () => {
-      mockGetActiveSessions.mockResolvedValue([
-        { id: 'session-42', status: 'active' },
-      ]);
+    it('auto-follows the pointer session on initial load (B3 — casting mid-session)', async () => {
+      // The projector must follow the section pointer immediately on load, NOT
+      // wait for a section_current_changed event. Reads getSection().current_session_id.
+      mockGetSection.mockResolvedValue(buildSection('session-42'));
       mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState, join_code: 'XYZ-999' });
 
       const { result } = renderHook(() =>
@@ -163,8 +182,24 @@ describe('useRealtimePublicView — section mode', () => {
       expect(mockGetSessionPublicState).toHaveBeenCalledWith('session-42');
     });
 
-    it('handles errors fetching active sessions gracefully', async () => {
-      mockGetActiveSessions.mockRejectedValue(new Error('Network error'));
+    it('does not auto-follow when the pointer is null (no getSessionPublicState)', async () => {
+      mockGetSection.mockResolvedValue(buildSection(null));
+
+      const { result } = renderHook(() =>
+        useRealtimePublicView({ section_id: 'section-1' })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.activeSessionId).toBeNull();
+      expect(result.current.state).toBeNull();
+      expect(mockGetSessionPublicState).not.toHaveBeenCalled();
+    });
+
+    it('handles errors fetching the section gracefully', async () => {
+      mockGetSection.mockRejectedValue(new Error('Network error'));
 
       const { result } = renderHook(() =>
         useRealtimePublicView({ section_id: 'section-1' })
@@ -176,48 +211,6 @@ describe('useRealtimePublicView — section mode', () => {
 
       expect(result.current.error).toBe('Network error');
       expect(result.current.state).toBeNull();
-    });
-
-    it('ignores completed sessions returned by getActiveSessions and waits for an active one', async () => {
-      // getActiveSessions returns ALL sessions (active + completed). The hook must
-      // filter by status === 'active' so a stale completed session is not subscribed to.
-      mockGetActiveSessions.mockResolvedValue([
-        { id: 'session-old', status: 'completed' },
-      ]);
-
-      const { result } = renderHook(() =>
-        useRealtimePublicView({ section_id: 'section-1' })
-      );
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      // Completed session must NOT be tracked
-      expect(result.current.activeSessionId).toBeNull();
-      expect(result.current.state).toBeNull();
-      expect(mockGetSessionPublicState).not.toHaveBeenCalled();
-    });
-
-    it('picks the active session when both completed and active sessions are returned', async () => {
-      mockGetActiveSessions.mockResolvedValue([
-        { id: 'session-old', status: 'completed' },
-        { id: 'session-new', status: 'active' },
-      ]);
-      mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState, join_code: 'ACTIVE-123' });
-
-      const { result } = renderHook(() =>
-        useRealtimePublicView({ section_id: 'section-1' })
-      );
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      expect(result.current.activeSessionId).toBe('session-new');
-      expect(result.current.state?.join_code).toBe('ACTIVE-123');
-      expect(mockGetSessionPublicState).toHaveBeenCalledWith('session-new');
-      expect(mockGetSessionPublicState).not.toHaveBeenCalledWith('session-old');
     });
   });
 
@@ -235,8 +228,8 @@ describe('useRealtimePublicView — section mode', () => {
       });
     });
 
-    it('does not subscribe to session channel when no active session initially', async () => {
-      mockGetActiveSessions.mockResolvedValue([]);
+    it('does not subscribe to session channel when the pointer is unset', async () => {
+      mockGetSection.mockResolvedValue(buildSection(null));
 
       renderHook(() =>
         useRealtimePublicView({ section_id: 'section-1' })
@@ -251,8 +244,8 @@ describe('useRealtimePublicView — section mode', () => {
       });
     });
 
-    it('subscribes to both section and session channels when section has an active session', async () => {
-      mockGetActiveSessions.mockResolvedValue([{ id: 'session-1', status: 'active' }]);
+    it('subscribes to both section and session channels when the pointer is set', async () => {
+      mockGetSection.mockResolvedValue(buildSection('session-1'));
 
       renderHook(() =>
         useRealtimePublicView({ section_id: 'section-1' })
@@ -271,9 +264,9 @@ describe('useRealtimePublicView — section mode', () => {
     });
   });
 
-  describe('session_started_in_section event', () => {
-    it('starts tracking session state when session_started_in_section fires', async () => {
-      mockGetActiveSessions.mockResolvedValue([]);
+  describe('section_current_changed event', () => {
+    it('starts tracking session state when the pointer moves to a session', async () => {
+      mockGetSection.mockResolvedValue(buildSection(null));
       mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState, join_code: 'NEW-999' });
 
       const { result } = renderHook(() =>
@@ -292,7 +285,7 @@ describe('useRealtimePublicView — section mode', () => {
       const sectionSub = createdSubs[0];
 
       await act(async () => {
-        simulateSectionPublication(sectionSub, 'session_started_in_section', {
+        simulateSectionPublication(sectionSub, 'section_current_changed', {
           session_id: 'new-session-1',
           problem: null,
         });
@@ -307,8 +300,8 @@ describe('useRealtimePublicView — section mode', () => {
       expect(mockGetSessionPublicState).toHaveBeenCalledWith('new-session-1');
     });
 
-    it('subscribes to session channel when session_started_in_section fires', async () => {
-      mockGetActiveSessions.mockResolvedValue([]);
+    it('subscribes to the session channel when the pointer moves to a session', async () => {
+      mockGetSection.mockResolvedValue(buildSection(null));
 
       const { result } = renderHook(() =>
         useRealtimePublicView({ section_id: 'section-1' })
@@ -321,7 +314,7 @@ describe('useRealtimePublicView — section mode', () => {
       const sectionSub = createdSubs[0];
 
       await act(async () => {
-        simulateSectionPublication(sectionSub, 'session_started_in_section', {
+        simulateSectionPublication(sectionSub, 'section_current_changed', {
           session_id: 'new-session-1',
           problem: null,
         });
@@ -335,8 +328,8 @@ describe('useRealtimePublicView — section mode', () => {
       });
     });
 
-    it('handles session events (featured_student_changed) on session channel after section start', async () => {
-      mockGetActiveSessions.mockResolvedValue([]);
+    it('handles session events (featured_student_changed) on the session channel after a pointer move', async () => {
+      mockGetSection.mockResolvedValue(buildSection(null));
       mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
 
       const { result } = renderHook(() =>
@@ -350,7 +343,7 @@ describe('useRealtimePublicView — section mode', () => {
       const sectionSub = createdSubs[0];
 
       await act(async () => {
-        simulateSectionPublication(sectionSub, 'session_started_in_section', {
+        simulateSectionPublication(sectionSub, 'section_current_changed', {
           session_id: 'new-session-1',
           problem: null,
         });
@@ -373,11 +366,9 @@ describe('useRealtimePublicView — section mode', () => {
       expect(result.current.state?.featured_student_id).toBe('student-1');
       expect(result.current.state?.featured_code).toBe('print("featured")');
     });
-  });
 
-  describe('session_ended_in_section event', () => {
-    it('clears session state when active session ends', async () => {
-      mockGetActiveSessions.mockResolvedValue([{ id: 'session-1', status: 'active' }]);
+    it('clears session state when the pointer is cleared (session_id: null)', async () => {
+      mockGetSection.mockResolvedValue(buildSection('session-1'));
       mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
 
       const { result } = renderHook(() =>
@@ -393,8 +384,8 @@ describe('useRealtimePublicView — section mode', () => {
       const sectionSub = createdSubs[0];
 
       act(() => {
-        simulateSectionPublication(sectionSub, 'session_ended_in_section', {
-          session_id: 'session-1',
+        simulateSectionPublication(sectionSub, 'section_current_changed', {
+          session_id: null,
         });
       });
 
@@ -404,12 +395,8 @@ describe('useRealtimePublicView — section mode', () => {
       });
     });
 
-    it('cleans up session channel subscription when active session ends (no React purity violation)', async () => {
-      // Regression test for React purity violation: session_ended_in_section handler
-      // must not call sessionCleanupRef.current() and setState(null) inside the
-      // setActiveSessionId updater function. Side-effects inside React updaters are
-      // called twice in StrictMode and cause incorrect behavior.
-      mockGetActiveSessions.mockResolvedValue([{ id: 'session-1', status: 'active' }]);
+    it('cleans up the session channel subscription when the pointer is cleared', async () => {
+      mockGetSection.mockResolvedValue(buildSection('session-1'));
       mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
 
       const { result } = renderHook(() =>
@@ -425,8 +412,8 @@ describe('useRealtimePublicView — section mode', () => {
       const sectionSub = createdSubs[0];
 
       act(() => {
-        simulateSectionPublication(sectionSub, 'session_ended_in_section', {
-          session_id: 'session-1',
+        simulateSectionPublication(sectionSub, 'section_current_changed', {
+          session_id: null,
         });
       });
 
@@ -439,35 +426,47 @@ describe('useRealtimePublicView — section mode', () => {
       expect(sessionSub.unsubscribe).toHaveBeenCalledTimes(1);
     });
 
-    it('does not clear state when a different session ends', async () => {
-      mockGetActiveSessions.mockResolvedValue([{ id: 'session-1', status: 'active' }]);
-      mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
+    it('switches to the new pointer session when the pointer moves between sessions', async () => {
+      mockGetSection.mockResolvedValue(buildSection('session-1'));
+      mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState, join_code: 'FIRST' });
 
       const { result } = renderHook(() =>
         useRealtimePublicView({ section_id: 'section-1' })
       );
 
       await waitFor(() => {
-        expect(result.current.state).not.toBeNull();
+        expect(result.current.activeSessionId).toBe('session-1');
       });
 
+      const firstSessionSub = createdSubs[1];
       const sectionSub = createdSubs[0];
 
-      act(() => {
-        simulateSectionPublication(sectionSub, 'session_ended_in_section', {
-          session_id: 'some-other-session',
+      mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState, join_code: 'SECOND' });
+
+      await act(async () => {
+        simulateSectionPublication(sectionSub, 'section_current_changed', {
+          session_id: 'session-2',
+          problem: null,
         });
       });
 
-      // State should be unchanged
-      expect(result.current.activeSessionId).toBe('session-1');
-      expect(result.current.state).not.toBeNull();
+      await waitFor(() => {
+        expect(result.current.activeSessionId).toBe('session-2');
+        expect(result.current.state?.join_code).toBe('SECOND');
+      });
+
+      // The previous session channel must be cleaned up before following the new one.
+      expect(firstSessionSub.unsubscribe).toHaveBeenCalledTimes(1);
+      expect(mockCentrifuge.newSubscription).toHaveBeenCalledWith(
+        'session:session-2',
+        expect.any(Object)
+      );
     });
   });
 
   describe('Cleanup', () => {
     it('unsubscribes from section channel on unmount', async () => {
-      mockGetActiveSessions.mockResolvedValue([]);
+      mockGetSection.mockResolvedValue(buildSection(null));
 
       const { unmount } = renderHook(() =>
         useRealtimePublicView({ section_id: 'section-1' })
@@ -484,8 +483,8 @@ describe('useRealtimePublicView — section mode', () => {
       expect(mockCentrifuge.disconnect).toHaveBeenCalled();
     });
 
-    it('unsubscribes from both section and session channels on unmount when active session exists', async () => {
-      mockGetActiveSessions.mockResolvedValue([{ id: 'session-1', status: 'active' }]);
+    it('unsubscribes from both section and session channels on unmount when the pointer is set', async () => {
+      mockGetSection.mockResolvedValue(buildSection('session-1'));
       mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
 
       const { unmount } = renderHook(() =>
@@ -511,7 +510,7 @@ describe('useRealtimePublicView — backward-compatible session mode', () => {
     jest.clearAllMocks();
     resetMocks();
     mockGetSessionPublicState.mockResolvedValue({ ...mockPublicState });
-    mockGetActiveSessions.mockResolvedValue([]);
+    mockGetSection.mockResolvedValue(buildSection(null));
   });
 
   it('still works with session_id only (backward compatibility)', async () => {
@@ -525,7 +524,7 @@ describe('useRealtimePublicView — backward-compatible session mode', () => {
 
     expect(result.current.state).toEqual(mockPublicState);
     expect(mockGetSessionPublicState).toHaveBeenCalledWith('session-1');
-    expect(mockGetActiveSessions).not.toHaveBeenCalled();
+    expect(mockGetSection).not.toHaveBeenCalled();
   });
 
   it('activeSessionId equals session_id when in session mode', async () => {

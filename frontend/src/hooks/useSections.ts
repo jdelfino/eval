@@ -7,9 +7,8 @@ import {
   listMySections,
   joinSection as apiJoinSection,
   leaveSection as apiLeaveSection,
-  getActiveSessions as apiGetActiveSessions,
 } from '@/lib/api/sections';
-import type { MySectionInfo, SectionMembership, Session } from '@/types/api';
+import type { MySectionInfo, SectionMembership } from '@/types/api';
 
 interface UseSectionsReturn {
   sections: MySectionInfo[];
@@ -18,7 +17,6 @@ interface UseSectionsReturn {
   fetchMySections: () => Promise<void>;
   joinSection: (join_code: string) => Promise<SectionMembership>;
   leaveSection: (section_id: string) => Promise<void>;
-  getActiveSessions: (section_id: string) => Promise<Session[]>;
 }
 
 export function useSections(): UseSectionsReturn {
@@ -53,13 +51,11 @@ export function useSections(): UseSectionsReturn {
     setSections(prev => prev.filter(s => s.section.id !== section_id));
   }, []);
 
-  const getActiveSessions = useCallback(async (section_id: string): Promise<Session[]> => {
-    setError(null);
-    const sessions = await apiGetActiveSessions(section_id);
-    // Filter for active sessions only
-    return sessions.filter((s: Session) => s.status === 'active');
-  }, []);
-
+  // NOTE (G4 section-pointer model, T12): the former `getActiveSessions` helper
+  // is removed. Under the pointer model there is no `status==='active'` session
+  // lifecycle — "is there a current problem" is derived from the section's
+  // `current_session_id` pointer (via getSection / useSectionEvents) at the
+  // call sites that need it, not through this hook.
   return {
     sections,
     loading,
@@ -67,6 +63,5 @@ export function useSections(): UseSectionsReturn {
     fetchMySections,
     joinSection,
     leaveSection,
-    getActiveSessions,
   };
 }

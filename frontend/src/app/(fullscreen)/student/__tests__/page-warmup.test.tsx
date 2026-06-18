@@ -14,7 +14,7 @@ import StudentPageWrapper from '../page';
 import { ApiError } from '@/lib/api-error';
 
 const mockGetStudentWork = jest.fn();
-const mockGetActiveSessions = jest.fn();
+const mockGetSection = jest.fn();
 const mockUpdateStudentWork = jest.fn();
 const mockWarmExecutor = jest.fn();
 const mockExecuteCode = jest.fn();
@@ -24,14 +24,21 @@ const mockUpdateCode = jest.fn();
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
+  getOrCreateStudentWork: jest.fn(),
 }));
 
+// G4 section-pointer model: live-vs-practice is gated on current_session_id.
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
-  getSection: jest.fn().mockResolvedValue({
-    id: 'section-1',
-    name: 'Test Section',
+  getSection: (...args: unknown[]) => mockGetSection(...args),
+}));
+
+jest.mock('@/hooks/useSectionEvents', () => ({
+  useSectionEvents: () => ({
+    currentSessionId: 'session-1',
+    currentProblem: { id: 'problem-1', title: 'Test Problem' },
+    lastActivity: new Date().toISOString(),
   }),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 jest.mock('@/lib/api/execute', () => ({
@@ -95,11 +102,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   },
 }));
 
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 const fakeStudentWork = {
   id: 'work-123',
   user_id: 'user-1',
@@ -145,12 +147,13 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
     mockUseRealtimeSession.mockReturnValue(defaultRealtimeSession);
     mockUpdateStudentWork.mockResolvedValue(undefined);
     mockWarmExecutor.mockResolvedValue(undefined);
+    // Default: no pointer → practice mode.
+    mockGetSection.mockResolvedValue({ id: 'section-1', name: 'Test Section', current_session_id: null });
   });
 
   describe('warmExecutor called on practice mode entry', () => {
     it('calls warmExecutor when no active session is found (practice mode)', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
 
       render(<StudentPageWrapper />);
 
@@ -161,16 +164,17 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       expect(mockWarmExecutor).toHaveBeenCalledTimes(1);
     });
 
-    it('does not call warmExecutor when active session is found (live mode)', async () => {
+    it('does not call warmExecutor when the pointer matches the opened problem (live mode)', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([
-        {
-          id: 'session-1',
-          problem: { id: 'problem-1' },
-          status: 'active',
-          section_id: 'section-1',
-        },
-      ]);
+      // Pointer set AND its problem == the opened work's problem → live mode
+      // (no executor warm-up needed). This is the B1 problem-identity gate's
+      // matching case.
+      mockGetSection.mockResolvedValue({
+        id: 'section-1',
+        name: 'Test Section',
+        current_session_id: 'session-1',
+        current_problem_id: 'problem-1',
+      });
       mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: null });
       mockUseRealtimeSession.mockReturnValue({
         ...defaultRealtimeSession,
@@ -180,7 +184,7 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       render(<StudentPageWrapper />);
 
       await waitFor(() => {
-        expect(mockGetActiveSessions).toHaveBeenCalledWith('section-1');
+        expect(mockGetSection).toHaveBeenCalledWith('section-1');
       });
 
       // Give a moment for effects to settle
@@ -189,11 +193,41 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
       });
 
       expect(mockWarmExecutor).not.toHaveBeenCalled();
+      expect(mockJoinSession).toHaveBeenCalled();
+    });
+
+    it('stays in practice mode (and does NOT join) when the pointer is a DIFFERENT problem (B1 gate)', async () => {
+      // Regression for silent cross-problem corruption: a student opens a
+      // non-live published problem (problem-1) while the section pointer points
+      // at a DIFFERENT live problem (problem-OTHER). The page must NOT join the
+      // live session — otherwise the student's code is autosaved under the wrong
+      // problem. It must enter practice mode for the opened problem instead.
+      mockGetStudentWork.mockResolvedValue(fakeStudentWork); // problem_id: 'problem-1'
+      mockGetSection.mockResolvedValue({
+        id: 'section-1',
+        name: 'Test Section',
+        current_session_id: 'session-live',
+        current_problem_id: 'problem-OTHER',
+      });
+      mockJoinSession.mockResolvedValue({ code: 'x', test_cases: null });
+      mockUseRealtimeSession.mockReturnValue({
+        ...defaultRealtimeSession,
+        joinSession: mockJoinSession,
+      });
+
+      render(<StudentPageWrapper />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      });
+
+      // Practice mode: executor warmed, live session NOT joined.
+      expect(mockWarmExecutor).toHaveBeenCalledTimes(1);
+      expect(mockJoinSession).not.toHaveBeenCalled();
     });
 
     it('does not block page load or show errors if warmExecutor fails', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
       mockWarmExecutor.mockRejectedValue(new Error('Network error'));
 
       render(<StudentPageWrapper />);
@@ -210,7 +244,6 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
   describe('503 warming-up message on execute', () => {
     it('shows warming-up message when execute returns 503', async () => {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
       mockExecuteCode.mockRejectedValue(
         new ApiError('Code execution is warming up, please try again in a few moments', 503)
       );
@@ -242,7 +275,6 @@ describe('StudentPage warm-up UX (PLAT-6nij.4)', () => {
        * because runtime errors (NameError, SyntaxError etc.) belong in the drawer.
        */
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([]);
       mockExecuteCode.mockRejectedValue(
         new ApiError('internal server error', 500)
       );

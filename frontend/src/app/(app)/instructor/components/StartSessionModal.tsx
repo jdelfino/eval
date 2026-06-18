@@ -3,20 +3,27 @@
 /**
  * Start Session Modal
  *
- * Modal that allows instructors to start a new session for a section.
- * Provides option to select a problem from the library or create a blank session.
+ * Modal that allows instructors to start a new session for a fixed section. Provides a
+ * problem picker (or "Create blank session"). The section is fixed via the section_id prop
+ * and rendered as a single locked row in the shared SessionComposer.
  *
- * When a problem (not blank) is selected, the modal checks if it is already published to
- * the section (section_id prop). If not published: shows a forced "Publish to section"
- * checkbox (checked, disabled) and a "Show solution to students" toggle (unchecked by default).
- * If already published: shows a small "Already published to this section" note.
+ * Internals are powered by SessionComposer (the locked section row + the single
+ * "Make this the current problem for the class" pointer checkbox + footer). The publish /
+ * show-solution UI is supplied via the shared useProblemPublishState hook as the composer's
+ * optionsSlot. The modal shell, testids (modal-backdrop / modal-content), and aria-labels
+ * (Publish to section / Show solution to students) are preserved (G7 reskins the shell).
+ *
+ * Under the section-pointer model there is no 409/conflict flow — only generic submit
+ * errors render inline.
  */
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { listProblems } from '@/lib/api/problems';
 import { createSession } from '@/lib/api/sessions';
-import { listProblemSections } from '@/lib/api/section-problems';
+import SessionComposer, { ComposerSection } from './SessionComposer';
+import { useProblemPublishState } from '../hooks/useProblemPublishState';
+import { PublishOptions } from '../hooks/PublishOptions';
 
 interface ProblemInfo {
   id: string;
@@ -45,10 +52,9 @@ export default function StartSessionModal({
   const [loading, setLoading] = useState(false);
   const [loadingProblems, setLoadingProblems] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Publish UX state
-  const [publishedInSection, setPublishedInSection] = useState(false);
-  const [showSolution, setShowSolution] = useState(false);
-  const [checkingPublished, setCheckingPublished] = useState(false);
+
+  const selectedProblemId = selectedOption && selectedOption !== 'blank' ? selectedOption : null;
+  const publish = useProblemPublishState(selectedProblemId, section_id);
 
   useEffect(() => {
     loadProblems();
@@ -68,30 +74,7 @@ export default function StartSessionModal({
     }
   };
 
-  const handleSelectOption = async (option: SelectionType) => {
-    setSelectedOption(option);
-    setShowSolution(false);
-
-    if (option === 'blank') {
-      setPublishedInSection(false);
-      return;
-    }
-
-    // It's a problem ID — check if already published to this section
-    setCheckingPublished(true);
-    try {
-      const sections = await listProblemSections(option);
-      const isPublished = sections.some(sp => sp.section_id === section_id);
-      setPublishedInSection(isPublished);
-    } catch (err) {
-      console.error('Error checking publish status:', err);
-      setPublishedInSection(false);
-    } finally {
-      setCheckingPublished(false);
-    }
-  };
-
-  const handleStartSession = async () => {
+  const handleStart = async ({ setCurrent }: { setCurrent: boolean }) => {
     if (!selectedOption) {
       return;
     }
@@ -101,8 +84,12 @@ export default function StartSessionModal({
       setError(null);
 
       const problemId = selectedOption !== 'blank' ? selectedOption : undefined;
-      const showSolutionArg = problemId && !publishedInSection ? showSolution : undefined;
-      const session = await createSession(section_id, problemId, showSolutionArg);
+      const session = await createSession(
+        section_id,
+        problemId,
+        publish.showSolutionArg,
+        { setCurrent }
+      );
       onSessionCreated(session.id);
       router.push(`/instructor/session/${session.id}`);
     } catch (err) {
@@ -119,7 +106,11 @@ export default function StartSessionModal({
     }
   };
 
-  const selectedProblem = selectedOption && selectedOption !== 'blank' ? selectedOption : null;
+  const composerSections: ComposerSection[] = [
+    { id: section_id, label: section_name, hasCurrentSession: false },
+  ];
+
+  const publishUi = <PublishOptions publish={publish} active={!!selectedProblemId} />;
 
   return (
     <div
@@ -152,140 +143,79 @@ export default function StartSessionModal({
           </button>
         </div>
 
-        {/* Error display */}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto space-y-4">
-          {/* Blank Session Option */}
-          <div>
-            <button
-              type="button"
-              onClick={() => handleSelectOption('blank')}
-              disabled={loading}
-              className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
-                selectedOption === 'blank'
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">Create blank session</p>
-                  <p className="text-sm text-gray-500">Start with an empty code editor</p>
-                </div>
-              </div>
-            </button>
-          </div>
-
-          {/* Problems List */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Or select a problem:</h3>
-            {loadingProblems ? (
-              <div className="text-sm text-gray-500 py-4 text-center">Loading problems...</div>
-            ) : problems.length === 0 ? (
-              <div className="text-sm text-gray-500 py-4 text-center">
-                No problems available. You can still create a blank session.
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {problems.map((problem) => (
-                  <button
-                    key={problem.id}
-                    type="button"
-                    onClick={() => handleSelectOption(problem.id)}
-                    disabled={loading}
-                    className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
-                      selectedOption === problem.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <p className="font-medium text-gray-900">{problem.title}</p>
-                    {problem.authorName && (
-                      <p className="text-xs text-gray-500">by {problem.authorName}</p>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Publish UX — shown only when a non-blank problem is selected */}
-          {selectedProblem && !checkingPublished && (
-            publishedInSection ? (
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
-                Already published to this section
-              </div>
-            ) : (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                <label className="flex items-center gap-2 text-sm text-blue-900">
-                  <input
-                    type="checkbox"
-                    checked={true}
-                    disabled={true}
-                    aria-label="Publish to section"
-                    className="rounded"
-                    readOnly
-                  />
-                  <span>Publish to section</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm text-blue-800 ml-5">
-                  <input
-                    type="checkbox"
-                    checked={showSolution}
-                    onChange={(e) => setShowSolution(e.target.checked)}
-                    aria-label="Show solution to students"
-                    className="rounded"
-                  />
-                  <span>Show solution to students</span>
-                </label>
-              </div>
-            )
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3 mt-6 pt-4 border-t">
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={loading}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        <div className="flex-1 overflow-y-auto">
+          <SessionComposer
+            sections={composerSections}
+            selectedSectionId={section_id}
+            onSelectSection={() => {}}
+            sectionLocked
+            optionsSlot={publishUi}
+            onStart={handleStart}
+            onCancel={handleClose}
+            starting={loading}
+            error={error}
+            startDisabled={!selectedOption}
           >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleStartSession}
-            disabled={loading || !selectedOption}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Creating...
-              </>
-            ) : (
-              'Start Session'
-            )}
-          </button>
+            {/* Problem picker (host content above the section row) */}
+            <div className="space-y-4">
+              {/* Blank Session Option */}
+              <button
+                type="button"
+                onClick={() => setSelectedOption('blank')}
+                disabled={loading}
+                className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                  selectedOption === 'blank'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Create blank session</p>
+                    <p className="text-sm text-gray-500">Start with an empty code editor</p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Problems List */}
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Or select a problem:</h3>
+                {loadingProblems ? (
+                  <div className="text-sm text-gray-500 py-4 text-center">Loading problems...</div>
+                ) : problems.length === 0 ? (
+                  <div className="text-sm text-gray-500 py-4 text-center">
+                    No problems available. You can still create a blank session.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {problems.map((problem) => (
+                      <button
+                        key={problem.id}
+                        type="button"
+                        onClick={() => setSelectedOption(problem.id)}
+                        disabled={loading}
+                        className={`w-full text-left p-3 rounded-lg border-2 transition-colors ${
+                          selectedOption === problem.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <p className="font-medium text-gray-900">{problem.title}</p>
+                        {problem.authorName && (
+                          <p className="text-xs text-gray-500">by {problem.authorName}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </SessionComposer>
         </div>
       </div>
     </div>

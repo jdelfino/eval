@@ -9,20 +9,33 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
 import type { Session, Revision, SessionPublicState, Problem, IOTestCase, SessionStudent } from '@/types/api';
 import type { WalkthroughScript } from '@/types/analysis';
+import { markSessionLaunched } from '@/lib/session-launch-flag';
 
 /**
  * Create a new session for a section.
  * @param sectionId - The section ID
  * @param problemId - Optional problem ID to associate with the session
  * @param showSolution - Optional flag to show solution to students when auto-publishing
+ * @param opts - Optional flags. `setCurrent` controls the section-pointer model (T1):
+ *   when omitted the server defaults to true (the new session becomes the section's
+ *   current problem and `section_current_changed` is published). Pass `setCurrent: false`
+ *   to create the session without retargeting the class; the body then includes
+ *   `set_current: false` explicitly. When `setCurrent` is true/undefined the flag is
+ *   omitted so existing callers keep the server default.
  * @returns The created Session object (backend returns plain object)
  */
 export async function createSession(
   sectionId: string,
   problemId?: string,
-  showSolution?: boolean
+  showSolution?: boolean,
+  opts?: { setCurrent?: boolean }
 ): Promise<Session> {
-  const body: { section_id: string; problem_id?: string; show_solution?: boolean } = {
+  const body: {
+    section_id: string;
+    problem_id?: string;
+    show_solution?: boolean;
+    set_current?: boolean;
+  } = {
     section_id: sectionId,
   };
   if (problemId) {
@@ -31,7 +44,17 @@ export async function createSession(
   if (showSolution !== undefined) {
     body.show_solution = showSolution;
   }
-  return apiPost<Session>('/sessions', body);
+  // Only send set_current when explicitly false; server default is true.
+  if (opts?.setCurrent === false) {
+    body.set_current = false;
+  }
+  const session = await apiPost<Session>('/sessions', body);
+  // Mark the freshly-created session so the instructor session page shows the
+  // post-launch confirmation strip exactly once. This is the single creation
+  // point for modal/composer flows. markSessionLaunched is a no-op outside the
+  // browser (guarded internally), so SSR/test contexts are safe.
+  markSessionLaunched(session.id);
+  return session;
 }
 
 /**
@@ -250,14 +273,6 @@ export async function featureCode(
     body.test_cases = testCases;
   }
   await apiPost(`/sessions/${sessionId}/feature`, body);
-}
-
-/**
- * Reopen a completed session.
- * @param sessionId - The session ID
- */
-export async function reopenSession(sessionId: string): Promise<void> {
-  await apiPost(`/sessions/${sessionId}/reopen`);
 }
 
 /**

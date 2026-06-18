@@ -93,6 +93,15 @@ func (s *Store) GetSession(ctx context.Context, id uuid.UUID) (*Session, error) 
 }
 
 // CreateSession creates a new session and returns the created record.
+//
+// Under the G4 section-pointer model this is a plain persistent-document insert:
+// it does NOT end, flip, or replace any other session. The section's live
+// pointer is set separately via SetSectionCurrentSession (see the Create
+// handler's set_current flow).
+//
+// G4-R4 (legacy status): sessions.status is NOT written here; it defaults to its
+// column default and no longer drives the live path (the section pointer does).
+// The column is retained only for the migration/cleanup tail of this epic.
 func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (*Session, error) {
 	query := `
 		INSERT INTO sessions (namespace_id, section_id, section_name, problem, creator_id)
@@ -106,32 +115,6 @@ func (s *Store) CreateSession(ctx context.Context, params CreateSessionParams) (
 		params.Problem,
 		params.CreatorID,
 	))
-}
-
-// EndActiveSessions marks all active sessions in a section as completed
-// and returns their IDs.
-func (s *Store) EndActiveSessions(ctx context.Context, sectionID uuid.UUID) ([]uuid.UUID, error) {
-	query := `
-		UPDATE sessions
-		SET status = 'completed', ended_at = now(), last_activity = now()
-		WHERE section_id = $1 AND status = 'active'
-		RETURNING id`
-
-	rows, err := s.q.Query(ctx, query, sectionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var ids []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
 }
 
 // UpdateSession updates a session's mutable fields and returns the updated record.
@@ -245,121 +228,6 @@ func (s *Store) UpdateSessionProblem(ctx context.Context, id uuid.UUID, problem 
 	}
 
 	return sess, nil
-}
-
-// CreateSessionReplacingActive atomically ends active sessions and creates a new one.
-func (s *Store) CreateSessionReplacingActive(ctx context.Context, params CreateSessionParams) (*Session, []uuid.UUID, error) {
-	tx, err := s.beginTx(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	// End active sessions in the section
-	endQuery := `
-		UPDATE sessions
-		SET status = 'completed', ended_at = now(), last_activity = now()
-		WHERE section_id = $1 AND status = 'active'
-		RETURNING id`
-
-	rows, err := tx.Query(ctx, endQuery, params.SectionID)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-
-	var endedIDs []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, nil, err
-		}
-		endedIDs = append(endedIDs, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
-	}
-
-	// Create the new session
-	createQuery := `
-		INSERT INTO sessions (namespace_id, section_id, section_name, problem, creator_id)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING ` + sessionColumns
-
-	sess, err := scanSession(tx.QueryRow(ctx, createQuery,
-		params.NamespaceID,
-		params.SectionID,
-		params.SectionName,
-		params.Problem,
-		params.CreatorID,
-	))
-	if err != nil {
-		if e := HandleForbidden(err); e != err {
-			return nil, nil, e
-		}
-		return nil, nil, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, nil, err
-	}
-
-	return sess, endedIDs, nil
-}
-
-// ReopenSessionReplacingActive atomically ends other active sessions and reopens the given one.
-func (s *Store) ReopenSessionReplacingActive(ctx context.Context, id uuid.UUID, sectionID uuid.UUID) (*Session, []uuid.UUID, error) {
-	tx, err := s.beginTx(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	// End active sessions in the section (excluding the one being reopened)
-	endQuery := `
-		UPDATE sessions
-		SET status = 'completed', ended_at = now(), last_activity = now()
-		WHERE section_id = $1 AND status = 'active' AND id != $2
-		RETURNING id`
-
-	rows, err := tx.Query(ctx, endQuery, sectionID, id)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-
-	var endedIDs []uuid.UUID
-	for rows.Next() {
-		var endedID uuid.UUID
-		if err := rows.Scan(&endedID); err != nil {
-			return nil, nil, err
-		}
-		endedIDs = append(endedIDs, endedID)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
-	}
-
-	// Reopen the session
-	reopenQuery := `
-		UPDATE sessions
-		SET status = 'active', ended_at = NULL, last_activity = now()
-		WHERE id = $1
-		RETURNING ` + sessionColumns
-
-	sess, err := scanSession(tx.QueryRow(ctx, reopenQuery, id))
-	if err != nil {
-		if e := HandleForbidden(err); e != err {
-			return nil, nil, e
-		}
-		return nil, nil, HandleNotFound(err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, nil, err
-	}
-
-	return sess, endedIDs, nil
 }
 
 // Compile-time check that Store implements SessionRepository.
