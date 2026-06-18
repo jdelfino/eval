@@ -35,6 +35,36 @@ describe('OpenOnLaptop', () => {
     expect(screen.getByRole('button', { name: /copy link/i })).toBeInTheDocument();
   });
 
+  it('does not emit a <main> landmark — it is a page fragment, never the page landmark', () => {
+    // Every call site already sits inside a layout/shell <main>; a nested <main>
+    // would be invalid HTML and break landmark navigation (G8 review M1).
+    const { container } = render(<OpenOnLaptop />);
+
+    expect(screen.queryByRole('main')).toBeNull();
+    expect(container.querySelector('main')).toBeNull();
+  });
+
+  it('renders the title as a non-h1 heading so it never duplicates the page <h1>', () => {
+    render(<OpenOnLaptop title="Open on laptop to solve" />);
+
+    // Still a heading (role assertions keep working) but downgraded from <h1>.
+    const heading = screen.getByRole('heading', { name: 'Open on laptop to solve' });
+    expect(heading.tagName).toBe('H2');
+  });
+
+  it('renders an optional secondary action beneath the primary button', () => {
+    render(
+      <OpenOnLaptop
+        secondaryAction={<a href="/auth/signin">You can still sign in →</a>}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: /you can still sign in/i })).toHaveAttribute(
+      'href',
+      '/auth/signin',
+    );
+  });
+
   it('renders custom title/body when provided (workspace-guard variant)', () => {
     render(<OpenOnLaptop title="Open this session on your laptop" body="Switch over to keep coding." />);
 

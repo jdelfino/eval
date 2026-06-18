@@ -66,8 +66,11 @@ jest.mock('@/hooks/useResponsiveLayout', () => ({
 // OpenOnLaptop is a client component using the Button primitive + clipboard;
 // mock it to a recognizable marker so the swap is observable.
 jest.mock('@/components/OpenOnLaptop', () => ({
-  OpenOnLaptop: ({ title }: { title?: string }) => (
-    <div data-testid="open-on-laptop">{title}</div>
+  OpenOnLaptop: ({ title, secondaryAction }: { title?: string; secondaryAction?: React.ReactNode }) => (
+    <div data-testid="open-on-laptop">
+      {title}
+      {secondaryAction}
+    </div>
   ),
 }));
 
@@ -433,6 +436,13 @@ describe('Public Problem Page', () => {
 
       expect(screen.getByTestId('open-on-laptop')).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: /^sign in$/i })).not.toBeInTheDocument();
+
+      // The primary anon "Sign in" CTA is hidden, but a deep-linked anon mobile
+      // user is not dead-ended: a secondary sign-in link rides on OpenOnLaptop.
+      expect(screen.getByRole('link', { name: /you can still sign in/i })).toHaveAttribute(
+        'href',
+        '/auth/signin',
+      );
     });
   });
 

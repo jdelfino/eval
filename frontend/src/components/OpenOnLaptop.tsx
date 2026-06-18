@@ -9,6 +9,12 @@ export interface OpenOnLaptopProps {
   title?: string;
   /** Supporting copy. Defaults to the v4 public-problem guidance. */
   body?: string;
+  /**
+   * Optional secondary action rendered beneath the primary "Copy link" button —
+   * e.g. a "You can still sign in →" link so an anon mobile user arriving via a
+   * deep-link isn't dead-ended.
+   */
+  secondaryAction?: React.ReactNode;
 }
 
 /**
@@ -18,10 +24,16 @@ export interface OpenOnLaptopProps {
  * /student workspace guard). The "laptop URL" is simply the current URL, so the
  * "Copy link" button copies `window.location.href` via the Clipboard API — no QR
  * library, no short-URL/email backend. Clipboard failures degrade gracefully.
+ *
+ * This is always a fragment of a larger page, never the page landmark itself —
+ * every call site already sits inside a layout/shell `<main>`. So the root is a
+ * role-neutral `<div>` and the heading is an `<h2>` (not `<h1>`): a second page
+ * `<main>` or page `<h1>` would be invalid HTML and break landmark/heading nav.
  */
 export function OpenOnLaptop({
   title = 'Coding works best on a laptop',
   body = "You'll write code on a bigger screen.",
+  secondaryAction,
 }: OpenOnLaptopProps): React.ReactElement {
   const [copied, setCopied] = useState(false);
 
@@ -37,7 +49,7 @@ export function OpenOnLaptop({
   };
 
   return (
-    <main
+    <div
       style={{
         minHeight: '100%',
         display: 'flex',
@@ -67,7 +79,7 @@ export function OpenOnLaptop({
       </div>
 
       <div style={{ maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <h1
+        <h2
           style={{
             fontFamily: 'var(--font-serif)',
             fontSize: 22,
@@ -78,7 +90,7 @@ export function OpenOnLaptop({
           }}
         >
           {title}
-        </h1>
+        </h2>
         <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--fg-muted)', margin: 0 }}>
           {body}
         </p>
@@ -93,7 +105,9 @@ export function OpenOnLaptop({
         <Icon name="link" size={16} />
         {copied ? 'Link copied' : 'Copy link'}
       </Button>
-    </main>
+
+      {secondaryAction}
+    </div>
   );
 }
 

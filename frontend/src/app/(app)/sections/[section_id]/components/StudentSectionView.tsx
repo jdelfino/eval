@@ -99,7 +99,13 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
       className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg p-4 text-white"
       style={{ marginBottom: 30 }}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Layout breakpoint is driven by the JS isMobile (<768px) source, not a
+          Tailwind sm: utility (640px), so the row-vs-column layout flips at the
+          same width as the content swap below — no inconsistent 640–767px state. */}
+      <div
+        className={`flex justify-between gap-4 ${isMobile ? 'flex-col' : 'flex-row items-center'}`}
+        suppressHydrationWarning
+      >
         <div className="flex items-center gap-4">
           <div className="w-9 h-9 bg-white bg-opacity-20 rounded-full flex items-center justify-center flex-shrink-0">
             <span style={{ fontSize: 14, fontWeight: 700 }}>▶</span>
@@ -154,7 +160,7 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
 interface ProblemRowProps {
   problem: PublishedProblemWithStatus;
   isLive: boolean;
-  /** Mobile read-only (G8 T3): stack the row and grow the hit targets at 420px. */
+  /** Mobile read-only (G8 T3): stack the row and grow the hit targets below 768px (the isMobile trigger). */
   isMobile: boolean;
   onPractice: () => void;
   onViewSolution: () => void;
@@ -176,8 +182,8 @@ function ProblemRow({ problem, isLive, isMobile, onPractice, onViewSolution }: P
       data-testid="problem-row"
       style={{
         display: 'flex',
-        // Stack vertically at 420px so the state pill / title / tests / actions
-        // never overflow the viewport width.
+        // Stack vertically below 768px (isMobile) so the state pill / title /
+        // tests / actions never overflow the viewport width.
         flexDirection: isMobile ? 'column' : 'row',
         alignItems: isMobile ? 'stretch' : 'center',
         gap: isMobile ? 8 : 14,

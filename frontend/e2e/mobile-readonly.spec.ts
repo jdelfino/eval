@@ -97,13 +97,19 @@ test.describe('Mobile read-only surfaces (420×820)', () => {
     await expect(page.locator('text=mobile hello test')).toBeVisible();
 
     // The solve/practice CTA block is replaced by the OpenOnLaptop affordance.
-    // useMobileViewport corrects after the first frame, so wait for the swap.
     await expect(page.locator('text=Open on laptop to solve')).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('button', { name: 'Copy link' })).toBeVisible();
 
     // The anonymous solve entry point (the "Sign in" CTA on a class-less public
     // problem) must NOT be presented on mobile — it is swapped out.
     await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);
+
+    // …but a deep-linked anon mobile user is not dead-ended: a secondary
+    // sign-in link rides on the OpenOnLaptop affordance.
+    await expect(page.getByRole('link', { name: /you can still sign in/i })).toHaveAttribute(
+      'href',
+      '/auth/signin',
+    );
 
     await expectNoHorizontalOverflow(page);
   });

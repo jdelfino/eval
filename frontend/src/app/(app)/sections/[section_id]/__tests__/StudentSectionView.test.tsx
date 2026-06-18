@@ -1538,8 +1538,21 @@ describe('StudentSectionView', () => {
   });
 
   describe('mobile layout responsiveness', () => {
-    it('PLAT-lnlm: banner inner flex container uses flex-col sm:flex-row and gap-4', () => {
-      const { container } = render(
+    it('PLAT-lnlm: banner inner flex container layout is driven by isMobile (768px), not a Tailwind sm: utility (640px)', () => {
+      // The card content swap (OpenOnLaptop vs Join) flips at the JS isMobile
+      // breakpoint (<768px). The row-vs-column layout must flip at the SAME width
+      // — driven by isMobile, not `sm:flex-row` (640px) — so there is no
+      // inconsistent 640–767px state (G8 review item 4).
+
+      // Desktop (isMobile:false): row layout, no flex-col / sm:flex-row leftovers.
+      mockUseMobileViewport.mockReturnValue({
+        isMobile: false,
+        isTablet: false,
+        isVerySmall: false,
+        isDesktop: true,
+        width: 1280,
+      });
+      const desktop = render(
         <StudentSectionView
           section={sectionDetail}
           currentSessionId="session-active-1"
@@ -1550,17 +1563,40 @@ describe('StudentSectionView', () => {
           sectionId={SECTION_ID}
         />
       );
+      const desktopInner = desktop.container
+        .querySelector('.bg-gradient-to-r')!
+        .firstElementChild!;
+      expect(desktopInner.className).toContain('flex-row');
+      expect(desktopInner.className).toContain('gap-4');
+      expect(desktopInner.className).not.toContain('flex-col');
+      expect(desktopInner.className).not.toContain('sm:flex-row');
+      desktop.unmount();
 
-      // The inner flex container inside the banner (direct child of the green bg div)
-      // must have flex-col sm:flex-row gap-4 for stacking on mobile
-      const banner = container.querySelector('.bg-gradient-to-r');
-      expect(banner).not.toBeNull();
-
-      const innerFlex = banner!.firstElementChild;
-      expect(innerFlex).not.toBeNull();
-      expect(innerFlex!.className).toContain('flex-col');
-      expect(innerFlex!.className).toContain('sm:flex-row');
-      expect(innerFlex!.className).toContain('gap-4');
+      // Mobile (isMobile:true): column layout (stacked).
+      mockUseMobileViewport.mockReturnValue({
+        isMobile: true,
+        isTablet: false,
+        isVerySmall: true,
+        isDesktop: false,
+        width: 420,
+      });
+      const mobile = render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
+          publishedProblems={[]}
+          pastSessions={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+      const mobileInner = mobile.container
+        .querySelector('.bg-gradient-to-r')!
+        .firstElementChild!;
+      expect(mobileInner.className).toContain('flex-col');
+      expect(mobileInner.className).toContain('gap-4');
+      expect(mobileInner.className).not.toContain('sm:flex-row');
     });
 
     it('PLAT-lnlm: applies gap-4 for spacing between stacked elements', () => {
