@@ -2,19 +2,21 @@
  * Problem Management E2E Tests
  *
  * Verifies the problem library CRUD workflow under the G2 author-skin:
- * 1. Instructor creates a problem via the ProblemCreator UI (G2 chrome)
+ * 1. Instructor creates a problem via the ProblemCreator UI (G2 chrome): Ribbon
+ *    title edit + CLASS chip + "Create Problem" button (no API shortcut)
  * 2. Problem appears in the Problem Library list
- * 3. Instructor edits the problem (title pre-set via API; uses G2 PropertiesBar for class)
+ * 3. Instructor edits the problem (uses G2 Ribbon title edit + PropertiesBar)
  * 4. Changes persist after saving
  * 5. Instructor deletes the problem
  * 6. Problem is removed from the list
  *
  * G2 chrome used here:
  *   - Create-new flow via /instructor/problems?edit=new
+ *   - Ribbon click-to-edit title in create mode (ribbonEditable={true} is passed
+ *     unconditionally by ProblemCreator — the title IS UI-editable in embedded mode)
  *   - ProblemPropertiesBar CLASS chip to select class (replaces old <select#problem-class>)
  *   - PropertiesBar tag chip for tags (replaces old <input#problem-tags>)
- *   - Title + description set via API before editing (Ribbon is not rendered in embedded
- *     mode — see NOTE in author-flow.spec.ts for the full explanation)
+ *   - "Create Problem" button drives the create (no createProblem API shortcut)
  *   - statement.md tab for description (replaces old <textarea#problem-description>)
  *
  * Previously referenced (now deleted) form-bar IDs:
@@ -38,8 +40,9 @@ test.describe('Problem Management', () => {
     // ===== API SETUP =====
     const instructor = await setupInstructor();
 
-    // Create a class via API — problems require a class_id
-    const cls = await createClass(instructor.token, `Problem CRUD Class ${testNamespace}`);
+    // Create a class via API — the problem is created via the UI, but it needs a
+    // class to attach to (selected via the CLASS chip below by its name).
+    await createClass(instructor.token, `Problem CRUD Class ${testNamespace}`);
 
     // ===== SIGN IN AND NAVIGATE TO PROBLEM LIBRARY =====
     await signInAs(page, instructor.email);
@@ -61,6 +64,27 @@ test.describe('Problem Management', () => {
     // ProblemCreator should open in create mode
     await expect(page.locator('h2:has-text("Create New Problem")')).toBeVisible();
 
+    // G2: Set the title via the Ribbon click-to-edit affordance. The Ribbon is
+    // rendered editable unconditionally in the embedded ProblemCreator host
+    // (ribbonEditable={true}), so the title IS UI-editable in create mode —
+    // there is no API shortcut here, this is a fully UI-driven create.
+    //
+    // In create mode the title starts empty, so the title-wrapper span collapses
+    // to zero width (Playwright treats a 0-size element as not actionable / out of
+    // viewport for a normal click). The wrapper lives in the always-visible Ribbon
+    // header; dispatch its real click handler to open the click-to-edit input.
+    // The strong assertions follow: the input opens, accepts the title, and the
+    // committed title then renders (and IS visible) in the wrapper below.
+    const createTitleWrapper = page.getByTestId('ribbon-title-wrapper');
+    await expect(createTitleWrapper).toBeAttached();
+    await createTitleWrapper.dispatchEvent('click');
+    const createTitleInput = page.getByRole('textbox', { name: /edit title/i });
+    await expect(createTitleInput).toBeVisible();
+    await createTitleInput.fill(`E2E Problem ${testNamespace}`);
+    await createTitleInput.press('Enter');
+    await expect(page.getByTestId('ribbon-title-wrapper')).toBeVisible();
+    await expect(page.getByTestId('ribbon-title-wrapper')).toContainText(`E2E Problem ${testNamespace}`);
+
     // G2: Select the class via the PropertiesBar CLASS chip (replaces <select#problem-class>)
     const classChip = page.locator('button:has(span:text-is("CLASS"))');
     await expect(classChip).toBeVisible();
@@ -72,28 +96,13 @@ test.describe('Problem Management', () => {
     await page.locator('input[placeholder="tag, tag…"]').fill('e2e,crud');
     await page.locator('input[placeholder="tag, tag…"]').press('Enter');
 
-    // G2: Title is not editable via UI in embedded mode (see NOTE in author-flow.spec.ts).
-    // The Create Problem button requires a title — create via API instead, then verify via edit.
-    // For this create-new flow, we pre-populate via the API route directly.
-    // Instead of fighting the embedded title gap, create via API and then jump to edit.
-    // (The title field is read-only in the new compact header.)
-    // To proceed: navigate away and use API to create a problem with a title.
-    await page.locator('button[title="Back to Problem Library"]').click();
+    // G2: Click "Create Problem" — the UI create path (no API createProblem shortcut).
+    await page.locator('button:has-text("Create Problem")').click();
+
+    // Returns to the Problem Library with the newly created problem in the list
+    // (A4: table layout — title in <td>). No page.reload() — the list reflects
+    // the UI-driven create directly.
     await expect(page.locator('h2:has-text("Problem Library")')).toBeVisible({ timeout: 10000 });
-
-    // Create via API directly with a title (works around embedded-mode Ribbon gap)
-    const apiProblem = await createProblem(instructor.token, cls.id, {
-      title: `E2E Problem ${testNamespace}`,
-      description: 'A problem created by E2E tests',
-      language: 'python',
-      starterCode: 'print("hello e2e")',
-    });
-
-    // Reload to see the newly created problem in the library
-    await page.reload();
-    await expect(page.locator('h2:has-text("Problem Library")')).toBeVisible({ timeout: 10000 });
-
-    // The new problem should appear in the problem list (A4: table layout — title in <td>)
     await expect(page.locator(`td:has-text("E2E Problem ${testNamespace}")`)).toBeVisible({ timeout: 10000 });
 
     // ===== PHASE 2: EDIT THE PROBLEM =====
@@ -168,9 +177,6 @@ test.describe('Problem Management', () => {
     await expect(
       page.locator('h2:has-text("No problems yet")')
     ).toBeVisible({ timeout: 10000 });
-
-    // Suppress the unused variable warning — apiProblem.id is used above
-    void apiProblem;
   });
 
   /**
