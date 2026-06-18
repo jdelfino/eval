@@ -523,8 +523,8 @@ export default function SessionProblemEditor({
               padding: '0.5rem 1rem',
               fontSize: '0.875rem',
               fontWeight: 500,
-              color: 'white',
-              backgroundColor: '#0d6efd',
+              color: 'var(--accent-fg)',
+              backgroundColor: 'var(--accent)',
               border: 'none',
               borderRadius: '0.25rem',
               cursor: 'pointer'

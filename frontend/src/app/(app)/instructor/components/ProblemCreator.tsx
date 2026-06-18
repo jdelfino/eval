@@ -537,7 +537,7 @@ export default function ProblemCreator({
                 backgroundColor: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#0d6efd',
+                color: 'var(--accent)',
                 display: 'flex',
                 alignItems: 'center'
               }}
@@ -560,9 +560,9 @@ export default function ProblemCreator({
               padding: '0.5rem 1rem',
               fontSize: '0.875rem',
               fontWeight: 500,
-              color: '#0d6efd',
+              color: 'var(--accent)',
               backgroundColor: 'white',
-              border: '1px solid #0d6efd',
+              border: '1px solid var(--accent)',
               borderRadius: '0.25rem',
               cursor: 'pointer',
             }}
@@ -577,8 +577,8 @@ export default function ProblemCreator({
               padding: '0.5rem 1rem',
               fontSize: '0.875rem',
               fontWeight: 500,
-              color: 'white',
-              backgroundColor: '#0d6efd',
+              color: 'var(--accent-fg)',
+              backgroundColor: 'var(--accent)',
               border: 'none',
               borderRadius: '0.25rem',
               cursor: (isSubmitting || isLoading || !title.trim() || (!isEditMode && !selectedClassId)) ? 'not-allowed' : 'pointer',

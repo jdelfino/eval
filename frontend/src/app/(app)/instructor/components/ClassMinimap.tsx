@@ -180,10 +180,10 @@ export function ClassMinimap({
           const bars = tile.joined ? codeToBars(tile.code) : [];
 
           const outline = isFocused
-            ? '2px solid #2563eb' // focused: persistent accent outline
+            ? '2px solid var(--accent)' // focused: persistent accent outline
             : isHovered && tile.joined
-              ? '2px solid #93c5fd' // hover: lighter accent outline
-              : '1px solid #e5e7eb';
+              ? '2px solid var(--accent-soft)' // hover: lighter accent outline
+              : '1px solid var(--border)';
 
           return (
             <div

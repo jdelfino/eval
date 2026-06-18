@@ -103,7 +103,11 @@ describe('ProblemsPage', () => {
     render(<ProblemsPageWrapper />);
 
     const creatorWrapper = screen.getByTestId('problem-creator').parentElement;
-    expect(creatorWrapper).toHaveClass('h-full', 'flex', 'flex-col', '-m-6');
+    expect(creatorWrapper).toHaveClass('h-full', 'flex', 'flex-col');
+    // Must NOT use the -m-6 full-bleed hack: AppShell <main> has no padding, so
+    // a negative margin over-bleeds the editor 24px past the viewport (clipping
+    // the ribbon's Generate/Update Problem actions). See eval-9p4.
+    expect(creatorWrapper).not.toHaveClass('-m-6');
   });
 
   it('does not show namespace header in page body when creator is open', () => {
