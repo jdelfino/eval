@@ -34,7 +34,7 @@ function ProblemsPage() {
 
   if (showCreator) {
     return (
-      <div className="h-full flex flex-col -m-6">
+      <div className="h-full flex flex-col">
         <ProblemCreator
           problem_id={editingProblemId}
           onCancel={handleCloseCreator}
