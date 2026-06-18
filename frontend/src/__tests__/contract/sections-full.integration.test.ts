@@ -22,7 +22,9 @@ import {
   getSectionInstructors,
   deleteSection,
   listSectionSessions,
+  clearSectionCurrentSession,
 } from '@/lib/api/sections';
+import { createSession } from '@/lib/api/sessions';
 import { createClass, createSection } from '@/lib/api/classes';
 import {
   validateSessionShape,
@@ -274,6 +276,51 @@ describe('Sections API (full coverage)', () => {
       for (const session of sessions) {
         validateSessionShape(session);
         expect(session.status).toBe('active');
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // clearSectionCurrentSession (G4 "End class" — clears the section pointer)
+  // -------------------------------------------------------------------------
+  describe('clearSectionCurrentSession()', () => {
+    /**
+     * Verifies the "End class" clear-pointer endpoint against the real backend:
+     * creating a session sets the section's current_session_id pointer;
+     * clearSectionCurrentSession unsets it (returns void) without completing or
+     * deleting the session. Catches: DELETE /sections/{id}/current path or
+     * pointer-clear semantics regressions. Uses a throwaway section so the shared
+     * state's active session (relied on by other tests) is untouched.
+     */
+    it('clears the section current-session pointer (void on success)', async () => {
+      const classId = state.classId;
+      expect(classId).toBeTruthy();
+
+      // Throwaway section so we never disturb the shared section's pointer.
+      const tempSection = await createSection(classId, {
+        name: `Clear Pointer Section ${Date.now()}`,
+        semester: 'Clear Pointer Test',
+      });
+
+      try {
+        // Creating a session defaults to set_current:true → pointer is set.
+        await createSession(tempSection.id);
+        const withPointer = await getSection(tempSection.id);
+        expect(typeof withPointer.current_session_id).toBe('string');
+
+        // End class: clear the pointer. Returns void on success.
+        await clearSectionCurrentSession(tempSection.id);
+
+        // The pointer is now unset; the session document still exists (not
+        // completed/deleted) but is no longer the section's current problem.
+        const cleared = await getSection(tempSection.id);
+        expect(cleared.current_session_id).toBeNull();
+      } finally {
+        try {
+          await deleteSection(tempSection.id);
+        } catch {
+          // Best-effort cleanup; namespace teardown will catch leftovers.
+        }
       }
     });
   });

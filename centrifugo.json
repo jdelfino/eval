@@ -13,6 +13,11 @@
       "join_leave": true,
       "history_size": 10,
       "history_ttl": "5m"
+    },
+    {
+      "name": "section",
+      "history_size": 10,
+      "history_ttl": "5m"
     }
   ]
 }

@@ -286,36 +286,46 @@ test.describe('Critical User Paths', () => {
       // Wait for debounced sync (500ms debounce + network time)
       await page.waitForTimeout(1000);
 
-      // ===== VERIFY INSTRUCTOR SEES STUDENT WITH CODE =====
-      // Student should appear in the connected students list
+      // ===== VERIFY INSTRUCTOR SEES STUDENT ON THE LIVE DASHBOARD =====
+      // The G4 dashboard surfaces joined students in the roster column. Dismiss
+      // the post-launch strip first so it never overlays the grid.
+      const stripDismiss = instructorPage.locator('[data-testid="session-launch-strip-dismiss"]');
+      if (await stripDismiss.isVisible().catch(() => false)) {
+        await stripDismiss.click();
+      }
+      await expect(instructorPage.locator('[data-testid="session-dashboard-grid"]')).toBeVisible({ timeout: 10000 });
+
       const studentDisplayName = 'E2E student';
-      await expect(instructorPage.locator(`text=${studentDisplayName}`)).toBeVisible();
+      // The roster row for the student (Activity tab is the default).
+      const rosterRow = instructorPage
+        .locator('[data-testid^="student-row-"]')
+        .filter({ hasText: studentDisplayName })
+        .first();
+      await expect(rosterRow).toBeVisible({ timeout: 15000 });
 
-      // Wait for activity badge to appear -- this confirms the code synced
-      const studentRow = instructorPage.locator(`div.border:has-text("${studentDisplayName}")`).first();
-      await expect(studentRow.locator('text=Active').or(studentRow.locator('text=Inactive'))).toBeVisible();
+      // ===== FOCUS THE STUDENT → FOCUSED PANEL SHOWS THEIR LIVE CODE =====
+      // Click the roster row to focus the student; the center focused panel embeds
+      // a read-only workspace bound to that student's live code (replaces the old
+      // "View" button + "{name}'s Code" header from SessionStudentPane).
+      await rosterRow.click();
+      const focusedPanel = instructorPage.locator('[data-testid="focused-student-panel"]');
+      await expect(focusedPanel).toBeVisible({ timeout: 10000 });
+      // The focused top bar carries the student's status line (unique element).
+      await expect(focusedPanel.locator('[data-testid="focused-status-line"]')).toBeVisible({ timeout: 10000 });
 
-      // ===== VERIFY INSTRUCTOR CAN VIEW STUDENT CODE =====
-      // Click "View" button to see student's code
-      const viewButton = studentRow.locator('button:has-text("View")').first();
-      await viewButton.click();
-
-      // Wait for code editor to load with student's code
-      await expect(instructorPage.locator(`text=${studentDisplayName}'s Code`)).toBeVisible();
-
-      // Verify the actual code content is visible in the Monaco editor
-      await expect(instructorPage.locator('.monaco-editor')).toBeVisible();
-
-      // Verify the Monaco editor is displaying student code via the Monaco API
+      // Verify the focused panel's Monaco editor is displaying the student's code.
+      await expect(focusedPanel.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
       await waitForMonacoReady(instructorPage);
       await expect.poll(() => getMonacoValue(instructorPage), {
         timeout: 10000,
-        message: 'Monaco editor on instructor view should contain student code',
+        message: 'Monaco editor on the focused student panel should contain student code',
       }).toContain('SYNC_TEST');
 
       // ===== FEATURE STUDENT ON PUBLIC VIEW =====
-      // Click "Feature" button to show student code on public view
-      const featureButton = studentRow.locator('button:has-text("Feature")');
+      // Feature button lives in the focused panel's top bar (replaces the old
+      // per-row Feature button on SessionStudentPane).
+      const featureButton = focusedPanel.locator('[data-testid="focused-feature-button"]');
+      await expect(featureButton).toBeVisible();
       await featureButton.click();
 
       // ===== VERIFY PUBLIC VIEW SHOWS STUDENT CODE =====

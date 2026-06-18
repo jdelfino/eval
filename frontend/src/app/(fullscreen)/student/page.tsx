@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useRef, Suspense, useEffect } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
@@ -101,7 +101,6 @@ function deriveFailure(
 
 function StudentPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const workIdFromUrl = searchParams.get('work_id');
   const sectionIdFromUrl = searchParams.get('section_id');
@@ -350,16 +349,23 @@ function StudentPage() {
 
   // "Jump in" on the moved-on banner: navigate to the new (pointer's) session
   // via getOrCreateStudentWork for the new problem, same flow as a fresh join.
+  //
+  // We perform a FULL navigation (window.location.assign) rather than
+  // router.push: this page captures work_id once at mount (useState(workId)) and
+  // seeds problem/code/session state from it, so a client-side query-only push
+  // to /student?work_id=NEW would NOT remount the page — the student would stay
+  // stranded on the old problem. A hard navigation remounts the workspace on the
+  // new work, which is the correct "enter the new problem fresh" behavior.
   const handleJumpIn = useCallback(async () => {
     if (!movedOnTo || !sectionId) return;
     try {
       const work = await getOrCreateStudentWork(sectionId, movedOnTo.problemId);
-      router.push(`/student?work_id=${work.id}&section_id=${sectionId}`);
+      window.location.assign(`/student?work_id=${work.id}&section_id=${sectionId}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to join new problem';
       setError(message);
     }
-  }, [movedOnTo, sectionId, router]);
+  }, [movedOnTo, sectionId]);
 
   const handleRunAll = useCallback(async () => {
     const effectiveTestCases =

@@ -158,25 +158,31 @@ test.describe('README Screenshots', () => {
         fullPage: false,
       });
 
-      // ===== INSTRUCTOR SESSION VIEW =====
+      // ===== INSTRUCTOR SESSION VIEW (G4 three-column live dashboard) =====
       await instructorPage.goto(`/instructor/session/${session.id}`);
       await instructorPage.locator('[data-testid="active-session-header"]').waitFor({ state: 'visible' });
 
-      // Wait for the student to appear in the connected list
+      // Dismiss the post-launch strip so it does not overlay the dashboard.
+      const stripDismiss = instructorPage.locator('[data-testid="session-launch-strip-dismiss"]');
+      if (await stripDismiss.isVisible().catch(() => false)) {
+        await stripDismiss.click();
+      }
+      await instructorPage.locator('[data-testid="session-dashboard-grid"]').waitFor({ state: 'visible', timeout: 10000 });
+
+      // Wait for the student to appear in the roster, then focus them so the
+      // center focused panel shows their live code (replaces the old View button).
       const studentDisplayName = 'E2E student';
-      await instructorPage.locator(`text=${studentDisplayName}`).waitFor({ state: 'visible', timeout: 15000 });
+      const studentRow = instructorPage
+        .locator('[data-testid^="student-row-"]')
+        .filter({ hasText: studentDisplayName })
+        .first();
+      await studentRow.waitFor({ state: 'visible', timeout: 15000 });
+      await studentRow.click();
 
-      // Click "View" to open the student's code panel
-      const studentRow = instructorPage.locator(`div.border:has-text("${studentDisplayName}")`).first();
-      await studentRow.locator('button:has-text("View")').first().click();
-
-      // Wait for the code panel with student name to appear
-      await instructorPage
-        .locator(`text=${studentDisplayName}'s Code`)
-        .waitFor({ state: 'visible', timeout: 10000 });
-
-      // Verify Monaco editor is loaded before screenshotting
-      await instructorPage.locator('.monaco-editor').waitFor({ state: 'visible' });
+      // Wait for the focused panel with the student's embedded workspace.
+      const focusedPanel = instructorPage.locator('[data-testid="focused-student-panel"]');
+      await focusedPanel.waitFor({ state: 'visible', timeout: 10000 });
+      await focusedPanel.locator('.monaco-editor').waitFor({ state: 'visible' });
 
       // ===== SCREENSHOT 2: Instructor session view =====
       await instructorPage.screenshot({

@@ -253,14 +253,20 @@ test.describe('Problem Management', () => {
     await expect(startButton).toBeVisible();
     await startButton.click();
 
-    // The CreateSessionFromProblemModal opens with a "Create Session" heading
+    // The CreateSessionFromProblemModal opens with a "Create Session" heading.
+    // It is now powered by SessionComposer: sections are radio rows (role="radio")
+    // labelled by section name, not a <select> dropdown.
     await expect(page.locator('h2:has-text("Create Session")')).toBeVisible({ timeout: 10000 });
 
-    // Select the section in the modal's section dropdown
-    await page.locator('select#section').selectOption({ label: `Tag Filter Section ${testNamespace} (Fall 2025)` });
+    // Select the section radio row for our section.
+    await page
+      .locator('[role="radio"]')
+      .filter({ hasText: `Tag Filter Section ${testNamespace}` })
+      .first()
+      .click();
 
-    // Click "Create Session" to start the session and navigate to it
-    await page.locator('button:has-text("Create Session")').last().click();
+    // The SessionComposer footer's confirm button is labelled "Start session".
+    await page.locator('button:has-text("Start session")').last().click();
 
     // Verify redirect to the active session page
     await page.waitForURL(/\/instructor\/session\//, { timeout: 15000 });

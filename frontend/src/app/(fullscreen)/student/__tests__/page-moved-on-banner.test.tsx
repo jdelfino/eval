@@ -180,10 +180,18 @@ describe('StudentPage "Instructor moved on" banner (G4 section-pointer)', () => 
 
     fireEvent.click(screen.getByTestId('jump-in-button'));
 
+    // Jump in resolves the new work for the destination problem.
     await waitFor(() => {
       expect(getOrCreateStudentWork).toHaveBeenCalledWith('section-1', 'problem-2');
-      expect(mockPush).toHaveBeenCalledWith('/student?work_id=work-new&section_id=section-1');
     });
+
+    // It performs a FULL navigation (window.location.assign), NOT a client-side
+    // router.push: the page captures work_id once at mount and seeds
+    // problem/code/session state from it, so a query-only push would leave the
+    // student stranded on the old problem. We assert the negative (no router.push)
+    // here; the actual assign target is verified by the moved-on E2E (jsdom does
+    // not implement window.location navigation, so it cannot be asserted in unit).
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('"Stay here" dismisses the banner and keeps the student in place (Test Case 5)', async () => {

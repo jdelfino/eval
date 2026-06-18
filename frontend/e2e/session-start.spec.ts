@@ -57,6 +57,15 @@ test.describe('Session Start via UI', () => {
     // ===== VERIFY SESSION IS ACTIVE WITH CORRECT PROBLEM TITLE =====
     await expect(page.locator('[data-testid="active-session-header"]')).toBeVisible({ timeout: 15000 });
 
+    // ===== POST-LAUNCH STRIP: visible after create, then dismissible =====
+    // The session-launch-strip is shown once on the instructor session page right
+    // after a session is created (gated by the session-launched sessionStorage
+    // flag set by createSession). Assert it appears, then dismiss it.
+    const launchStrip = page.locator('[data-testid="session-launch-strip"]');
+    await expect(launchStrip).toBeVisible({ timeout: 10000 });
+    await page.locator('[data-testid="session-launch-strip-dismiss"]').click();
+    await expect(launchStrip).toBeHidden({ timeout: 10000 });
+
     // Verify the session displays the correct section name
     const sectionName = `Session Start Section ${testNamespace}`;
     await expect(page.locator(`text=${sectionName}`)).toBeVisible({ timeout: 10000 });

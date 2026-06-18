@@ -176,13 +176,9 @@ jest.mock('../RevisionViewer', () => {
   };
 });
 
-// SessionStudentPane must NOT be rendered by the shell anymore. Mock it so that
-// if it were ever rendered the test would catch it via testid.
-jest.mock('../SessionStudentPane', () => ({
-  SessionStudentPane: function MockSessionStudentPane() {
-    return <div data-testid="session-student-pane" />;
-  },
-}));
+// SessionStudentPane has been retired (T11): the shell now composes the four
+// single-purpose column components below. The "no longer renders" assertion
+// checks its old testid is absent, which holds because the component is deleted.
 
 describe('SessionView', () => {
   const mockStudents = [

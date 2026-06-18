@@ -51,6 +51,15 @@ resource "kubernetes_config_map" "centrifugo_config" {
           join_leave   = true
           history_size = 10
           history_ttl  = "5m"
+        },
+        # G4 section-pointer model: the section:{id} channel carries
+        # section_current_changed (late-join landing + "instructor moved on"
+        # banner). Without this namespace Centrifugo rejects the subscription and
+        # the entire pointer realtime path is silently dead.
+        {
+          name         = "section"
+          history_size = 10
+          history_ttl  = "5m"
         }
       ]
     })

@@ -111,8 +111,13 @@ test.describe('Public View Feature', () => {
       await expect(publicViewPage.locator(`text=${joinCode}`)).toBeVisible();
       await expect(publicViewPage.locator('.monaco-editor')).toBeVisible();
 
-      // Verify student list panel is visible on instructor page
-      await expect(instructorPage.locator('h3:has-text("Connected Students")')).toBeVisible();
+      // The G4 live dashboard grid is the instructor's session surface (replaces
+      // the old "Connected Students" pane). Dismiss the launch strip first.
+      const stripDismiss = instructorPage.locator('[data-testid="session-launch-strip-dismiss"]');
+      if (await stripDismiss.isVisible().catch(() => false)) {
+        await stripDismiss.click();
+      }
+      await expect(instructorPage.locator('[data-testid="session-dashboard-grid"]')).toBeVisible({ timeout: 10000 });
 
       await signInAs(page, student.email);
       await page.goto(`/sections/${sectionId}`);
@@ -132,13 +137,20 @@ test.describe('Public View Feature', () => {
       // Wait for debounced code update (500ms debounce + network time)
       await page.waitForTimeout(1000);
 
-      // ===== VERIFY INSTRUCTOR SEES STUDENT =====
-      // Wait for student to appear - via Realtime broadcast or polling fallback
-      await expect(instructorPage.locator('text=E2E student')).toBeVisible();
+      // ===== VERIFY INSTRUCTOR SEES STUDENT, FEATURE VIA FOCUSED PANEL =====
+      // The student appears in the roster; focus them, then use the focused
+      // panel's "Feature on public view" button (replaces the old per-row Feature).
+      const rosterRow = instructorPage
+        .locator('[data-testid^="student-row-"]')
+        .filter({ hasText: 'E2E student' })
+        .first();
+      await expect(rosterRow).toBeVisible({ timeout: 15000 });
+      await rosterRow.click();
 
-      // Click "Feature" button for this student
-      const studentRow = instructorPage.locator('div:has-text("E2E student")').first();
-      const featureBtn = studentRow.locator('button:has-text("Feature")');
+      const focusedPanel = instructorPage.locator('[data-testid="focused-student-panel"]');
+      await expect(focusedPanel).toBeVisible({ timeout: 10000 });
+      const featureBtn = focusedPanel.locator('[data-testid="focused-feature-button"]');
+      await expect(featureBtn).toBeVisible();
       await featureBtn.click();
 
       // ===== VERIFY PUBLIC VIEW UPDATES =====
