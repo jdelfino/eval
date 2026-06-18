@@ -98,8 +98,16 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
 
   return (
     <div
-      className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg p-4 text-white"
-      style={{ marginBottom: 30 }}
+      data-testid="live-session-card"
+      className="rounded-lg shadow-lg p-4"
+      style={{
+        marginBottom: 30,
+        // Live "run" gradient on F1 tokens (replaces the green-500→green-600
+        // Tailwind gradient): --run into a darker run via color-mix.
+        background:
+          'linear-gradient(to right, var(--run), color-mix(in oklch, var(--run) 82%, black))',
+        color: 'var(--fg-inverse)',
+      }}
     >
       {/* Layout breakpoint is driven by the JS isMobile (<768px) source, not a
           Tailwind sm: utility (640px), so the row-vs-column layout flips at the
@@ -109,14 +117,17 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
         suppressHydrationWarning
       >
         <div className="flex items-center gap-4">
-          <div className="w-9 h-9 bg-white bg-opacity-20 rounded-full flex items-center justify-center flex-shrink-0">
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: 'color-mix(in oklch, var(--fg-inverse) 20%, transparent)' }}
+          >
             <span style={{ fontSize: 14, fontWeight: 700 }}>▶</span>
           </div>
           <div>
             <h2 className="text-lg font-bold mb-0.5">
               {liveNow ? 'Class is live!' : 'Current problem'}
             </h2>
-            <p className="text-green-50 text-sm">
+            <p className="text-sm" style={{ color: 'color-mix(in oklch, var(--fg-inverse) 88%, transparent)' }}>
               {isMobile
                 ? 'Open this session on your laptop to participate.'
                 : liveNow
@@ -131,8 +142,8 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
             T1 /student guard; the real block stays that guard, not here. The
             mobile-vs-desktop swap shape is the shared <MobileSwap> wrapper. */}
         <MobileSwap
-          mobileClassName="rounded-lg overflow-hidden bg-white"
-          mobileStyle={{ color: 'var(--fg)' }}
+          mobileClassName="rounded-lg overflow-hidden"
+          mobileStyle={{ color: 'var(--fg)', background: 'var(--bg-raised)' }}
           mobile={
             <OpenOnLaptop
               title="Open this session on your laptop"
@@ -142,7 +153,8 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
         >
           <button
             onClick={onJoin}
-            className="px-6 py-2.5 bg-white text-green-600 text-sm font-semibold rounded-lg hover:bg-green-50 transition-colors shadow hover:shadow-md flex items-center gap-2"
+            className="px-6 py-2.5 text-sm font-semibold rounded-lg transition-colors shadow hover:shadow-md flex items-center gap-2"
+            style={{ background: 'var(--bg-raised)', color: 'var(--run)' }}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -447,7 +459,7 @@ export default function StudentSectionView({
           )}
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="rounded-lg shadow p-6" style={{ background: 'var(--bg-raised)' }}>
           <div className="flex items-start justify-between">
             <div>
               <SectionLabel style={{ marginBottom: 4 }}>Section</SectionLabel>

@@ -1564,7 +1564,7 @@ describe('StudentSectionView', () => {
         />
       );
       const desktopInner = desktop.container
-        .querySelector('.bg-gradient-to-r')!
+        .querySelector('[data-testid="live-session-card"]')!
         .firstElementChild!;
       expect(desktopInner.className).toContain('flex-row');
       expect(desktopInner.className).toContain('gap-4');
@@ -1592,7 +1592,7 @@ describe('StudentSectionView', () => {
         />
       );
       const mobileInner = mobile.container
-        .querySelector('.bg-gradient-to-r')!
+        .querySelector('[data-testid="live-session-card"]')!
         .firstElementChild!;
       expect(mobileInner.className).toContain('flex-col');
       expect(mobileInner.className).toContain('gap-4');
@@ -1612,7 +1612,7 @@ describe('StudentSectionView', () => {
         />
       );
 
-      const banner = container.querySelector('.bg-gradient-to-r');
+      const banner = container.querySelector('[data-testid="live-session-card"]');
       expect(banner).not.toBeNull();
       const innerFlex = banner!.firstElementChild;
       expect(innerFlex).not.toBeNull();

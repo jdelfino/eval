@@ -75,13 +75,20 @@ export default function InstructorSectionView({
           <BackButton href={`/classes/${section.classId}`}>Back to Class</BackButton>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div
+          data-testid="section-header-card"
+          className="rounded-lg shadow p-6"
+          style={{ background: 'var(--bg-raised)' }}
+        >
           <div className="flex flex-col sm:flex-row flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{section.name}</h1>
-              <p className="text-lg text-gray-600 mb-1">{section.className}</p>
+              <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--fg)' }}>{section.name}</h1>
+              <p className="text-lg mb-1" style={{ color: 'var(--fg-muted)' }}>{section.className}</p>
               {section.semester && (
-                <span className="inline-block text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                <span
+                  className="inline-block text-sm px-3 py-1 rounded-full"
+                  style={{ color: 'var(--fg-muted)', background: 'var(--bg-sunken)' }}
+                >
                   {section.semester}
                 </span>
               )}
@@ -90,7 +97,8 @@ export default function InstructorSectionView({
               {onEnterPreview && (
                 <button
                   onClick={onEnterPreview}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors border border-gray-300"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors border"
+                  style={{ color: 'var(--fg-muted)', background: 'var(--bg-sunken)', borderColor: 'var(--border)' }}
                 >
                   <svg
                     className="w-4 h-4"
@@ -115,8 +123,8 @@ export default function InstructorSectionView({
                   Preview as Student
                 </button>
               )}
-              <div className="text-sm text-gray-500">
-                Enrolled as <span className="font-medium text-gray-700">{section.role}</span>
+              <div className="text-sm" style={{ color: 'var(--fg-muted)' }}>
+                Enrolled as <span className="font-medium" style={{ color: 'var(--fg)' }}>{section.role}</span>
               </div>
             </div>
           </div>
@@ -125,13 +133,19 @@ export default function InstructorSectionView({
 
       {/* Active Sessions */}
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
+        <h2 className="text-2xl font-bold mb-4 flex items-center" style={{ color: 'var(--fg)' }}>
           {activeSessions.length > 0 && (
-            <span className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></span>
+            <span
+              className="w-3 h-3 rounded-full mr-3 animate-pulse"
+              style={{ background: 'var(--run)' }}
+            ></span>
           )}
           Active Sessions
           {activeSessions.length > 0 && (
-            <span className="ml-3 px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-full">
+            <span
+              className="ml-3 px-3 py-1 text-sm font-semibold rounded-full"
+              style={{ background: 'var(--run-soft)', color: 'var(--run)' }}
+            >
               {activeSessions.length}
             </span>
           )}
@@ -142,28 +156,33 @@ export default function InstructorSectionView({
             {activeSessions.map((session) => (
               <div
                 key={session.id}
-                className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow border-2 border-green-200"
+                data-testid="active-session-card"
+                className="rounded-lg shadow hover:shadow-lg transition-shadow border-2"
+                style={{ background: 'var(--bg-raised)', borderColor: 'var(--run-soft)' }}
               >
                 <div className="p-6">
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4 flex-1">
                       <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <div
+                          className="w-12 h-12 rounded-lg flex items-center justify-center"
+                          style={{ background: 'var(--run-soft)' }}
+                        >
                           <span data-testid="live-dot">
                             <ConnectionDot status="live" compact />
                           </span>
                         </div>
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-gray-900 mb-1">
+                        <h3 className="text-xl font-semibold mb-1" style={{ color: 'var(--fg)' }}>
                           {session.problem?.title || 'Coding Session'}
                         </h3>
                         {session.problem?.description && (
-                          <p className="text-gray-600 mb-2 line-clamp-2">
+                          <p className="mb-2 line-clamp-2" style={{ color: 'var(--fg-muted)' }}>
                             {session.problem.description}
                           </p>
                         )}
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--fg-muted)' }}>
                           <span className="flex items-center gap-1">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -176,7 +195,8 @@ export default function InstructorSectionView({
                     </div>
                     <button
                       onClick={() => handleJoinSession(session.id)}
-                      className="px-8 py-4 bg-green-600 text-white text-base font-semibold rounded-lg hover:bg-green-700 transition-colors shadow hover:shadow-md flex items-center gap-2 w-full sm:w-auto"
+                      className="px-8 py-4 text-base font-semibold rounded-lg transition-colors shadow hover:shadow-md flex items-center gap-2 w-full sm:w-auto"
+                      style={{ background: 'var(--run)', color: 'var(--fg-inverse)' }}
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -189,14 +209,17 @@ export default function InstructorSectionView({
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="rounded-lg shadow p-8 text-center" style={{ background: 'var(--bg-raised)' }}>
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+              style={{ background: 'var(--bg-sunken)' }}
+            >
+              <svg className="w-8 h-8" style={{ color: 'var(--fg-subtle)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <p className="text-gray-600">No active sessions at the moment</p>
-            <p className="text-sm text-gray-500 mt-2">Start a new session to engage with your students</p>
+            <p style={{ color: 'var(--fg-muted)' }}>No active sessions at the moment</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--fg-muted)' }}>Start a new session to engage with your students</p>
           </div>
         )}
       </div>
@@ -222,20 +245,22 @@ export default function InstructorSectionView({
               {publishedProblems.map((problem) => (
                 <div
                   key={problem.problem.id}
-                  className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200"
+                  className="rounded-lg shadow hover:shadow-md transition-shadow border"
+                  style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}
                 >
                   <div className="p-6">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{problem.problem.title}</h3>
+                        <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--fg)' }}>{problem.problem.title}</h3>
                         {problem.problem.description && (
-                          <p className="text-gray-600 mb-2 line-clamp-2 text-sm">{problem.problem.description}</p>
+                          <p className="mb-2 line-clamp-2 text-sm" style={{ color: 'var(--fg-muted)' }}>{problem.problem.description}</p>
                         )}
                         <div className="flex items-center gap-2">
                           {(problem.problem.tags || []).map((tag) => (
                             <span
                               key={tag}
-                              className="px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded"
+                              className="px-2 py-1 text-xs font-medium rounded"
+                              style={{ background: 'var(--bg-sunken)', color: 'var(--fg-muted)' }}
                             >
                               {tag}
                             </span>
@@ -285,28 +310,33 @@ export default function InstructorSectionView({
               {pastSessions.map((session) => (
                 <div
                   key={session.id}
-                  className="bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200"
+                  data-testid="past-session-card"
+                  className="rounded-lg shadow hover:shadow-md transition-shadow border"
+                  style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}
                 >
                   <div className="p-6">
                     <div className="flex items-center justify-between flex-wrap gap-4">
                       <div className="flex items-center gap-4 flex-1">
                         <div className="flex-shrink-0">
-                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <svg className="w-7 h-7 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <div
+                            className="w-12 h-12 rounded-lg flex items-center justify-center"
+                            style={{ background: 'var(--bg-sunken)' }}
+                          >
+                            <svg className="w-7 h-7" style={{ color: 'var(--fg-muted)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           </div>
                         </div>
                         <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                          <h3 className="text-lg font-semibold mb-1" style={{ color: 'var(--fg)' }}>
                             {session.problem?.title || 'Coding Session'}
                           </h3>
                           {session.problem?.description && (
-                            <p className="text-gray-600 mb-2 line-clamp-1 text-sm">
+                            <p className="mb-2 line-clamp-1 text-sm" style={{ color: 'var(--fg-muted)' }}>
                               {session.problem.description}
                             </p>
                           )}
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--fg-muted)' }}>
                             <span className="flex items-center gap-1">
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -319,7 +349,10 @@ export default function InstructorSectionView({
                               </svg>
                               {formatDate(session.created_at)}
                             </span>
-                            <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">
+                            <span
+                              className="px-2 py-1 rounded text-xs font-medium"
+                              style={{ background: 'var(--bg-sunken)', color: 'var(--fg-muted)' }}
+                            >
                               Completed
                             </span>
                           </div>
@@ -327,7 +360,8 @@ export default function InstructorSectionView({
                       </div>
                       <button
                         onClick={() => router.push(`/instructor/session/${session.id}`)}
-                        className="px-6 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2 w-full sm:w-auto"
+                        className="px-6 py-3 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 w-full sm:w-auto"
+                        style={{ background: 'var(--bg-sunken)', color: 'var(--fg-muted)' }}
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -341,13 +375,16 @@ export default function InstructorSectionView({
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="rounded-lg shadow p-8 text-center" style={{ background: 'var(--bg-raised)' }}>
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                style={{ background: 'var(--bg-sunken)' }}
+              >
+                <svg className="w-8 h-8" style={{ color: 'var(--fg-subtle)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <p className="text-gray-600">No past sessions yet</p>
+              <p style={{ color: 'var(--fg-muted)' }}>No past sessions yet</p>
             </div>
           )}
         </Tabs.Panel>
@@ -355,26 +392,26 @@ export default function InstructorSectionView({
         {/* Students Tab */}
         <Tabs.Panel tabId="students">
           {students.length > 0 ? (
-            <div className="bg-white rounded-lg shadow overflow-x-auto" data-testid="students-table-container">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+            <div className="rounded-lg shadow overflow-x-auto" data-testid="students-table-container" style={{ background: 'var(--bg-raised)' }}>
+              <table className="min-w-full divide-y" style={{ borderColor: 'var(--border)' }}>
+                <thead style={{ background: 'var(--bg-sunken)' }}>
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--fg-muted)' }}>
                       Student
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--fg-muted)' }}>
                       Progress
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--fg-muted)' }}>
                       Last Seen
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="divide-y" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}>
                   {students.map((student) => (
                     <tr
                       key={student.user_id}
-                      className="hover:bg-gray-50 transition-colors"
+                      className="transition-colors"
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link
@@ -384,15 +421,15 @@ export default function InstructorSectionView({
                           {student.display_name || student.email}
                         </Link>
                         {student.display_name && (
-                          <span className="block text-xs text-gray-500 mt-0.5">
+                          <span className="block text-xs mt-0.5" style={{ color: 'var(--fg-muted)' }}>
                             {student.email}
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--fg-muted)' }}>
                         {`Solved ${student.problems_solved} · Started ${student.problems_started}`}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm" style={{ color: 'var(--fg-muted)' }}>
                         {student.last_active ? formatTimeAgo(student.last_active) : 'Never'}
                       </td>
                     </tr>
@@ -401,13 +438,16 @@ export default function InstructorSectionView({
               </table>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="rounded-lg shadow p-8 text-center" style={{ background: 'var(--bg-raised)' }}>
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+                style={{ background: 'var(--bg-sunken)' }}
+              >
+                <svg className="w-8 h-8" style={{ color: 'var(--fg-subtle)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
-              <p className="text-gray-600">No students enrolled yet</p>
+              <p style={{ color: 'var(--fg-muted)' }}>No students enrolled yet</p>
             </div>
           )}
         </Tabs.Panel>

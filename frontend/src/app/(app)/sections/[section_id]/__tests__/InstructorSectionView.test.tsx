@@ -231,7 +231,7 @@ describe('InstructorSectionView', () => {
       expect(screen.getByText('Active Problem')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Rejoin/i })).toBeInTheDocument();
       // Live indicator: pulsing dot element inside the active session card
-      const sessionCard = container.querySelector('.border-green-200');
+      const sessionCard = container.querySelector('[data-testid="active-session-card"]');
       expect(sessionCard).not.toBeNull();
       // A pulse/live indicator dot should exist inside the card
       const liveDot = sessionCard!.querySelector('[data-testid="live-dot"]');
@@ -833,7 +833,7 @@ describe('InstructorSectionView', () => {
 
       // The outer header flex container should use flex-col sm:flex-row to stack on mobile
       // Find the div that wraps both the section title and the right-side controls
-      const headerCard = container.querySelector('.bg-white.rounded-lg.shadow.p-6');
+      const headerCard = container.querySelector('[data-testid="section-header-card"]');
       expect(headerCard).not.toBeNull();
       const outerFlex = headerCard!.firstElementChild;
       expect(outerFlex).not.toBeNull();
@@ -852,7 +852,7 @@ describe('InstructorSectionView', () => {
         />
       );
 
-      const headerCard = container.querySelector('.bg-white.rounded-lg.shadow.p-6');
+      const headerCard = container.querySelector('[data-testid="section-header-card"]');
       const outerFlex = headerCard!.firstElementChild;
       expect(outerFlex!.className).toMatch(/flex-col/);
       expect(outerFlex!.className).toMatch(/sm:flex-row/);
@@ -871,7 +871,7 @@ describe('InstructorSectionView', () => {
       );
 
       // The flex container inside the active session card p-6 div
-      const sessionCard = container.querySelector('.border-2.border-green-200');
+      const sessionCard = container.querySelector('[data-testid="active-session-card"]');
       expect(sessionCard).not.toBeNull();
       const flexContainer = sessionCard!.querySelector('.flex.items-center.justify-between');
       expect(flexContainer).not.toBeNull();
@@ -907,7 +907,7 @@ describe('InstructorSectionView', () => {
 
       await userEvent.click(screen.getByRole('tab', { name: /Sessions/i }));
 
-      const sessionCards = container.querySelectorAll('.border.border-gray-200');
+      const sessionCards = container.querySelectorAll('[data-testid="past-session-card"]');
       expect(sessionCards.length).toBeGreaterThan(0);
       const pastSessionCard = sessionCards[0];
       const flexContainer = pastSessionCard.querySelector('.flex.items-center.justify-between');

@@ -91,7 +91,7 @@ describe('EmptyState', () => {
       );
       const root = container.firstChild as HTMLElement;
       const chip = screen.getByText('500 · Something on our end');
-      const circle = container.querySelector('.bg-red-100');
+      const circle = container.querySelector('[data-testid="empty-state-icon-circle"]');
       const heading = screen.getByRole('heading', { name: 'Server error' });
       const order = Array.from(root.children);
       // chip is the first child, before the icon circle and the title
@@ -112,34 +112,34 @@ describe('EmptyState', () => {
   });
 
   describe('tone prop', () => {
-    it('defaults to neutral tone (gray icon circle)', () => {
+    const circleOf = (container: HTMLElement) =>
+      container.querySelector('[data-testid="empty-state-icon-circle"]');
+
+    it('defaults to neutral tone (sunken token icon circle)', () => {
       const { container } = render(<EmptyState title="No items" />);
-      const circle = container.querySelector('.bg-gray-100');
-      expect(circle).toBeInTheDocument();
+      expect(circleOf(container)).toHaveStyle({ background: 'var(--bg-sunken)' });
     });
 
+    // info/warn/danger remain Tailwind palette utilities (out of this slice's
+    // gray/green token scope).
     it('applies info tone (blue icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="info" />);
-      const circle = container.querySelector('.bg-blue-100');
-      expect(circle).toBeInTheDocument();
+      expect(circleOf(container)).toHaveClass('bg-blue-100');
     });
 
-    it('applies ok tone (green icon circle)', () => {
+    it('applies ok tone (run token icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="ok" />);
-      const circle = container.querySelector('.bg-green-100');
-      expect(circle).toBeInTheDocument();
+      expect(circleOf(container)).toHaveStyle({ background: 'var(--run-soft)' });
     });
 
     it('applies warn tone (yellow icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="warn" />);
-      const circle = container.querySelector('.bg-yellow-100');
-      expect(circle).toBeInTheDocument();
+      expect(circleOf(container)).toHaveClass('bg-yellow-100');
     });
 
     it('applies danger tone (red icon circle)', () => {
       const { container } = render(<EmptyState title="No items" tone="danger" />);
-      const circle = container.querySelector('.bg-red-100');
-      expect(circle).toBeInTheDocument();
+      expect(circleOf(container)).toHaveClass('bg-red-100');
     });
   });
 });
