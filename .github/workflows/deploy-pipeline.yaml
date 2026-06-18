@@ -151,9 +151,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
+        id: auth
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          # Mint a short-lived access token. Without this, WIF only writes an
+          # ADC credential file; gke-gcloud-auth-plugin then shells to
+          # `gcloud config config-helper`, which requires an *activated* gcloud
+          # account (the file override is not one) and fails kubectl with
+          # "You do not currently have an active account selected".
+          token_format: 'access_token'
+      # Hand gcloud/the auth plugin the access token directly so neither needs
+      # an activated account. Applies to all later steps in this job.
+      - name: Export gcloud access token for kubectl
+        run: |
+          echo "CLOUDSDK_AUTH_ACCESS_TOKEN=${{ steps.auth.outputs.access_token }}" >> "$GITHUB_ENV"
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> "$GITHUB_ENV"
       # setup-gcloud@v2 downloads a full ~500MB SDK even though gcloud is
       # pre-installed on the runner. The runner's apt-managed gcloud disables
       # the component manager and the Google Cloud apt source is removed, so
@@ -172,6 +185,10 @@ jobs:
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
+          # The loop's last command is `sleep` (exit 0); without this guard a
+          # 3x-failed get-credentials would pass the step and surface later as a
+          # confusing kubectl auth error.
+          kubectl config current-context >/dev/null 2>&1 || { echo "::error::get-credentials failed after 3 attempts"; exit 1; }
       - name: Apply cluster-level manifests
         run: kubectl apply -f k8s/cluster/
       - name: Reset staging database
@@ -510,9 +527,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
+        id: auth
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+          # Mint a short-lived access token. Without this, WIF only writes an
+          # ADC credential file; gke-gcloud-auth-plugin then shells to
+          # `gcloud config config-helper`, which requires an *activated* gcloud
+          # account (the file override is not one) and fails kubectl with
+          # "You do not currently have an active account selected".
+          token_format: 'access_token'
+      # Hand gcloud/the auth plugin the access token directly so neither needs
+      # an activated account. Applies to all later steps in this job.
+      - name: Export gcloud access token for kubectl
+        run: |
+          echo "CLOUDSDK_AUTH_ACCESS_TOKEN=${{ steps.auth.outputs.access_token }}" >> "$GITHUB_ENV"
+          echo "USE_GKE_GCLOUD_AUTH_PLUGIN=True" >> "$GITHUB_ENV"
       - name: Install gke-gcloud-auth-plugin
         run: |
           curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
@@ -527,6 +557,10 @@ jobs:
             echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
+          # The loop's last command is `sleep` (exit 0); without this guard a
+          # 3x-failed get-credentials would pass the step and surface later as a
+          # confusing kubectl auth error.
+          kubectl config current-context >/dev/null 2>&1 || { echo "::error::get-credentials failed after 3 attempts"; exit 1; }
       - name: Apply cluster-level manifests
         run: kubectl apply -f k8s/cluster/
       - name: Deploy to production
