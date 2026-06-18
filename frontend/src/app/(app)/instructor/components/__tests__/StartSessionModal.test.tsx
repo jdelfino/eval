@@ -57,7 +57,7 @@ describe('StartSessionModal', () => {
         />
       );
 
-      expect(screen.getByRole('heading', { name: 'Start Session' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Start a session' })).toBeInTheDocument();
       // Section name appears in the header subtitle and in the locked composer row.
       expect(screen.getAllByText(section_name).length).toBeGreaterThanOrEqual(1);
     });
@@ -184,6 +184,23 @@ describe('StartSessionModal', () => {
       fireEvent.click(modalContent);
 
       expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('closes modal when Escape is pressed (once, no double-fire)', async () => {
+      jest.spyOn(problemsApi, 'listProblems').mockResolvedValueOnce(mockProblems);
+
+      render(
+        <StartSessionModal
+          section_id={section_id}
+          section_name={section_name}
+          onClose={mockOnClose}
+          onSessionCreated={mockOnSessionCreated}
+        />
+      );
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(mockOnClose).toHaveBeenCalledTimes(1);
     });
 
     it('closes modal when X button is clicked', async () => {

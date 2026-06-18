@@ -21,6 +21,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { listProblems } from '@/lib/api/problems';
 import { createSession } from '@/lib/api/sessions';
+import { Modal } from '@/components/ui/Modal';
 import SessionComposer, { ComposerSection } from './SessionComposer';
 import { useProblemPublishState } from '../hooks/useProblemPublishState';
 import { PublishOptions } from '../hooks/PublishOptions';
@@ -113,51 +114,29 @@ export default function StartSessionModal({
   const publishUi = <PublishOptions publish={publish} active={!!selectedProblemId} />;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={handleClose}
-      data-testid="modal-backdrop"
+    <Modal
+      open
+      title="Start a session"
+      sub={`Section: ${section_name}`}
+      width={560}
+      onClose={handleClose}
+      backdropTestId="modal-backdrop"
+      contentTestId="modal-content"
     >
-      <div
-        className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        data-testid="modal-content"
+      <SessionComposer
+        sections={composerSections}
+        selectedSectionId={section_id}
+        onSelectSection={() => {}}
+        sectionLocked
+        optionsSlot={publishUi}
+        onStart={handleStart}
+        onCancel={handleClose}
+        starting={loading}
+        error={error}
+        startDisabled={!selectedOption}
       >
-        {/* Header */}
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Start Session</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Section: <span className="font-medium">{section_name}</span>
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            disabled={loading}
-            aria-label="Close"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          <SessionComposer
-            sections={composerSections}
-            selectedSectionId={section_id}
-            onSelectSection={() => {}}
-            sectionLocked
-            optionsSlot={publishUi}
-            onStart={handleStart}
-            onCancel={handleClose}
-            starting={loading}
-            error={error}
-            startDisabled={!selectedOption}
-          >
-            {/* Problem picker (host content above the section row) */}
-            <div className="space-y-4">
+        {/* Problem picker (host content above the section row) */}
+        <div className="space-y-4">
               {/* Blank Session Option */}
               <button
                 type="button"
@@ -214,10 +193,8 @@ export default function StartSessionModal({
                   </div>
                 )}
               </div>
-            </div>
-          </SessionComposer>
         </div>
-      </div>
-    </div>
+      </SessionComposer>
+    </Modal>
   );
 }
