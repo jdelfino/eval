@@ -23,7 +23,7 @@
  * - Calls useSectionEvents with correct sectionId and initialActiveSessions
  * - Preview mode: back button calls onBack when onBack prop is provided (no href link)
  * - Preview mode: back button links to /sections when onBack prop is not provided
- * - Past sessions render with date and problem title (Replay link absent — eval-4zi)
+ * - Past sessions render with date, problem title, and a Replay modal trigger (eval-4zi restored)
  * - Join handler called with live session id on Join click
  */
 
@@ -41,6 +41,13 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/lib/api/student-work', () => ({
   getOrCreateStudentWork: jest.fn(),
+}));
+
+// The Replay modal fetches revisions via getRevisions (omitting user_id for the
+// student variant). Mock it so the modal's open/empty behavior is deterministic.
+const mockGetRevisions = jest.fn();
+jest.mock('@/lib/api/sessions', () => ({
+  getRevisions: (...args: unknown[]) => mockGetRevisions(...args),
 }));
 
 // Mock useSectionEvents (section-pointer model). By default it echoes the
@@ -346,6 +353,7 @@ const POINTER_PROBLEM = activeSessionWithProblem.problem!; // problem id = PROBL
 describe('StudentSectionView', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetRevisions.mockResolvedValue([]);
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
     // Default: hook echoes the initial pointer/problem/activity passed to the
     // component, so tests drive the live card via props.
@@ -1332,12 +1340,11 @@ describe('StudentSectionView', () => {
   });
 
   describe('past sessions', () => {
-    it('renders past sessions section with date and problem title (no Replay link)', () => {
+    it('renders past sessions section with date, problem title, and a Replay trigger', () => {
       /**
-       * Contract: past sessions render date + problem title only. The Replay link
-       * has been removed because /student?session_id= is ignored by the student page
-       * (permanent spinner). Replay UX lands in G4 (eval-4zi).
-       * Catches: accidental re-introduction of the broken Replay link.
+       * Contract: past sessions render date + problem title + a Replay affordance
+       * (G7-T6 restores the entry removed in eval-4zi).
+       * Catches: missing Replay trigger / row data loss.
        */
       render(
         <StudentSectionView
@@ -1353,18 +1360,18 @@ describe('StudentSectionView', () => {
       expect(screen.getByText('FizzBuzz')).toBeInTheDocument();
       expect(screen.getByText('Binary Search')).toBeInTheDocument();
 
-      // "Replay →" link must NOT be present — it caused a permanent spinner (eval-4zi)
-      // Note: subtitle text "Replay any class session..." is still present; we check
-      // specifically that no anchor with text matching the link pattern exists.
-      expect(screen.queryByRole('link', { name: /Replay →/i })).not.toBeInTheDocument();
-      expect(screen.queryByText('Replay →')).not.toBeInTheDocument();
+      // One Replay trigger per past session.
+      expect(screen.getAllByRole('button', { name: 'Replay' })).toHaveLength(
+        pastSessions.length
+      );
     });
 
-    it('Replay link is absent from past session rows', () => {
+    it('Replay trigger is a button, not a link to the dead /student?session_id= route', () => {
       /**
-       * Contract: PastSessionRow renders date/problem/verdict with NO link.
-       * Replay UX deferred to G4 (eval-4zi); /student?session_id= is currently broken.
-       * Catches: broken replay link re-introduction.
+       * Contract (eval-4zi regression): the restored Replay affordance must NOT
+       * navigate to /student?session_id=<id>, which the student page ignores and
+       * which produced a permanent loading spinner. It is a modal trigger button.
+       * Catches: re-introduction of the broken navigation.
        */
       render(
         <StudentSectionView
@@ -1376,12 +1383,82 @@ describe('StudentSectionView', () => {
         />
       );
 
-      // No anchor links should target the broken student?session_id route
+      // No anchor links should target the broken student?session_id route.
       const allLinks = screen.queryAllByRole('link');
       const replayLinks = allLinks.filter(
         (l) => l.getAttribute('href')?.includes('session_id=')
       );
       expect(replayLinks).toHaveLength(0);
+
+      // The Replay affordance is a button (modal trigger), not a link.
+      expect(screen.getAllByRole('button', { name: 'Replay' }).length).toBeGreaterThan(0);
+    });
+
+    it('clicking Replay opens the Replay modal and loads that session\'s revisions (eval-4zi)', async () => {
+      /**
+       * Contract (Test Case 4 / eval-4zi regression): activating a past-session
+       * Replay trigger opens the Replay modal (student variant) and fetches that
+       * session's revisions WITHOUT a user_id filter (backend infers the caller),
+       * instead of navigating to the dead /student?session_id= route.
+       * Catches: the exact infinite-spinner bug eval-4zi reported.
+       */
+      mockGetRevisions.mockResolvedValue([
+        {
+          id: 'rev-1',
+          timestamp: '2026-02-18T09:05:00Z',
+          full_code: 'print(1)',
+          execution_result: null,
+        },
+      ]);
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId={null}
+          publishedProblems={[]}
+          pastSessions={pastSessions}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      expect(screen.queryByTestId('replay-modal')).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getAllByRole('button', { name: 'Replay' })[0]);
+
+      // Modal opens for the clicked session…
+      expect(await screen.findByTestId('replay-modal')).toBeInTheDocument();
+      // …and revisions are fetched for that session with userId omitted
+      // (the hook passes undefined for the user filter in student mode).
+      await waitFor(() => {
+        expect(mockGetRevisions).toHaveBeenCalledWith('session-past-1', undefined);
+      });
+      // It must NOT navigate.
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('Replay modal with zero revisions shows an empty state, not a spinner (eval-4zi)', async () => {
+      /**
+       * Contract (Test Case 5): when the session has no revisions, the modal
+       * degrades to an empty state ("No prior revision to compare") rather than
+       * the permanent spinner that was the original dead-end symptom.
+       * Catches: regression to the infinite-loading behavior.
+       */
+      mockGetRevisions.mockResolvedValue([]);
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId={null}
+          publishedProblems={[]}
+          pastSessions={pastSessions}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      await userEvent.click(screen.getAllByRole('button', { name: 'Replay' })[0]);
+
+      expect(await screen.findByTestId('replay-empty')).toBeInTheDocument();
+      expect(screen.queryByText(/Loading revision history/i)).not.toBeInTheDocument();
     });
 
     it('does not render a verdict pill on past session rows', () => {

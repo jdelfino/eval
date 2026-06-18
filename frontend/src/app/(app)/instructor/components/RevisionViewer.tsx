@@ -1,21 +1,97 @@
 'use client';
 
-import { useRevisionHistory } from '@/hooks/useRevisionHistory';
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
+import { Modal } from '@/components/ui/Modal';
+import { CodeBlock } from '@/components/ui/CodeBlock';
+import { Pill } from '@/components/ui/Pill';
+import { Button } from '@/components/ui/Button';
+import { useRevisionHistory, type CodeRevision } from '@/hooks/useRevisionHistory';
+import { lineDiff } from '@/lib/diff';
 
-interface RevisionViewerProps {
-  session_id: string;
-  studentId: string;
-  studentName: string;
+/**
+ * ReplayModal — revision-history walkthrough on the Modal primitive (G7-T6).
+ *
+ * Two-column layout per design ReplayModalP: a revision list on the left (one
+ * row per revision with an rN pill, relative timestamp, and a pass/fail tone
+ * derived from the captured execution result) and a diff pane on the right
+ * (selected revision vs. the prior one, rendered as unified-diff text in a
+ * CodeBlock, plus a failure-detail block when the run failed). Prev/next nav
+ * walks the selection.
+ *
+ * Two call sites share this one component:
+ *  - instructor: `RevisionViewer` passes a foreign `studentId`; revisions are
+ *    fetched filtered to that student.
+ *  - student: `StudentSectionView` omits `studentId` (`omitUser`); the backend
+ *    returns the caller's own revisions.
+ *
+ * The Modal supplies focus-trap / Escape / focus-restore the previous inline
+ * 900×600 div lacked. When there are no revisions (or the fetch fails), an
+ * empty state renders instead of an infinite spinner — the original eval-4zi
+ * dead-end the student replay link caused.
+ */
+export interface ReplayModalProps {
+  /** Whether the modal is open. */
+  open: boolean;
+  /** Session whose revisions are replayed. */
+  sessionId: string;
+  /** Called on Escape, backdrop click, or close-button press. */
   onClose: () => void;
+  /**
+   * Student whose revisions to show (instructor variant). Omit for the student
+   * variant — combined with `omitUser`, the backend returns the caller's own
+   * revisions.
+   */
+  studentId?: string;
+  /**
+   * When true, fetch the caller's own revisions (student variant) by omitting
+   * the user filter. The Modal title then drops the foreign-student name.
+   */
+  omitUser?: boolean;
+  /** Foreign student's name, shown in the instructor title. */
+  studentName?: string;
+  /** Problem title, appended to the Modal heading when present. */
+  problemTitle?: string;
 }
 
-export default function RevisionViewer({
-  session_id,
-  studentId,
-  studentName,
+function formatTimestamp(date: Date): string {
+  return date.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+/** Relative time of a revision from the first revision ("+1m 5s"). */
+function formatElapsed(revisions: CodeRevision[], index: number): string {
+  if (revisions.length === 0 || index >= revisions.length) return '';
+  const elapsed = Math.floor(
+    (revisions[index].timestamp.getTime() - revisions[0].timestamp.getTime()) / 1000
+  );
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  return `+${minutes}m ${seconds}s`;
+}
+
+type Verdict = { tone: 'ok' | 'danger' | 'neutral'; label: string };
+
+/** Derive the pass/fail pill from a revision's captured execution result. */
+function deriveVerdict(rev: CodeRevision | undefined): Verdict {
+  const result = rev?.executionResult;
+  if (!result) return { tone: 'neutral', label: 'no run' };
+  const { passed, total } = result.summary;
+  if (total > 0 && passed === total) return { tone: 'ok', label: 'pass' };
+  return { tone: 'danger', label: 'fail' };
+}
+
+export function ReplayModal({
+  open,
+  sessionId,
   onClose,
-}: RevisionViewerProps) {
+  studentId,
+  omitUser = false,
+  studentName,
+  problemTitle,
+}: ReplayModalProps): React.ReactElement | null {
   const {
     revisions,
     currentRevision,
@@ -25,406 +101,211 @@ export default function RevisionViewer({
     goToRevision,
     next,
     previous,
-    goToFirst,
-    goToLast,
     hasNext,
     hasPrevious,
     totalRevisions,
   } = useRevisionHistory({
-    session_id,
-    studentId,
+    session_id: open ? sessionId : null,
+    studentId: studentId ?? null,
+    omitUser,
   });
 
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
-  const formatElapsedTime = (index: number) => {
-    if (revisions.length === 0 || index >= revisions.length) return '';
-    
-    const sessionStart = revisions[0].timestamp;
-    const current = revisions[index].timestamp;
-    const elapsed = Math.floor((current.getTime() - sessionStart.getTime()) / 1000);
-    
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    
-    return `+${minutes}m ${seconds}s`;
-  };
-
-  const formatTimeSinceLastRevision = (index: number) => {
-    if (revisions.length === 0 || index >= revisions.length || index === 0) return '';
-    
-    const previous = revisions[index - 1].timestamp;
-    const current = revisions[index].timestamp;
-    const elapsed = Math.floor((current.getTime() - previous.getTime()) / 1000);
-    
-    if (elapsed < 60) {
-      return `(+${elapsed}s)`;
-    }
-    
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    
-    return `(+${minutes}m ${seconds}s)`;
-  };
-
-  // Track changes and trigger highlight animation
-  const [highlightKey, setHighlightKey] = useState(0);
-  
-  useEffect(() => {
-    // Trigger highlight animation when revision changes
-    setHighlightKey(prev => prev + 1);
-  }, [currentIndex]);
-
-  // Calculate which lines changed compared to previous revision
-  const changedLines = useMemo(() => {
-    if (currentIndex === 0 || !currentRevision) return new Set<number>();
-    
-    const prevRevision = revisions[currentIndex - 1];
-    if (!prevRevision) return new Set<number>();
-    
-    const prevLines = prevRevision.code.split('\n');
-    const currLines = currentRevision.code.split('\n');
-    const changes = new Set<number>();
-    
-    // Simple line-by-line comparison
-    const maxLines = Math.max(prevLines.length, currLines.length);
-    for (let i = 0; i < maxLines; i++) {
-      if (prevLines[i] !== currLines[i]) {
-        changes.add(i);
-      }
-    }
-    
-    return changes;
-  }, [currentIndex, currentRevision, revisions]);
-
-  // Render code with line highlighting
-  const renderCodeWithHighlights = () => {
+  // Diff of the selected revision vs. the prior one. The first revision has no
+  // predecessor, so it renders as all-context (added) lines.
+  const diff = useMemo(() => {
     if (!currentRevision) return '';
-    
-    const lines = currentRevision.code.split('\n');
-    return lines.map((line, idx) => {
-      const isChanged = changedLines.has(idx);
-      return (
-        <div
-          key={`${highlightKey}-${idx}`}
-          style={{
-            backgroundColor: isChanged ? '#3d5016' : 'transparent',
-            animation: isChanged ? 'fadeOut 2s ease-out forwards' : 'none',
-            transition: 'background-color 0.3s',
-          }}
-        >
-          {line || '\n'}
-        </div>
-      );
-    });
-  };
+    const prev = currentIndex > 0 ? revisions[currentIndex - 1] : null;
+    return lineDiff(prev?.code ?? '', currentRevision.code);
+  }, [currentRevision, currentIndex, revisions]);
 
-  if (loading && totalRevisions === 0) {
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}>
-        <div style={{
-          backgroundColor: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          maxWidth: '90%',
-          maxHeight: '90%',
-        }}>
-          <p>Loading revision history...</p>
-        </div>
-      </div>
-    );
-  }
+  const verdict = deriveVerdict(currentRevision ?? undefined);
 
-  if (error) {
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}>
-        <div style={{
-          backgroundColor: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          maxWidth: '90%',
-          maxHeight: '90%',
-        }}>
-          <h3>Error</h3>
-          <p>{error}</p>
-          <button onClick={onClose} style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginTop: '1rem',
-          }}>
-            Close
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const baseTitle = studentName ? `Replay · ${studentName}` : 'Replay';
+  const title = problemTitle ? `${baseTitle} — ${problemTitle}` : baseTitle;
 
-  if (totalRevisions === 0) {
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}>
-        <div style={{
-          backgroundColor: 'white',
-          padding: '2rem',
-          borderRadius: '8px',
-          maxWidth: '90%',
-          maxHeight: '90%',
-        }}>
-          <h3>No Revision History</h3>
-          <p>No code revisions have been captured for {studentName} yet.</p>
-          <button onClick={onClose} style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            marginTop: '1rem',
-          }}>
-            Close
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const sub =
+    totalRevisions > 0
+      ? `Revision ${currentIndex + 1} of ${totalRevisions}`
+      : undefined;
+
+  const footer = (
+    <>
+      <Button
+        variant="quiet"
+        size="sm"
+        onClick={previous}
+        disabled={!hasPrevious}
+        data-testid="replay-prev"
+      >
+        ← Prev
+      </Button>
+      <Button
+        variant="quiet"
+        size="sm"
+        onClick={next}
+        disabled={!hasNext}
+        data-testid="replay-next"
+      >
+        Next →
+      </Button>
+      <span style={{ flex: 1 }} />
+      <Button variant="accent" size="sm" onClick={onClose}>
+        Close
+      </Button>
+    </>
+  );
+
+  // Empty / loading / error states all degrade gracefully — never an infinite
+  // spinner (the eval-4zi bug). Loading shows a brief message; everything else
+  // falls through to a single empty body.
+  const isEmpty = !loading && totalRevisions === 0;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-      onClick={onClose}
+    <Modal
+      open={open}
+      title={title}
+      sub={sub}
+      width={780}
+      onClose={onClose}
+      footer={footer}
+      contentTestId="replay-modal"
     >
-      <div
-        style={{
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          width: '900px',
-          height: '600px',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div style={{
-          padding: '1.5rem',
-          borderBottom: '1px solid #ddd',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexShrink: 0,
-        }}>
-          <div>
-            <h3 style={{ margin: 0, marginBottom: '0.5rem' }}>
-              Revision History: {studentName}
-            </h3>
-            <div style={{ color: '#666', fontSize: '0.9rem' }}>
-              Revision {currentIndex + 1}/{totalRevisions} | {' '}
-              {currentRevision && formatTimestamp(currentRevision.timestamp)} | {' '}
-              {formatElapsedTime(currentIndex)}
-              {formatTimeSinceLastRevision(currentIndex) && ` ${formatTimeSinceLastRevision(currentIndex)}`}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
+      {loading && totalRevisions === 0 ? (
+        <div style={{ padding: '24px 0', color: 'var(--fg-muted)', fontSize: 13 }}>
+          Loading revision history…
+        </div>
+      ) : error ? (
+        <div style={{ padding: '24px 0', color: 'var(--danger)', fontSize: 13 }}>
+          {error}
+        </div>
+      ) : isEmpty ? (
+        <div
+          data-testid="replay-empty"
+          style={{ padding: '24px 0', color: 'var(--fg-muted)', fontSize: 13 }}
+        >
+          No prior revision to compare
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 14, minHeight: 0 }}>
+          {/* Revision list */}
+          <ul
+            data-testid="replay-revision-list"
             style={{
-              padding: '0.5rem 1rem',
-              backgroundColor: '#e0e0e0',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '1.2rem',
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              maxHeight: 420,
+              overflow: 'auto',
             }}
           >
-            ✕
-          </button>
-        </div>
+            {revisions.map((rev, i) => {
+              const v = deriveVerdict(rev);
+              const selected = i === currentIndex;
+              return (
+                <li key={rev.id}>
+                  <button
+                    type="button"
+                    data-testid={`replay-revision-${i}`}
+                    aria-current={selected ? 'true' : undefined}
+                    onClick={() => goToRevision(i)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 8px',
+                      borderRadius: 'var(--radius)',
+                      border: '1px solid',
+                      borderColor: selected ? 'var(--border-strong)' : 'transparent',
+                      background: selected ? 'var(--bg-sunken)' : 'transparent',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Pill tone="neutral" mono>{`r${i + 1}`}</Pill>
+                    <span style={{ fontSize: 11, color: 'var(--fg-subtle)', flex: 1 }}>
+                      {formatElapsed(revisions, i)}
+                    </span>
+                    <Pill tone={v.tone}>{v.label}</Pill>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
 
-        {/* Code Display */}
-        <div style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: '1.5rem',
-          backgroundColor: '#f5f5f5',
-          minHeight: 0,
-        }}>
-          <style>{`
-            @keyframes fadeOut {
-              0% { background-color: #3d5016; }
-              100% { background-color: transparent; }
-            }
-          `}</style>
-          <pre style={{
-            margin: 0,
-            padding: '1rem',
-            backgroundColor: '#1e1e1e',
-            color: '#d4d4d4',
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            fontSize: '0.9rem',
-            whiteSpace: 'pre',
-            wordWrap: 'break-word',
-            minHeight: '100%',
-            lineHeight: '1.5',
-          }}>
-            {renderCodeWithHighlights()}
-          </pre>
-        </div>
-
-        {/* Controls */}
-        <div style={{
-          padding: '1.5rem',
-          borderTop: '1px solid #ddd',
-          flexShrink: 0,
-        }}>
-          {/* Navigation Buttons */}
-          <div style={{
-            display: 'flex',
-            gap: '0.5rem',
-            marginBottom: '1rem',
-            justifyContent: 'center',
-          }}>
-            <button
-              onClick={goToFirst}
-              disabled={!hasPrevious}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: hasPrevious ? '#0070f3' : '#ccc',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: hasPrevious ? 'pointer' : 'not-allowed',
-              }}
-            >
-              ⏮ First
-            </button>
-            <button
-              onClick={previous}
-              disabled={!hasPrevious}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: hasPrevious ? '#0070f3' : '#ccc',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: hasPrevious ? 'pointer' : 'not-allowed',
-              }}
-            >
-              ◀ Prev
-            </button>
-            <button
-              onClick={next}
-              disabled={!hasNext}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: hasNext ? '#0070f3' : '#ccc',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: hasNext ? 'pointer' : 'not-allowed',
-              }}
-            >
-              Next ▶
-            </button>
-            <button
-              onClick={goToLast}
-              disabled={!hasNext}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: hasNext ? '#0070f3' : '#ccc',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: hasNext ? 'pointer' : 'not-allowed',
-              }}
-            >
-              Last ⏭
-            </button>
-          </div>
-
-          {/* Timeline Slider */}
-          <div style={{ width: '100%' }}>
-            <input
-              type="range"
-              min={0}
-              max={totalRevisions - 1}
-              value={currentIndex}
-              onChange={(e) => goToRevision(parseInt(e.target.value))}
-              style={{
-                width: '100%',
-                cursor: 'pointer',
-              }}
-            />
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              marginTop: '0.5rem',
-              fontSize: '0.85rem',
-              color: '#666',
-            }}>
-              <span>{revisions[0] && formatTimestamp(revisions[0].timestamp)}</span>
-              {totalRevisions > 1 && (
-                <span>
-                  {revisions[totalRevisions - 1] && formatTimestamp(revisions[totalRevisions - 1].timestamp)}
+          {/* Diff + failure detail */}
+          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Pill tone={verdict.tone}>{verdict.label}</Pill>
+              {currentRevision && (
+                <span style={{ fontSize: 11.5, color: 'var(--fg-subtle)' }}>
+                  {formatTimestamp(currentRevision.timestamp)} · {formatElapsed(revisions, currentIndex)}
                 </span>
               )}
             </div>
+
+            <CodeBlock aria-label="revision diff">{diff}</CodeBlock>
+
+            {verdict.tone === 'danger' && currentRevision?.executionResult && (
+              <div
+                data-testid="replay-failure-detail"
+                style={{
+                  fontSize: 12,
+                  color: 'var(--danger)',
+                  background: 'var(--danger-soft)',
+                  border: '1px solid var(--danger)',
+                  borderRadius: 'var(--radius)',
+                  padding: '8px 10px',
+                }}
+              >
+                {currentRevision.executionResult.summary.passed}/
+                {currentRevision.executionResult.summary.total} tests passed
+                {currentRevision.executionResult.summary.errors > 0 &&
+                  ` · ${currentRevision.executionResult.summary.errors} errors`}
+              </div>
+            )}
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
+  );
+}
+
+interface RevisionViewerProps {
+  session_id: string;
+  studentId: string;
+  studentName: string;
+  /** Problem title, appended to the Replay modal heading when present. */
+  problemTitle?: string;
+  onClose: () => void;
+}
+
+/**
+ * RevisionViewer — instructor entry point for the Replay modal.
+ *
+ * Thin adapter preserving the original `{ session_id, studentId, studentName,
+ * onClose }` prop shape (plus an additive optional `problemTitle`) so the single
+ * SessionView invocation needs no behavioral change. Renders the shared
+ * ReplayModal filtered to the focused student.
+ */
+export default function RevisionViewer({
+  session_id,
+  studentId,
+  studentName,
+  problemTitle,
+  onClose,
+}: RevisionViewerProps) {
+  return (
+    <ReplayModal
+      open
+      sessionId={session_id}
+      studentId={studentId}
+      studentName={studentName}
+      problemTitle={problemTitle}
+      onClose={onClose}
+    />
   );
 }

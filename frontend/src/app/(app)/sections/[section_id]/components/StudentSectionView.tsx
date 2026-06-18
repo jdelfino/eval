@@ -14,6 +14,7 @@ import { useSectionEvents } from '@/hooks/useSectionEvents';
 import { isSectionLive } from '@/lib/liveness';
 import { formatShortDate } from '@/lib/format';
 import { SolutionViewerModal } from '@/components/SolutionViewerModal';
+import { ReplayModal } from '@/app/(app)/instructor/components/RevisionViewer';
 import type { SectionDetail } from '../page';
 
 // ---------------------------------------------------------------------------
@@ -206,9 +207,15 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution }: ProblemRowP
 
 interface PastSessionRowProps {
   session: Session;
+  /**
+   * Opens the Replay modal for this session (G7-T6, restores eval-4zi). The
+   * modal lives in the parent component; the row only triggers it — it does NOT
+   * navigate to the dead `/student?session_id=` route the old link used.
+   */
+  onReplay: (session: Session) => void;
 }
 
-function PastSessionRow({ session }: PastSessionRowProps) {
+function PastSessionRow({ session, onReplay }: PastSessionRowProps) {
   const date = session.created_at ? formatShortDate(session.created_at) : '—';
 
   return (
@@ -232,8 +239,10 @@ function PastSessionRow({ session }: PastSessionRowProps) {
         </div>
       </div>
 
-      {/* Verdict pill omitted (per-session pass/fail not persisted).
-          Replay UX lands in G4 (eval-4zi). */}
+      {/* Replay trigger (G7-T6, restores eval-4zi as a modal trigger). */}
+      <Button variant="quiet" size="xs" onClick={() => onReplay(session)}>
+        Replay
+      </Button>
     </div>
   );
 }
@@ -296,6 +305,9 @@ export default function StudentSectionView({
   const [filter, setFilter] = useState<FilterValue>('all');
   const [error, setError] = useState<string | null>(null);
   const [solutionModal, setSolutionModal] = useState<{ title: string; solution: string } | null>(null);
+  // The session whose revisions are being replayed. Lives in the main component
+  // (not the leaf row) so a single modal instance serves every past-session row.
+  const [replaySession, setReplaySession] = useState<Session | null>(null);
 
   const handleProblemClick = async (problemId: string) => {
     try {
@@ -490,7 +502,7 @@ export default function StudentSectionView({
                   key={session.id}
                   style={isLast ? undefined : { borderBottom: '1px solid var(--border)' }}
                 >
-                  <PastSessionRow session={session} />
+                  <PastSessionRow session={session} onReplay={setReplaySession} />
                 </div>
               );
             })}
@@ -513,6 +525,20 @@ export default function StudentSectionView({
         solution={solutionModal?.solution ?? ''}
         variant="student"
       />
+
+      {/* Replay modal (student variant — G7-T6, restores eval-4zi).
+          Fetches the caller's OWN revisions (userId omitted via omitUser); when
+          there are none the modal shows an empty state, never the infinite
+          spinner the dead /student?session_id= route caused. */}
+      {replaySession && (
+        <ReplayModal
+          open
+          sessionId={replaySession.id}
+          omitUser
+          problemTitle={replaySession.problem?.title}
+          onClose={() => setReplaySession(null)}
+        />
+      )}
     </div>
   );
 }
