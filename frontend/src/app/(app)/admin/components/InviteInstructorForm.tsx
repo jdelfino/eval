@@ -11,7 +11,7 @@ import React, { useState, FormEvent } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
+import { Banner } from '@/components/ui/Banner';
 
 interface InviteInstructorFormProps {
   onSubmit: (email: string) => Promise<void>;
@@ -97,17 +97,13 @@ export default function InviteInstructorForm({
 
         {error && (
           <div className="mt-4">
-            <Alert variant="error" dismissible onDismiss={() => setError('')}>
-              {error}
-            </Alert>
+            <Banner tone="danger" icon="alert" title={error} onDismiss={() => setError('')} />
           </div>
         )}
 
         {success && (
           <div className="mt-4">
-            <Alert variant="success" dismissible onDismiss={() => setSuccess('')}>
-              {success}
-            </Alert>
+            <Banner tone="run" icon="check" title={success} onDismiss={() => setSuccess('')} />
           </div>
         )}
       </form>

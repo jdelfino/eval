@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
+import { Banner } from '@/components/ui/Banner';
 
 interface NamespaceListProps {
   namespaces: NamespaceWithStats[];
@@ -161,30 +161,32 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
 
           {/* Actions */}
           {deletingId === namespace.id ? (
-            <Alert variant="warning" className="p-4">
-              <p className="font-medium mb-3">
-                Are you sure you want to delete this namespace? This will deactivate it.
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleConfirmDelete(namespace.id)}
-                  disabled={actionLoading}
-                  loading={actionLoading}
-                >
-                  {actionLoading ? 'Deleting...' : 'Yes, Delete'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleCancelDelete}
-                  disabled={actionLoading}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </Alert>
+            <Banner
+              tone="warn"
+              icon="alert"
+              title="Are you sure you want to delete this namespace? This will deactivate it."
+              action={
+                <div className="flex gap-2">
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleConfirmDelete(namespace.id)}
+                    disabled={actionLoading}
+                    loading={actionLoading}
+                  >
+                    {actionLoading ? 'Deleting...' : 'Yes, Delete'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleCancelDelete}
+                    disabled={actionLoading}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              }
+            />
           ) : (
             <div className="flex gap-2 flex-wrap">
               <Button

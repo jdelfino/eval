@@ -59,9 +59,6 @@ export type {
   TabsPanelProps,
 } from './Tabs';
 
-export { Alert } from './Alert';
-export type { AlertProps, AlertVariant } from './Alert';
-
 export { SignInButtons } from './SignInButtons';
 export type { SignInButtonsProps } from './SignInButtons';
 

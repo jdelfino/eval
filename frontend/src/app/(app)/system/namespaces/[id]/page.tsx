@@ -17,7 +17,7 @@ import { BackButton } from '@/components/ui/BackButton';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { Alert } from '@/components/ui/Alert';
+import { Banner } from '@/components/ui/Banner';
 
 /**
  * Namespace User Management Page
@@ -144,9 +144,9 @@ export default function NamespaceUsersPage() {
 
       {/* Error Display */}
       {(error || actionError) && (
-        <Alert variant="error" className="mb-8">
-          <strong>Error:</strong> {error || actionError}
-        </Alert>
+        <div className="mb-8">
+          <Banner tone="danger" icon="alert" title="Error:" body={error || actionError} />
+        </div>
       )}
 
       {/* User List */}
@@ -216,29 +216,33 @@ export default function NamespaceUsersPage() {
 
                 {/* User Actions */}
                 {deletingUserId === user.id ? (
-                  <Alert variant="warning" className="p-4 ml-4">
-                    <p className="text-sm mb-2">
-                      Delete this user?
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => handleDeleteUser(user.id)}
-                        disabled={loading}
-                      >
-                        Yes
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setDeletingUserId(null)}
-                        disabled={loading}
-                      >
-                        No
-                      </Button>
-                    </div>
-                  </Alert>
+                  <div className="ml-4">
+                    <Banner
+                      tone="warn"
+                      icon="alert"
+                      title="Delete this user?"
+                      action={
+                        <div className="flex gap-2">
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={loading}
+                          >
+                            Yes
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setDeletingUserId(null)}
+                            disabled={loading}
+                          >
+                            No
+                          </Button>
+                        </div>
+                      }
+                    />
+                  </div>
                 ) : (
                   <div className="flex gap-2">
                     <Button

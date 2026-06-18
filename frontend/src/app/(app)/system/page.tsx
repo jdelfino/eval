@@ -20,7 +20,7 @@ import type { SerializedInvitation } from '@/lib/api/invitations';
 import { Tabs } from '@/components/ui/Tabs';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Alert } from '@/components/ui/Alert';
+import { Banner } from '@/components/ui/Banner';
 
 // Filters for invitations (extends typed filters with 'all' options for UI)
 interface InvitationFilters {
@@ -291,9 +291,9 @@ function SystemAdminContent() {
 
           {/* Error Display */}
           {namespacesError && (
-            <Alert variant="error" className="mb-8">
-              <strong>Error:</strong> {namespacesError}
-            </Alert>
+            <div className="mb-8">
+              <Banner tone="danger" icon="alert" title="Error:" body={namespacesError} />
+            </div>
           )}
 
           {/* Namespace List */}
@@ -413,9 +413,9 @@ function SystemAdminContent() {
 
           {/* Error Display */}
           {invitationsError && (
-            <Alert variant="error" className="mb-8">
-              <strong>Error:</strong> {invitationsError}
-            </Alert>
+            <div className="mb-8">
+              <Banner tone="danger" icon="alert" title="Error:" body={invitationsError} />
+            </div>
           )}
 
           {/* Invitation List */}
