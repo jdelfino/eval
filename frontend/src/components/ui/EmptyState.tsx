@@ -83,8 +83,7 @@ export function EmptyState({
     >
       {code && (
         <span
-          className="mb-3 font-mono text-xs font-semibold uppercase tracking-wide"
-          style={{ color: 'var(--fg-subtle)' }}
+          className="mb-3 font-mono text-xs font-semibold uppercase tracking-wide text-fg-subtle"
         >
           {code}
         </span>
@@ -100,9 +99,9 @@ export function EmptyState({
           className={TONE_ICON_COLOR[tone]}
         />
       </div>
-      <h2 className="mb-2 text-lg font-semibold" style={{ color: 'var(--fg)' }}>{title}</h2>
+      <h2 className="mb-2 text-lg font-semibold text-fg">{title}</h2>
       {body && (
-        <p className="mb-6 max-w-sm text-sm" style={{ color: 'var(--fg-muted)' }}>{body}</p>
+        <p className="mb-6 max-w-sm text-sm text-fg-muted">{body}</p>
       )}
       {primary}
       {secondary && <div className="mt-2">{secondary}</div>}

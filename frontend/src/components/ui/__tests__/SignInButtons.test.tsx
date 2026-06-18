@@ -390,7 +390,7 @@ describe('SignInButtons', () => {
 
     it('renders three equal-weight provider buttons with v4 outline styling', () => {
       /**
-       * v4 ProviderButton style contract: background var(--bg), border includes var(--border),
+       * v4 ProviderButton style contract: background bg-bg utility, border border-border utility,
        * three buttons named "Continue with Google/GitHub/Microsoft".
        * Catches restyle drift away from equal-weight outline look.
        */
@@ -405,8 +405,8 @@ describe('SignInButtons', () => {
       expect(microsoft).toBeInTheDocument();
 
       // Check v4 styling on one button
-      expect(google).toHaveStyle({ background: 'var(--bg)' });
-      expect(google.style.border).toContain('var(--border)');
+      expect(google).toHaveClass('bg-bg');
+      expect(google).toHaveClass('border', 'border-border');
     });
   });
 

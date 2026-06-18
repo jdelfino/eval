@@ -160,10 +160,10 @@ describe('Input', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Error message');
     });
 
-    it('error message uses var(--danger) color', () => {
+    it('error message uses the danger text token utility', () => {
       render(<Input error="Error message" />);
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveStyle({ color: 'var(--danger)' });
+      expect(alert).toHaveClass('text-danger');
     });
   });
 

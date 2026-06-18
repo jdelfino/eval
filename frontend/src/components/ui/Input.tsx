@@ -92,7 +92,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <p
             id={props.id ? `${props.id}-error` : undefined}
             role="alert"
-            style={{ color: 'var(--danger)', fontSize: 12, marginTop: 4 }}
+            className="text-danger"
+            style={{ fontSize: 12, marginTop: 4 }}
           >
             {error}
           </p>
