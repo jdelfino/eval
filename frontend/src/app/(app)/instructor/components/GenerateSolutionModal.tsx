@@ -136,13 +136,11 @@ export function GenerateSolutionModal({
     >
       <Field label="Statement (read-only)">
         <div
+          className="bg-bg-sunken border border-border text-fg-muted"
           style={{
             padding: 10,
-            background: 'var(--bg-sunken)',
-            border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             fontSize: 12.5,
-            color: 'var(--fg-muted)',
             lineHeight: 1.5,
             whiteSpace: 'pre-wrap',
           }}
@@ -160,12 +158,12 @@ export function GenerateSolutionModal({
       </Field>
 
       <div
+        className="text-fg-muted"
         style={{
           display: 'flex',
           flexWrap: 'wrap',
           gap: 12,
           fontSize: 12,
-          color: 'var(--fg-muted)',
           marginTop: 4,
           marginBottom: 12,
         }}
@@ -183,15 +181,15 @@ export function GenerateSolutionModal({
       </div>
 
       {error && (
-        <div role="alert" style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 10 }}>
+        <div role="alert" className="text-danger" style={{ fontSize: 12.5, marginBottom: 10 }}>
           {error}
         </div>
       )}
 
       <div
+        className="text-fg-subtle"
         style={{
           fontSize: 11,
-          color: 'var(--fg-subtle)',
           marginBottom: 6,
           fontWeight: 600,
           letterSpacing: 0.4,
@@ -209,12 +207,12 @@ export function GenerateSolutionModal({
         <>
           <CodeBlock aria-label="generated solution">{generated}</CodeBlock>
           <div
+            className="text-fg-subtle"
             style={{
               display: 'flex',
               gap: 8,
               marginTop: 10,
               fontSize: 11,
-              color: 'var(--fg-subtle)',
               alignItems: 'center',
             }}
           >
@@ -222,7 +220,7 @@ export function GenerateSolutionModal({
           </div>
         </>
       ) : (
-        <div style={{ fontSize: 12.5, color: 'var(--fg-subtle)', padding: '8px 0' }}>
+        <div className="text-fg-subtle" style={{ fontSize: 12.5, padding: '8px 0' }}>
           No draft yet — click Generate to draft a reference solution.
         </div>
       )}

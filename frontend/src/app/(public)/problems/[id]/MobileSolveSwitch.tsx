@@ -34,7 +34,8 @@ export function MobileSolveSwitch({ children }: MobileSolveSwitchProps): React.R
           secondaryAction={
             <Link
               href="/auth/signin"
-              style={{ fontSize: 13, color: 'var(--accent-ink)', textDecoration: 'underline' }}
+              className="text-accent-ink"
+              style={{ fontSize: 13, textDecoration: 'underline' }}
             >
               You can still sign in →
             </Link>

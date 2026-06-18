@@ -116,6 +116,7 @@ export function OpenOnLaptop({
       }}
     >
       <div
+        className="bg-accent-soft text-accent-ink"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -123,8 +124,6 @@ export function OpenOnLaptop({
           width: 48,
           height: 48,
           borderRadius: 'var(--radius)',
-          background: 'var(--accent-soft)',
-          color: 'var(--accent-ink)',
         }}
         aria-hidden="true"
       >
@@ -133,18 +132,18 @@ export function OpenOnLaptop({
 
       <div style={{ maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <h2
+          className="text-fg"
           style={{
             fontFamily: 'var(--font-serif)',
             fontSize: 22,
             fontWeight: 500,
             letterSpacing: -0.5,
-            color: 'var(--fg)',
             margin: 0,
           }}
         >
           {title}
         </h2>
-        <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--fg-muted)', margin: 0 }}>
+        <p className="text-fg-muted" style={{ fontSize: 14, lineHeight: 1.5, margin: 0 }}>
           {body}
         </p>
       </div>
@@ -161,10 +160,10 @@ export function OpenOnLaptop({
 
       {showUrl && (
         <p
+          className="text-fg-muted"
           style={{
             fontSize: 12,
             lineHeight: 1.5,
-            color: 'var(--fg-muted)',
             margin: 0,
             maxWidth: 360,
             wordBreak: 'break-all',

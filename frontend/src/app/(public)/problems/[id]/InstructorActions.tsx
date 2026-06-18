@@ -65,8 +65,8 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
   if (showCloseTab) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12, marginBottom: 24 }}>
-        <p style={{ fontSize: 13, color: 'var(--run)', fontWeight: 500 }}>Session started successfully.</p>
-        <p style={{ fontSize: 13, color: 'var(--fg-muted)' }}>You may close this tab.</p>
+        <p className="text-run" style={{ fontSize: 13, fontWeight: 500 }}>Session started successfully.</p>
+        <p className="text-fg-muted" style={{ fontSize: 13 }}>You may close this tab.</p>
       </div>
     );
   }
@@ -132,7 +132,7 @@ export default function InstructorActions({ problem_id, problem_title, class_id,
         </Button>
       </div>
       {autoStartError && (
-        <p style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 16 }}>{autoStartError}</p>
+        <p className="text-danger" style={{ fontSize: 13, marginBottom: 16 }}>{autoStartError}</p>
       )}
       {showModal && (
         <CreateSessionFromProblemModal

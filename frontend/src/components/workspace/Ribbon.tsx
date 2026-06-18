@@ -126,14 +126,15 @@ function EditableTitle({ title, onTitleChange }: EditableTitleProps) {
         borderBottom: hovered ? '1px dashed var(--border)' : '1px dashed transparent',
       }}
     >
-      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+      <span className="text-fg" style={{ fontSize: 13, fontWeight: 600 }}>
         {displayTitle}
       </span>
       {hovered && (
         <span
           data-testid="ribbon-title-pencil"
           aria-hidden="true"
-          style={{ fontSize: 11, color: 'var(--fg-muted)' }}
+          className="text-fg-muted"
+          style={{ fontSize: 11 }}
         >
           ✏
         </span>
@@ -162,12 +163,11 @@ export function Ribbon({ open, onToggle, title, meta, body, editable = false, on
 
   return (
     <div
+      className="border-b border-border bg-bg-raised"
       style={{
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg-raised)',
         maxHeight: open ? 280 : 36,
         transition: 'max-height 200ms ease',
         overflow: 'hidden',
@@ -177,6 +177,7 @@ export function Ribbon({ open, onToggle, title, meta, body, editable = false, on
       <div
         data-testid="ribbon-header"
         onClick={onToggle}
+        className="bg-bg-raised"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -186,16 +187,15 @@ export function Ribbon({ open, onToggle, title, meta, body, editable = false, on
           cursor: 'pointer',
           flexShrink: 0,
           borderBottom: open ? '1px solid var(--border)' : 'none',
-          background: 'var(--bg-raised)',
         }}
       >
         <span
+          className="text-fg-muted"
           style={{
             fontSize: 11.5,
             fontWeight: 600,
             letterSpacing: 0.4,
             textTransform: 'uppercase',
-            color: 'var(--fg-muted)',
           }}
         >
           Problem
@@ -204,13 +204,13 @@ export function Ribbon({ open, onToggle, title, meta, body, editable = false, on
         {editable ? (
           <EditableTitle title={title} onTitleChange={onTitleChange} />
         ) : (
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+          <span className="text-fg" style={{ fontSize: 13, fontWeight: 600 }}>
             {title}
           </span>
         )}
 
         {meta && (
-          <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+          <span className="text-fg-muted" style={{ fontSize: 12 }}>
             · {meta}
           </span>
         )}
@@ -220,9 +220,9 @@ export function Ribbon({ open, onToggle, title, meta, body, editable = false, on
         {/* First-line preview — only shown when collapsed */}
         {!open && (
           <span
+            className="text-fg-muted"
             style={{
               fontSize: 11.5,
-              color: 'var(--fg-muted)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -237,8 +237,8 @@ export function Ribbon({ open, onToggle, title, meta, body, editable = false, on
         <Kbd>⌘1</Kbd>
 
         <span
+          className="text-fg-muted"
           style={{
-            color: 'var(--fg-muted)',
             fontSize: 13,
             transform: open ? 'rotate(180deg)' : 'none',
             transition: 'transform 160ms',
@@ -251,11 +251,11 @@ export function Ribbon({ open, onToggle, title, meta, body, editable = false, on
       {/* Body — rendered only when expanded */}
       {open && (
         <div
+          className="bg-bg-raised"
           style={{
             flex: 1,
             overflow: 'auto',
             padding: '14px 22px',
-            background: 'var(--bg-raised)',
           }}
         >
           <MarkdownContent content={body} darkTheme={false} />

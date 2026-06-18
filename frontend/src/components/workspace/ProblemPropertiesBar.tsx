@@ -47,6 +47,7 @@ function ChipButton({ label, value, onClick }: ChipButtonProps) {
     <button
       type="button"
       onClick={onClick}
+      className="border border-border bg-bg"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -54,8 +55,6 @@ function ChipButton({ label, value, onClick }: ChipButtonProps) {
         height: 24,
         padding: '0 9px',
         borderRadius: 12,
-        border: '1px solid var(--border)',
-        background: 'var(--bg)',
         fontFamily: 'var(--font-sans)',
         fontSize: 12,
         cursor: 'pointer',
@@ -69,18 +68,18 @@ function ChipButton({ label, value, onClick }: ChipButtonProps) {
       }}
     >
       <span
+        className="text-fg-muted"
         style={{
           fontSize: 10.5,
           fontWeight: 600,
           letterSpacing: 0.3,
-          color: 'var(--fg-muted)',
           textTransform: 'uppercase',
         }}
       >
         {label}
       </span>
-      <span style={{ color: 'var(--fg)' }}>{value}</span>
-      <span style={{ color: 'var(--fg-muted)', fontSize: 10 }}>▾</span>
+      <span className="text-fg">{value}</span>
+      <span className="text-fg-muted" style={{ fontSize: 10 }}>▾</span>
     </button>
   );
 }
@@ -195,6 +194,7 @@ export function ProblemPropertiesBar({
 
   return (
     <div
+      className="border-b border-border bg-bg-raised"
       style={{
         height: 36,
         padding: '0 14px',
@@ -202,8 +202,6 @@ export function ProblemPropertiesBar({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg-raised)',
         flexShrink: 0,
       }}
     >
@@ -225,8 +223,8 @@ export function ProblemPropertiesBar({
 
       {/* Vertical separator */}
       <div
+        className="border-l border-border"
         style={{
-          borderLeft: '1px solid var(--border)',
           height: 16,
           flexShrink: 0,
         }}
@@ -236,6 +234,7 @@ export function ProblemPropertiesBar({
       {problemTags.map((tag) => (
         <span
           key={tag}
+          className="bg-bg-sunken text-fg-muted border border-border"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -243,9 +242,6 @@ export function ProblemPropertiesBar({
             height: 20,
             padding: '0 8px',
             borderRadius: 10,
-            background: 'var(--bg-sunken)',
-            color: 'var(--fg-muted)',
-            border: '1px solid var(--border)',
             fontFamily: 'var(--font-mono)',
             fontSize: 10.5,
             whiteSpace: 'nowrap',
@@ -256,6 +252,7 @@ export function ProblemPropertiesBar({
             type="button"
             aria-label="×"
             onClick={() => removeTag(tag)}
+            className="text-fg-subtle"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -265,7 +262,6 @@ export function ProblemPropertiesBar({
               padding: 0,
               border: 'none',
               background: 'transparent',
-              color: 'var(--fg-subtle)',
               cursor: 'pointer',
               fontSize: 10,
               lineHeight: 1,
@@ -290,15 +286,13 @@ export function ProblemPropertiesBar({
           }}
           autoFocus
           placeholder="tag, tag…"
+          className="border border-border bg-bg text-fg"
           style={{
             height: 20,
             padding: '0 8px',
             borderRadius: 10,
-            border: '1px solid var(--border)',
-            background: 'var(--bg)',
             fontFamily: 'var(--font-mono)',
             fontSize: 10.5,
-            color: 'var(--fg)',
             outline: 'none',
             width: 100,
           }}
@@ -310,6 +304,7 @@ export function ProblemPropertiesBar({
             setTagInputOpen(true);
             // focus is handled by autoFocus on the input
           }}
+          className="text-fg-subtle"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -318,7 +313,6 @@ export function ProblemPropertiesBar({
             borderRadius: 10,
             border: '1px dashed var(--border)',
             background: 'transparent',
-            color: 'var(--fg-subtle)',
             fontFamily: 'var(--font-sans)',
             fontSize: 10.5,
             cursor: 'pointer',

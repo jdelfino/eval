@@ -60,27 +60,25 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
   if (!hasCurrentProblem) {
     return (
       <div
+        className="bg-bg-raised"
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 14,
           padding: '14px 18px',
           marginBottom: 30,
-          background: 'var(--bg-raised)',
           border: '1px dashed var(--border-strong)',
           borderRadius: 'var(--radius-lg)',
         }}
       >
         <div
+          className="bg-bg-sunken border border-border text-fg-subtle"
           style={{
             width: 34,
             height: 34,
             borderRadius: 17,
-            background: 'var(--bg-sunken)',
-            border: '1px solid var(--border)',
             display: 'grid',
             placeItems: 'center',
-            color: 'var(--fg-subtle)',
             fontSize: 16,
           }}
         >
@@ -88,7 +86,7 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13.5, fontWeight: 600 }}>No session live right now</div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+          <div className="text-fg-muted" style={{ fontSize: 12 }}>
             You&apos;ll get a banner when your instructor opens a problem. Until then, practice or review past sessions below.
           </div>
         </div>
@@ -99,14 +97,13 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
   return (
     <div
       data-testid="live-session-card"
-      className="rounded-lg shadow-lg p-4"
+      className="rounded-lg shadow-lg p-4 text-fg-inverse"
       style={{
         marginBottom: 30,
         // Live "run" gradient on F1 tokens (replaces the green-500→green-600
         // Tailwind gradient): --run into a darker run via color-mix.
         background:
           'linear-gradient(to right, var(--run), color-mix(in oklch, var(--run) 82%, black))',
-        color: 'var(--fg-inverse)',
       }}
     >
       {/* Layout breakpoint is driven by the JS isMobile (<768px) source, not a
@@ -142,8 +139,7 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
             T1 /student guard; the real block stays that guard, not here. The
             mobile-vs-desktop swap shape is the shared <MobileSwap> wrapper. */}
         <MobileSwap
-          mobileClassName="rounded-lg overflow-hidden"
-          mobileStyle={{ color: 'var(--fg)', background: 'var(--bg-raised)' }}
+          mobileClassName="rounded-lg overflow-hidden text-fg bg-bg-raised"
           mobile={
             <OpenOnLaptop
               title="Open this session on your laptop"
@@ -153,8 +149,7 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
         >
           <button
             onClick={onJoin}
-            className="px-6 py-2.5 text-sm font-semibold rounded-lg transition-colors shadow hover:shadow-md flex items-center gap-2"
-            style={{ background: 'var(--bg-raised)', color: 'var(--run)' }}
+            className="px-6 py-2.5 text-sm font-semibold rounded-lg transition-colors shadow hover:shadow-md flex items-center gap-2 bg-bg-raised text-run"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -221,7 +216,7 @@ function ProblemRow({ problem, isLive, isMobile, onPractice, onViewSolution }: P
           gap: 10,
         }}
       >
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
+        <span className="text-fg" style={{ fontSize: 14, fontWeight: 600 }}>
           {problem.problem.title}
         </span>
         {isLive && (
@@ -236,10 +231,10 @@ function ProblemRow({ problem, isLive, isMobile, onPractice, onViewSolution }: P
 
       {/* Tests count */}
       <div
+        className="text-fg-subtle"
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 11.5,
-          color: 'var(--fg-subtle)',
           textAlign: isMobile ? 'left' : 'right',
           whiteSpace: 'nowrap',
         }}
@@ -314,7 +309,7 @@ function PastSessionRow({ session, onReplay, isMobile }: PastSessionRowProps) {
 
       {/* Problem title */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--fg)' }}>
+        <div className="text-fg" style={{ fontSize: 13.5, fontWeight: 500 }}>
           {session.problem?.title ?? '—'}
         </div>
       </div>
@@ -459,14 +454,14 @@ export default function StudentSectionView({
           )}
         </div>
 
-        <div className="rounded-lg shadow p-6" style={{ background: 'var(--bg-raised)' }}>
+        <div className="rounded-lg shadow p-6 bg-bg-raised">
           <div className="flex items-start justify-between">
             <div>
               <SectionLabel style={{ marginBottom: 4 }}>Section</SectionLabel>
               <AuthHeading size="xl" style={{ marginBottom: 0 }}>
                 {section.name}
               </AuthHeading>
-              <div style={{ marginTop: 6, fontSize: 13, color: 'var(--fg-muted)' }}>
+              <div className="text-fg-muted" style={{ marginTop: 6, fontSize: 13 }}>
                 <span>{section.className}</span>
                 {section.semester && (
                   <>
@@ -514,9 +509,8 @@ export default function StudentSectionView({
 
         {filteredProblems.length > 0 ? (
           <div
+            className="bg-bg-raised border border-border"
             style={{
-              background: 'var(--bg-raised)',
-              border: '1px solid var(--border)',
               borderRadius: 'var(--radius-lg)',
               overflow: 'hidden',
               marginBottom: 36,
@@ -569,16 +563,15 @@ export default function StudentSectionView({
           <SectionLabel as="h2" style={{ margin: 0 }}>
             Past sessions
           </SectionLabel>
-          <div style={{ fontSize: 12, color: 'var(--fg-subtle)' }}>
+          <div className="text-fg-subtle" style={{ fontSize: 12 }}>
             Replay any class session to review your code and tests
           </div>
         </div>
 
         {pastSessions.length > 0 ? (
           <div
+            className="bg-bg-raised border border-border"
             style={{
-              background: 'var(--bg-raised)',
-              border: '1px solid var(--border)',
               borderRadius: 'var(--radius-lg)',
               overflow: 'hidden',
             }}

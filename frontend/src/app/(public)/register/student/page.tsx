@@ -263,18 +263,18 @@ function StudentRegistrationContent() {
       <AuthPublicShell narrow showSignInLink={false}>
         <AuthCard style={{ marginTop: 30, textAlign: 'center' as const }}>
           <div
+            className="bg-run-soft"
             style={{
               width: 56,
               height: 56,
               borderRadius: '50%',
-              background: 'var(--run-soft)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 16px',
             }}
           >
-            <Icon name="check" size={24} style={{ color: 'var(--run)' }} />
+            <Icon name="check" size={24} className="text-run" />
           </div>
           <AuthHeading size="sm" as="h2" style={{ margin: '0 0 8px' }} sub="Redirecting to your dashboard…">
             Joined!
@@ -344,17 +344,16 @@ function StudentRegistrationContent() {
 
           {/* Card footer — replaces old blue info-box and bottom "Sign in here" */}
           <div
+            className="border-t border-border text-fg-muted"
             style={{
-              borderTop: '1px solid var(--border)',
               marginTop: 20,
               paddingTop: 12,
               fontSize: 12.5,
-              color: 'var(--fg-muted)',
               textAlign: 'center' as const,
             }}
           >
             Already on Eval?{' '}
-            <Link href="/auth/signin" style={{ color: 'var(--accent-ink)', textDecoration: 'none' }}>
+            <Link href="/auth/signin" className="text-accent-ink" style={{ textDecoration: 'none' }}>
               Sign in →
             </Link>
           </div>
@@ -366,12 +365,12 @@ function StudentRegistrationContent() {
         <AuthCard style={{ marginTop: 20, padding: 28 }}>
           {/* Kicker */}
           <div
+            className="text-accent-ink"
             style={{
               fontSize: 11,
               fontWeight: 600,
               letterSpacing: 0.6,
               textTransform: 'uppercase' as const,
-              color: 'var(--accent-ink)',
             }}
           >
             Join code accepted
@@ -383,18 +382,17 @@ function StudentRegistrationContent() {
           </AuthHeading>
 
           {/* Section / semester sub-line */}
-          <p style={{ fontSize: 13, color: 'var(--fg-muted)', marginTop: 0 }}>
+          <p className="text-fg-muted" style={{ fontSize: 13, marginTop: 0 }}>
             Section: {registrationInfo.section.name}
             {registrationInfo.section.semester ? ` · ${registrationInfo.section.semester}` : ''}
           </p>
 
           {/* Locked code summary */}
           <div
+            className="bg-bg-sunken border border-border"
             style={{
               marginTop: 18,
               padding: 12,
-              background: 'var(--bg-sunken)',
-              border: '1px solid var(--border)',
               borderRadius: 'var(--radius)',
               display: 'flex',
               justifyContent: 'space-between',
@@ -404,8 +402,8 @@ function StudentRegistrationContent() {
           >
             <div>
               <div
+                className="text-fg-subtle"
                 style={{
-                  color: 'var(--fg-subtle)',
                   fontSize: 11,
                   textTransform: 'uppercase' as const,
                   letterSpacing: 0.4,
@@ -443,10 +441,10 @@ function StudentRegistrationContent() {
           </div>
 
           {/* Sign-in heading */}
-          <div style={{ marginTop: 18, fontSize: 13, color: 'var(--fg)', fontWeight: 500 }}>
+          <div className="text-fg" style={{ marginTop: 18, fontSize: 13, fontWeight: 500 }}>
             Sign in to finish joining
           </div>
-          <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2, marginBottom: 12 }}>
+          <div className="text-fg-muted" style={{ fontSize: 12, marginTop: 2, marginBottom: 12 }}>
             Your name and email come from the account you choose.
           </div>
 
@@ -472,20 +470,20 @@ function StudentRegistrationContent() {
 
           {/* Terms line */}
           <div
+            className="text-fg-subtle"
             style={{
               fontSize: 11,
-              color: 'var(--fg-subtle)',
               marginTop: 16,
               textAlign: 'center' as const,
               lineHeight: 1.5,
             }}
           >
             By joining, you agree to the{' '}
-            <Link href="/terms" style={{ color: 'var(--accent-ink)', textDecoration: 'none' }}>
+            <Link href="/terms" className="text-accent-ink" style={{ textDecoration: 'none' }}>
               Terms
             </Link>{' '}
             and{' '}
-            <Link href="/privacy" style={{ color: 'var(--accent-ink)', textDecoration: 'none' }}>
+            <Link href="/privacy" className="text-accent-ink" style={{ textDecoration: 'none' }}>
               Privacy Policy
             </Link>
             .

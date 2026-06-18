@@ -113,7 +113,7 @@ export default function Home() {
           >
             <EvalLogomark size={40} wordmarkSize={30} />
           </div>
-          <div style={{ fontSize: 14, color: 'var(--fg-muted)' }}>
+          <div className="text-fg-muted" style={{ fontSize: 14 }}>
             A coding classroom for teachers and students.
           </div>
         </div>
@@ -123,20 +123,20 @@ export default function Home() {
         <form onSubmit={handleSubmit}>
           <label
             htmlFor="join-code"
+            className="text-fg"
             style={{
               display: 'block',
               fontSize: 13,
               fontWeight: 600,
-              color: 'var(--fg)',
               marginBottom: 4,
             }}
           >
             Enter your section join code
           </label>
           <div
+            className="text-fg-subtle"
             style={{
               fontSize: 12,
-              color: 'var(--fg-subtle)',
               marginBottom: 14,
             }}
           >
@@ -157,9 +157,9 @@ export default function Home() {
 
           {error && (
             <p
+              className="text-danger"
               style={{
                 fontSize: 12.5,
-                color: 'var(--danger)',
                 marginTop: 10,
                 marginBottom: 0,
                 textAlign: 'center',
@@ -190,26 +190,27 @@ export default function Home() {
 
         {/* Escape hatches below the card */}
         <div
+          className="border-t border-border"
           style={{
             marginTop: 20,
             paddingTop: 16,
-            borderTop: '1px solid var(--border)',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
             alignItems: 'center',
           }}
         >
-          <div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>
+          <div className="text-fg-muted" style={{ fontSize: 12.5 }}>
             Already on Eval?{' '}
             <Link
               href="/auth/signin"
-              style={{ color: 'var(--accent-ink)', fontWeight: 500, textDecoration: 'none' }}
+              className="text-accent-ink"
+              style={{ fontWeight: 500, textDecoration: 'none' }}
             >
               Sign in →
             </Link>
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--fg-subtle)' }}>
+          <div className="text-fg-subtle" style={{ fontSize: 11.5 }}>
             Invited as an instructor? Check your email for the invitation link.
           </div>
         </div>

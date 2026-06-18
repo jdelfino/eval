@@ -76,20 +76,20 @@ function SignInPageContent() {
 
         {/* Card footer */}
         <div
+          className="border-t border-border"
           style={{
             marginTop: 18,
             paddingTop: 16,
-            borderTop: '1px solid var(--border)',
             textAlign: 'center',
           }}
         >
-          <p style={{ fontSize: 12.5, color: 'var(--fg-muted)', margin: 0 }}>
+          <p className="text-fg-muted" style={{ fontSize: 12.5, margin: 0 }}>
             Have a section join code?{' '}
-            <Link href="/register/student" style={{ color: 'var(--accent-ink)' }}>
+            <Link href="/register/student" className="text-accent-ink">
               Join as a student →
             </Link>
           </p>
-          <p style={{ fontSize: 11.5, color: 'var(--fg-subtle)', margin: '6px 0 0' }}>
+          <p className="text-fg-subtle" style={{ fontSize: 11.5, margin: '6px 0 0' }}>
             <Link href="/auth/signin/email" style={{ color: 'inherit' }}>
               Sign in with email
             </Link>

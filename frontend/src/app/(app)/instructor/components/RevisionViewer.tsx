@@ -171,17 +171,18 @@ export function ReplayModal({
       contentTestId="replay-modal"
     >
       {loading && totalRevisions === 0 ? (
-        <div style={{ padding: '24px 0', color: 'var(--fg-muted)', fontSize: 13 }}>
+        <div className="text-fg-muted" style={{ padding: '24px 0', fontSize: 13 }}>
           Loading revision history…
         </div>
       ) : error ? (
-        <div style={{ padding: '24px 0', color: 'var(--danger)', fontSize: 13 }}>
+        <div className="text-danger" style={{ padding: '24px 0', fontSize: 13 }}>
           {error}
         </div>
       ) : isEmpty ? (
         <div
           data-testid="replay-empty"
-          style={{ padding: '24px 0', color: 'var(--fg-muted)', fontSize: 13 }}
+          className="text-fg-muted"
+          style={{ padding: '24px 0', fontSize: 13 }}
         >
           No prior revision to compare
         </div>
@@ -226,7 +227,7 @@ export function ReplayModal({
                     }}
                   >
                     <Pill tone="neutral" mono>{`r${i + 1}`}</Pill>
-                    <span style={{ fontSize: 11, color: 'var(--fg-subtle)', flex: 1 }}>
+                    <span className="text-fg-subtle" style={{ fontSize: 11, flex: 1 }}>
                       {formatElapsed(revisions, i)}
                     </span>
                     <Pill tone={v.tone}>{v.label}</Pill>
@@ -241,7 +242,7 @@ export function ReplayModal({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Pill tone={verdict.tone}>{verdict.label}</Pill>
               {currentRevision && (
-                <span style={{ fontSize: 11.5, color: 'var(--fg-subtle)' }}>
+                <span className="text-fg-subtle" style={{ fontSize: 11.5 }}>
                   {formatTimestamp(currentRevision.timestamp)} · {formatElapsed(revisions, currentIndex)}
                 </span>
               )}
@@ -252,11 +253,9 @@ export function ReplayModal({
             {verdict.tone === 'danger' && currentRevision?.executionResult && (
               <div
                 data-testid="replay-failure-detail"
+                className="text-danger bg-danger-soft border border-danger"
                 style={{
                   fontSize: 12,
-                  color: 'var(--danger)',
-                  background: 'var(--danger-soft)',
-                  border: '1px solid var(--danger)',
                   borderRadius: 'var(--radius)',
                   padding: '8px 10px',
                 }}

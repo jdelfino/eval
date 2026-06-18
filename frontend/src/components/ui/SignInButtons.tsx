@@ -141,6 +141,7 @@ export function SignInButtons({ onSuccess, onError, disabled: externalDisabled, 
             type="button"
             disabled={isDisabled}
             onClick={() => handleSignIn(provider.providerType, provider.id)}
+            className="bg-bg border border-border text-fg"
             style={{
               width: '100%',
               height: 44,
@@ -148,12 +149,9 @@ export function SignInButtons({ onSuccess, onError, disabled: externalDisabled, 
               display: 'flex',
               alignItems: 'center',
               gap: 10,
-              background: 'var(--bg)',
-              border: '1px solid var(--border)',
               borderRadius: 'var(--radius)',
               fontSize: 13.5,
               fontWeight: 500,
-              color: 'var(--fg)',
               cursor: isDisabled ? 'default' : 'pointer',
               opacity: isDisabled ? 0.55 : 1,
             }}
@@ -166,7 +164,7 @@ export function SignInButtons({ onSuccess, onError, disabled: externalDisabled, 
         );
       })}
       {popupBlocked && (
-        <p style={{ fontSize: 12.5, color: 'var(--danger)', textAlign: 'center', margin: 0 }}>
+        <p className="text-danger" style={{ fontSize: 12.5, textAlign: 'center', margin: 0 }}>
           Please allow popups for this site to sign in.
         </p>
       )}

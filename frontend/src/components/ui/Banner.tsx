@@ -55,9 +55,9 @@ export function Banner({
   return (
     <div
       role={isUrgent ? 'alert' : 'status'}
+      className="text-fg"
       style={{
         background: t.bg,
-        color: 'var(--fg)',
         padding: '10px 12px',
         borderRadius: 'var(--radius)',
         display: 'flex',
@@ -76,7 +76,7 @@ export function Banner({
       <div style={{ flex: 1 }}>
         <strong>{title}</strong>
         {body && (
-          <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>{body}</span>
+          <span className="text-fg-muted" style={{ marginLeft: 6 }}>{body}</span>
         )}
         {action && <div style={{ marginTop: 6 }}>{action}</div>}
       </div>

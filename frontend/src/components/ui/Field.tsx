@@ -42,7 +42,7 @@ export function Field({ label, hint, error, right, children, style }: FieldProps
           }}
         >
           {label && (
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg)' }}>
+            <span className="text-fg" style={{ fontSize: 12, fontWeight: 500 }}>
               {label}
             </span>
           )}

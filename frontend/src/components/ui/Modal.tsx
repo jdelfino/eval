@@ -202,13 +202,12 @@ export function Modal({
       <div
         ref={panelRef}
         data-testid={contentTestId}
+        className="bg-bg-raised border border-border"
         style={{
           position: 'relative',
           width,
           maxWidth: '100%',
           maxHeight: '100%',
-          background: 'var(--bg-raised)',
-          border: '1px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
           boxShadow: 'var(--shadow-lg)',
           display: 'flex',
@@ -217,9 +216,9 @@ export function Modal({
         }}
       >
         <header
+          className="border-b border-border"
           style={{
             padding: '14px 16px',
-            borderBottom: '1px solid var(--border)',
             display: 'flex',
             alignItems: 'flex-start',
             gap: 12,
@@ -250,7 +249,7 @@ export function Modal({
               {title}
             </h2>
             {sub && (
-              <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{sub}</div>
+              <div className="text-fg-muted" style={{ fontSize: 12, marginTop: 2 }}>{sub}</div>
             )}
           </div>
           <IconBtn icon="x" onClick={onClose} title="Close" />
@@ -262,10 +261,9 @@ export function Modal({
 
         {footer && (
           <footer
+            className="border-t border-border bg-bg-sunken"
             style={{
               padding: 12,
-              borderTop: '1px solid var(--border)',
-              background: 'var(--bg-sunken)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',

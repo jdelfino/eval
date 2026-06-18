@@ -181,7 +181,7 @@ export function SolutionViewerModal({
           {diffState.status === 'ready' ? (
             <CodeBlock aria-label="diff vs last revision">{diffState.diff}</CodeBlock>
           ) : (
-            <div style={{ fontSize: 13, color: 'var(--fg-muted)', padding: '8px 0' }}>
+            <div className="text-fg-muted" style={{ fontSize: 13, padding: '8px 0' }}>
               {diffState.status === 'loading' ? 'Loading…' : FALLBACK}
             </div>
           )}

@@ -18,7 +18,7 @@ export function AppShell({ children }: AppShellProps) {
   const [collapsed, , toggle] = useSidebarCollapsed();
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'row', background: 'var(--bg)' }}>
+    <div className="bg-bg" style={{ height: '100vh', display: 'flex', flexDirection: 'row' }}>
       <Suspense fallback={<div style={{ width: 232 }} />}>
         <Sidebar collapsed={collapsed} onToggleCollapse={toggle} />
       </Suspense>

@@ -302,10 +302,11 @@ function EmailSignInContent() {
           </Button>
         </form>
 
-        <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+        <div className="border-t border-border" style={{ marginTop: 18, paddingTop: 16, textAlign: 'center' }}>
           <Link
             href="/auth/signin"
-            style={{ fontSize: 13, color: 'var(--accent-ink)', textDecoration: 'none' }}
+            className="text-accent-ink"
+            style={{ fontSize: 13, textDecoration: 'none' }}
           >
             Use a different sign-in method
           </Link>

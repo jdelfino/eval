@@ -175,12 +175,12 @@ const failBlock: React.CSSProperties = {
 function IdleView() {
   return (
     <div
+      className="text-fg-subtle"
       style={{
         flex: 1,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: 'var(--fg-subtle)',
         fontSize: 12,
       }}
     >
@@ -208,7 +208,8 @@ function OutputView({ output }: { output?: DrawerOutput }) {
       {output.status === 'pass' && (
         <div
           data-testid="output-status-pass"
-          style={{ color: 'var(--run)', fontWeight: 600, marginBottom: 6 }}
+          className="text-run"
+          style={{ fontWeight: 600, marginBottom: 6 }}
         >
           ✓ Success
         </div>
@@ -216,7 +217,8 @@ function OutputView({ output }: { output?: DrawerOutput }) {
       {output.status === 'fail' && (
         <div
           data-testid="output-status-fail"
-          style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 6 }}
+          className="text-danger"
+          style={{ fontWeight: 600, marginBottom: 6 }}
         >
           ✗ Error
         </div>
@@ -263,7 +265,7 @@ function FailPytest({ pytest }: { pytest: FailurePytest }) {
     <>
       <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
         <span style={failLabel}>Target</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--fg-inverse)' }}>
+        <span className="text-fg-inverse" style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5 }}>
           {pytest.target}
         </span>
       </div>
@@ -361,33 +363,33 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
         </button>
         {/* Progress bar */}
         <div
+          className="bg-bg-inverse-raised"
           style={{
             flex: 1,
             position: 'relative',
             height: 8,
-            background: 'var(--bg-inverse-raised)',
             borderRadius: 4,
           }}
         >
           <div
             data-testid="scrubber-fill"
+            className="bg-accent"
             style={{
               position: 'absolute',
               left: 0,
               top: 0,
               bottom: 0,
               width: `${fillPct}%`,
-              background: 'var(--accent)',
               borderRadius: 4,
             }}
           />
         </div>
         <div
           data-testid="debug-step-counter"
+          className="text-fg-inverse-muted"
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            color: 'var(--fg-inverse-muted)',
             minWidth: 64,
             textAlign: 'right',
           }}
@@ -400,11 +402,11 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Locals panel */}
         <div
+          className="border-r border-border-inverse"
           style={{
             flex: 1,
             overflow: 'auto',
             padding: '8px 12px',
-            borderRight: '1px solid var(--border-inverse)',
           }}
         >
           <div style={failLabel}>Locals</div>
@@ -450,9 +452,9 @@ function DebugView({ debug }: { debug?: DrawerDebug }) {
                 key={i}
                 style={{ display: 'flex', gap: 10, fontFamily: 'var(--font-mono)', fontSize: 12 }}
               >
-                <span style={{ color: 'var(--fg-inverse-muted)', minWidth: 24 }}>{i}</span>
-                <span style={{ color: 'var(--fg-inverse)' }}>{frame.frame}</span>
-                <span style={{ color: 'var(--fg-inverse-muted)' }}>line {frame.line}</span>
+                <span className="text-fg-inverse-muted" style={{ minWidth: 24 }}>{i}</span>
+                <span className="text-fg-inverse">{frame.frame}</span>
+                <span className="text-fg-inverse-muted">line {frame.line}</span>
               </div>
             ))}
           </div>
@@ -477,11 +479,11 @@ function RuntimeErrorView({ err }: { err?: DrawerRuntimeError }) {
         lineHeight: 1.65,
       }}
     >
-      <div style={{ color: 'var(--danger)', fontWeight: 700, marginBottom: 6 }}>
+      <div className="text-danger" style={{ fontWeight: 700, marginBottom: 6 }}>
         {err.type}: {err.message}
       </div>
       {err.trace && (
-        <pre style={{ margin: 0, whiteSpace: 'pre-wrap', color: 'var(--fg-inverse)' }}>
+        <pre className="text-fg-inverse" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
           {err.trace}
         </pre>
       )}
@@ -666,7 +668,8 @@ function EditTestView({
           <>
             <label
               htmlFor="edit-seed"
-              style={{ fontSize: 11, color: 'var(--fg-inverse-muted)', fontFamily: 'var(--font-mono)' }}
+              className="text-fg-inverse-muted"
+              style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}
             >
               seed
             </label>
@@ -741,6 +744,7 @@ export function Drawer({
         data-mode={mode}
         data-collapsed="true"
         onClick={onToggleCollapsed}
+        className="bg-bg-sunken border-t border-border text-fg-muted"
         style={{
           flexShrink: 0,
           height: '30px',
@@ -748,10 +752,7 @@ export function Drawer({
           alignItems: 'center',
           gap: 10,
           padding: '0 12px',
-          background: 'var(--bg-sunken)',
-          borderTop: '1px solid var(--border)',
           fontSize: 11.5,
-          color: 'var(--fg-muted)',
           cursor: 'pointer',
         }}
       >
