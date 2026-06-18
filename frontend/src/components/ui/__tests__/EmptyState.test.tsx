@@ -78,6 +78,39 @@ describe('EmptyState', () => {
     expect(container.querySelector('svg')).toBeInTheDocument();
   });
 
+  // T5a: optional `code` badge (mono chip above the icon) used by 404/403/500 surfaces
+  describe('code badge', () => {
+    it('renders the mono code chip with the provided text when code is set', () => {
+      render(<EmptyState title="Not found" code="404 · Not found" />);
+      expect(screen.getByText('404 · Not found')).toBeInTheDocument();
+    });
+
+    it('renders the code chip before the icon circle and title', () => {
+      const { container } = render(
+        <EmptyState title="Server error" code="500 · Something on our end" tone="danger" />
+      );
+      const root = container.firstChild as HTMLElement;
+      const chip = screen.getByText('500 · Something on our end');
+      const circle = container.querySelector('.bg-red-100');
+      const heading = screen.getByRole('heading', { name: 'Server error' });
+      const order = Array.from(root.children);
+      // chip is the first child, before the icon circle and the title
+      expect(order.indexOf(chip)).toBe(0);
+      expect(order.indexOf(chip)).toBeLessThan(order.indexOf(circle as Element));
+      expect(order.indexOf(chip)).toBeLessThan(order.indexOf(heading));
+    });
+
+    it('uses a monospace font for the code chip', () => {
+      render(<EmptyState title="Not found" code="404 · Not found" />);
+      expect(screen.getByText('404 · Not found')).toHaveClass('font-mono');
+    });
+
+    it('renders no code chip when code is absent (existing callers unchanged)', () => {
+      const { container } = render(<EmptyState title="No items" />);
+      expect(container.querySelector('.font-mono')).toBeNull();
+    });
+  });
+
   describe('tone prop', () => {
     it('defaults to neutral tone (gray icon circle)', () => {
       const { container } = render(<EmptyState title="No items" />);

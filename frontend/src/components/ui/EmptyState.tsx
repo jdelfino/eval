@@ -12,6 +12,12 @@ import { Icon, type IconName } from './Icon';
 export type EmptyStateTone = 'neutral' | 'info' | 'warn' | 'danger' | 'ok';
 
 export interface EmptyStateProps {
+  /**
+   * Optional mono "code badge" chip rendered above the icon circle, e.g.
+   * "404 · Not found". Used by the 404/403/500 error surfaces per
+   * primitives-v4 EmptyFrame. Omit for ordinary empty states.
+   */
+  code?: string;
   /** Icon name from the ui/Icon set to display above the title. Defaults to 'book'. */
   icon?: IconName;
   /** Short headline */
@@ -64,6 +70,7 @@ const TONE_ICON_COLOR: Record<EmptyStateTone, string> = {
  * ```
  */
 export function EmptyState({
+  code,
   icon = 'book',
   title,
   body,
@@ -81,6 +88,11 @@ export function EmptyState({
     <div
       className={`flex flex-col items-center justify-center py-12 text-center ${className}`.trim()}
     >
+      {code && (
+        <span className="mb-3 font-mono text-xs font-semibold uppercase tracking-wide text-gray-400">
+          {code}
+        </span>
+      )}
       <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${TONE_CIRCLE_BG[tone]}`}>
         <Icon name={icon} size={28} stroke={1.5} className={TONE_ICON_COLOR[tone]} />
       </div>

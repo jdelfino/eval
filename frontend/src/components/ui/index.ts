@@ -28,7 +28,7 @@ export type { BadgeProps, BadgeVariant } from './Badge';
 export { Spinner } from './Spinner';
 export type { SpinnerProps, SpinnerSize } from './Spinner';
 
-export { Skeleton, SkeletonText, SkeletonAvatar } from './Skeleton';
+export { Skeleton, SkeletonText, SkeletonAvatar, SkeletonCard, SkeletonRow } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
 
 export { ConfirmDialog } from './ConfirmDialog';
