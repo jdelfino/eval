@@ -15,14 +15,26 @@ import type { WalkthroughScript } from '@/types/analysis';
  * @param sectionId - The section ID
  * @param problemId - Optional problem ID to associate with the session
  * @param showSolution - Optional flag to show solution to students when auto-publishing
+ * @param opts - Optional flags. `setCurrent` controls the section-pointer model (T1):
+ *   when omitted the server defaults to true (the new session becomes the section's
+ *   current problem and `section_current_changed` is published). Pass `setCurrent: false`
+ *   to create the session without retargeting the class; the body then includes
+ *   `set_current: false` explicitly. When `setCurrent` is true/undefined the flag is
+ *   omitted so existing callers keep the server default.
  * @returns The created Session object (backend returns plain object)
  */
 export async function createSession(
   sectionId: string,
   problemId?: string,
-  showSolution?: boolean
+  showSolution?: boolean,
+  opts?: { setCurrent?: boolean }
 ): Promise<Session> {
-  const body: { section_id: string; problem_id?: string; show_solution?: boolean } = {
+  const body: {
+    section_id: string;
+    problem_id?: string;
+    show_solution?: boolean;
+    set_current?: boolean;
+  } = {
     section_id: sectionId,
   };
   if (problemId) {
@@ -30,6 +42,10 @@ export async function createSession(
   }
   if (showSolution !== undefined) {
     body.show_solution = showSolution;
+  }
+  // Only send set_current when explicitly false; server default is true.
+  if (opts?.setCurrent === false) {
+    body.set_current = false;
   }
   return apiPost<Session>('/sessions', body);
 }
