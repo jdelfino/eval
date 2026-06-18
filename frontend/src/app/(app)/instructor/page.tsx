@@ -7,7 +7,7 @@
  * with easy session management (Start Session / Rejoin Session buttons).
  */
 
-import React, { useState, Suspense } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { InstructorDashboard } from './components/InstructorDashboard';
@@ -17,7 +17,7 @@ interface StartSessionState {
   section_name: string;
 }
 
-function InstructorPage() {
+export default function InstructorPage() {
   const { user: _user } = useAuth();
   const router = useRouter();
 
@@ -63,13 +63,5 @@ function InstructorPage() {
         />
       )}
     </div>
-  );
-}
-
-export default function InstructorPageWrapper() {
-  return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-      <InstructorPage />
-    </Suspense>
   );
 }
