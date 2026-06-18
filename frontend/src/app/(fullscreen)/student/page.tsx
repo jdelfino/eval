@@ -17,6 +17,8 @@ import { useApiDebugger } from '@/hooks/useApiDebugger';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { OpenOnLaptop } from '@/components/OpenOnLaptop';
+import { useMobileViewport } from '@/hooks/useResponsiveLayout';
 import { Button } from '@/components/ui/Button';
 import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { buildDrawerDebug } from '@/lib/debuggerAdapter';
@@ -101,6 +103,14 @@ function deriveFailure(
 
 function StudentPage() {
   const { user } = useAuth();
+  // G8 mobile read-only guard. useMobileViewport uses a lazy useState
+  // initializer that reads the real window.innerWidth on the client's FIRST
+  // render, so on a phone isMobile is true immediately — the WorkspaceShell
+  // never client-mounts on mobile (read-only intent holds). The cost is an
+  // SSR↔client hydration mismatch (server emits the desktop/workspace branch,
+  // client's first render emits the mobile guard); the guard's <main> wrapper
+  // below carries suppressHydrationWarning to silence that expected mismatch.
+  const { isMobile } = useMobileViewport();
   const searchParams = useSearchParams();
   const workIdFromUrl = searchParams.get('work_id');
   const sectionIdFromUrl = searchParams.get('section_id');
@@ -613,6 +623,20 @@ function StudentPage() {
     : undefined;
 
   // ─── Early returns ────────────────────────────────────────────────────────
+
+  // Mobile read-only guard (G8): the single enforcement point. On a confirmed
+  // mobile viewport, render the "Open on laptop" affordance instead of ever
+  // mounting the WorkspaceShell editor. OpenOnLaptop is a role-neutral fragment,
+  // so this early return supplies the page <main> landmark itself, matching the
+  // other early-return states below. suppressHydrationWarning absorbs the
+  // expected SSR(desktop)↔client(mobile) viewport mismatch (see hook note above).
+  if (isMobile) {
+    return (
+      <main suppressHydrationWarning>
+        <OpenOnLaptop title="Open this session on your laptop" />
+      </main>
+    );
+  }
 
   if (!workIdFromUrl) {
     return (

@@ -93,6 +93,20 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
 
+// Mobile guard (G8): the page swaps WorkspaceShell for OpenOnLaptop when isMobile.
+// Default to desktop so the existing suite's WorkspaceShell assertions hold; the
+// guard suite overrides this per-test.
+const mockUseMobileViewport = jest.fn(() => ({
+  isMobile: false,
+  isTablet: false,
+  isVerySmall: false,
+  isDesktop: true,
+  width: 1280,
+}));
+jest.mock('@/hooks/useResponsiveLayout', () => ({
+  useMobileViewport: () => mockUseMobileViewport(),
+}));
+
 const fakeStudentWorkWithProblem = {
   id: 'work-123',
   user_id: 'user-1',
@@ -120,6 +134,14 @@ const fakeStudentWorkWithProblem = {
 describe('StudentPage (student_work-centric)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default to desktop after each test (guard suite overrides per-test).
+    mockUseMobileViewport.mockReturnValue({
+      isMobile: false,
+      isTablet: false,
+      isVerySmall: false,
+      isDesktop: true,
+      width: 1280,
+    });
     // Reset useSearchParams to default (work_id = 'work-123') after tests that override it.
     const { useSearchParams, useRouter } = require('next/navigation');
     useSearchParams.mockReturnValue({
@@ -250,6 +272,50 @@ describe('StudentPage (student_work-centric)', () => {
       render(<StudentPageWrapper />);
 
       expect(screen.getByText(/No student work/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Mobile guard (G8: read-only enforcement point)', () => {
+    /**
+     * Contract: on a confirmed-mobile viewport the /student route renders the
+     * OpenOnLaptop guard INSTEAD of the WorkspaceShell editor. This is the single
+     * read-only enforcement point for the mobile strategy — if WorkspaceShell ever
+     * mounts on mobile, students can edit/run code where the product forbids it.
+     */
+    it('renders OpenOnLaptop and does NOT mount WorkspaceShell on mobile', async () => {
+      mockUseMobileViewport.mockReturnValue({
+        isMobile: true,
+        isTablet: false,
+        isVerySmall: false,
+        isDesktop: false,
+        width: 420,
+      });
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
+
+      render(<StudentPageWrapper />);
+
+      expect(await screen.findByText('Open this session on your laptop')).toBeInTheDocument();
+      expect(screen.queryByTestId('workspace-shell')).not.toBeInTheDocument();
+    });
+
+    /**
+     * Contract: desktop behavior is unchanged — WorkspaceShell still mounts and the
+     * guard never appears. Catches an over-eager guard that would block laptops.
+     */
+    it('mounts WorkspaceShell (no guard) on desktop', async () => {
+      mockUseMobileViewport.mockReturnValue({
+        isMobile: false,
+        isTablet: false,
+        isVerySmall: false,
+        isDesktop: true,
+        width: 1280,
+      });
+      mockGetStudentWork.mockResolvedValue(fakeStudentWorkWithProblem);
+
+      render(<StudentPageWrapper />);
+
+      expect(await screen.findByTestId('workspace-shell')).toBeInTheDocument();
+      expect(screen.queryByText('Open this session on your laptop')).not.toBeInTheDocument();
     });
   });
 

@@ -15,6 +15,8 @@ import { isSectionLive } from '@/lib/liveness';
 import { formatShortDate } from '@/lib/format';
 import { SolutionViewerModal } from '@/components/SolutionViewerModal';
 import { ReplayModal } from '@/app/(app)/instructor/components/RevisionViewer';
+import { OpenOnLaptop } from '@/components/OpenOnLaptop';
+import { useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { SectionDetail } from '../page';
 
 // ---------------------------------------------------------------------------
@@ -42,10 +44,17 @@ interface LiveSessionCardProps {
    * "current problem available" affordance for a stale pointer (G4-R3).
    */
   liveNow: boolean;
+  /**
+   * Mobile read-only (G8 T3): when true, the live state nudges toward the laptop
+   * (OpenOnLaptop affordance) instead of presenting "Join now"/"Jump in" as the
+   * primary navigate-to-workspace action. This is copy only — the actual block is
+   * the T1 /student guard, NOT duplicated here.
+   */
+  isMobile: boolean;
   onJoin: () => void;
 }
 
-function LiveSessionCard({ hasCurrentProblem, liveNow, onJoin }: LiveSessionCardProps) {
+function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveSessionCardProps) {
   if (!hasCurrentProblem) {
     return (
       <div
@@ -90,9 +99,15 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, onJoin }: LiveSessionCard
       className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg p-4 text-white"
       style={{ marginBottom: 30 }}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Layout breakpoint is driven by the JS isMobile (<768px) source, not a
+          Tailwind sm: utility (640px), so the row-vs-column layout flips at the
+          same width as the content swap below — no inconsistent 640–767px state. */}
+      <div
+        className={`flex justify-between gap-4 ${isMobile ? 'flex-col' : 'flex-row items-center'}`}
+        suppressHydrationWarning
+      >
         <div className="flex items-center gap-4">
-          <div className="w-9 h-9 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+          <div className="w-9 h-9 bg-white bg-opacity-20 rounded-full flex items-center justify-center flex-shrink-0">
             <span style={{ fontSize: 14, fontWeight: 700 }}>▶</span>
           </div>
           <div>
@@ -100,21 +115,39 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, onJoin }: LiveSessionCard
               {liveNow ? 'Class is live!' : 'Current problem'}
             </h2>
             <p className="text-green-50 text-sm">
-              {liveNow
-                ? 'Your instructor started a session. Join now to participate.'
-                : 'Your class is working on this problem. Jump in to join.'}
+              {isMobile
+                ? 'Open this session on your laptop to participate.'
+                : liveNow
+                  ? 'Your instructor started a session. Join now to participate.'
+                  : 'Your class is working on this problem. Jump in to join.'}
             </p>
           </div>
         </div>
-        <button
-          onClick={onJoin}
-          className="px-6 py-2.5 bg-white text-green-600 text-sm font-semibold rounded-lg hover:bg-green-50 transition-colors shadow hover:shadow-md flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-          </svg>
-          {liveNow ? 'Join now' : 'Jump in'}
-        </button>
+        {isMobile ? (
+          // Mobile read-only (G8 T3): nudge to the laptop instead of presenting a
+          // primary navigate-to-workspace "Join now" action. The OpenOnLaptop
+          // affordance is the consistent, dependency-free Copy-link CTA used by
+          // the T1 /student guard; the real block stays that guard, not here.
+          <div
+            className="rounded-lg overflow-hidden bg-white"
+            style={{ color: 'var(--fg)' }}
+          >
+            <OpenOnLaptop
+              title="Open this session on your laptop"
+              body="Class is live — you'll join and write code on a bigger screen."
+            />
+          </div>
+        ) : (
+          <button
+            onClick={onJoin}
+            className="px-6 py-2.5 bg-white text-green-600 text-sm font-semibold rounded-lg hover:bg-green-50 transition-colors shadow hover:shadow-md flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+            {liveNow ? 'Join now' : 'Jump in'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -127,11 +160,13 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, onJoin }: LiveSessionCard
 interface ProblemRowProps {
   problem: PublishedProblemWithStatus;
   isLive: boolean;
+  /** Mobile read-only (G8 T3): stack the row and grow the hit targets below 768px (the isMobile trigger). */
+  isMobile: boolean;
   onPractice: () => void;
   onViewSolution: () => void;
 }
 
-function ProblemRow({ problem, isLive, onPractice, onViewSolution }: ProblemRowProps) {
+function ProblemRow({ problem, isLive, isMobile, onPractice, onViewSolution }: ProblemRowProps) {
   const state = deriveProblemState(problem);
   const testCount = problem.problem.test_cases?.length ?? 0;
 
@@ -147,26 +182,38 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution }: ProblemRowP
       data-testid="problem-row"
       style={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        padding: '12px 16px',
+        // Stack vertically below 768px (isMobile) so the state pill / title /
+        // tests / actions never overflow the viewport width.
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: isMobile ? 'stretch' : 'center',
+        gap: isMobile ? 8 : 14,
+        padding: isMobile ? '14px 16px' : '12px 16px',
         cursor: 'pointer',
       }}
     >
       {/* State pill */}
-      <div style={{ width: 108, flexShrink: 0 }}>
+      <div style={{ width: isMobile ? 'auto' : 108, flexShrink: 0 }}>
         <Pill tone={statePillProps.tone}>{statePillProps.label}</Pill>
       </div>
 
       {/* Title + tags */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
+          gap: 10,
+        }}
+      >
         <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
           {problem.problem.title}
         </span>
         {isLive && (
           <Pill tone="ok">Live</Pill>
         )}
-        <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {(problem.problem.tags ?? []).map((tag) => (
             <Pill key={tag} tone="neutral" mono>{tag}</Pill>
           ))}
@@ -179,20 +226,37 @@ function ProblemRow({ problem, isLive, onPractice, onViewSolution }: ProblemRowP
           fontFamily: 'var(--font-mono)',
           fontSize: 11.5,
           color: 'var(--fg-subtle)',
-          textAlign: 'right',
+          textAlign: isMobile ? 'left' : 'right',
           whiteSpace: 'nowrap',
         }}
       >
         {testCount} {testCount === 1 ? 'test' : 'tests'}
       </div>
 
-      {/* Actions */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Button variant="accent" size="xs" onClick={onPractice}>
+      {/* Actions — grow to ≥44px touch targets on mobile. */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center',
+          justifyContent: isMobile ? 'flex-start' : 'flex-end',
+        }}
+      >
+        <Button
+          variant="accent"
+          size={isMobile ? 'sm' : 'xs'}
+          onClick={onPractice}
+          style={isMobile ? { minHeight: 44 } : undefined}
+        >
           {problem.student_work?.id ? 'Continue' : 'Practice'}
         </Button>
         {problem.show_solution && problem.problem.solution && (
-          <Button variant="quiet" size="xs" onClick={onViewSolution}>
+          <Button
+            variant="quiet"
+            size={isMobile ? 'sm' : 'xs'}
+            onClick={onViewSolution}
+            style={isMobile ? { minHeight: 44 } : undefined}
+          >
             View Solution
           </Button>
         )}
@@ -213,9 +277,11 @@ interface PastSessionRowProps {
    * navigate to the dead `/student?session_id=` route the old link used.
    */
   onReplay: (session: Session) => void;
+  /** Mobile read-only (G8 T3): shrink the date column and grow the hit target. */
+  isMobile: boolean;
 }
 
-function PastSessionRow({ session, onReplay }: PastSessionRowProps) {
+function PastSessionRow({ session, onReplay, isMobile }: PastSessionRowProps) {
   const date = session.created_at ? formatShortDate(session.created_at) : '—';
 
   return (
@@ -223,12 +289,12 @@ function PastSessionRow({ session, onReplay }: PastSessionRowProps) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 14,
-        padding: '12px 16px',
+        gap: isMobile ? 10 : 14,
+        padding: isMobile ? '14px 16px' : '12px 16px',
       }}
     >
       {/* Date */}
-      <div style={{ width: 100, flexShrink: 0 }}>
+      <div style={{ width: isMobile ? 72 : 100, flexShrink: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 600 }}>{date}</div>
       </div>
 
@@ -240,7 +306,12 @@ function PastSessionRow({ session, onReplay }: PastSessionRowProps) {
       </div>
 
       {/* Replay trigger (G7-T6, restores eval-4zi as a modal trigger). */}
-      <Button variant="quiet" size="xs" onClick={() => onReplay(session)}>
+      <Button
+        variant="quiet"
+        size={isMobile ? 'sm' : 'xs'}
+        onClick={() => onReplay(session)}
+        style={isMobile ? { minHeight: 44 } : undefined}
+      >
         Replay
       </Button>
     </div>
@@ -295,6 +366,7 @@ export default function StudentSectionView({
   onBack,
 }: StudentSectionViewProps) {
   const router = useRouter();
+  const { isMobile } = useMobileViewport();
 
   const { currentSessionId, currentProblem, lastActivity } = useSectionEvents({
     sectionId,
@@ -402,6 +474,7 @@ export default function StudentSectionView({
       <LiveSessionCard
         hasCurrentProblem={hasCurrentProblem && pointerProblemId != null}
         liveNow={liveNow}
+        isMobile={isMobile}
         onJoin={handleActiveSessionJoin}
       />
 
@@ -448,6 +521,7 @@ export default function StudentSectionView({
                   <ProblemRow
                     problem={problem}
                     isLive={problemIsLive}
+                    isMobile={isMobile}
                     onPractice={() => handleProblemClick(problem.problem.id)}
                     onViewSolution={() =>
                       setSolutionModal({ title: problem.problem.title, solution: problem.problem.solution! })
@@ -502,7 +576,7 @@ export default function StudentSectionView({
                   key={session.id}
                   style={isLast ? undefined : { borderBottom: '1px solid var(--border)' }}
                 >
-                  <PastSessionRow session={session} onReplay={setReplaySession} />
+                  <PastSessionRow session={session} onReplay={setReplaySession} isMobile={isMobile} />
                 </div>
               );
             })}

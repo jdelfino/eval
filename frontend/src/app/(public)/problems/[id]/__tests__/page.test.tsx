@@ -50,6 +50,30 @@ jest.mock('@/components/MarkdownContent', () => {
   };
 });
 
+// G8 mobile read-only swap: MobileSolveSwitch branches on useMobileViewport.
+// Default to desktop (isMobile:false); individual tests override.
+const mockUseMobileViewport = jest.fn(() => ({
+  isMobile: false,
+  isTablet: false,
+  isVerySmall: false,
+  isDesktop: true,
+  width: 1280,
+}));
+jest.mock('@/hooks/useResponsiveLayout', () => ({
+  useMobileViewport: () => mockUseMobileViewport(),
+}));
+
+// OpenOnLaptop is a client component using the Button primitive + clipboard;
+// mock it to a recognizable marker so the swap is observable.
+jest.mock('@/components/OpenOnLaptop', () => ({
+  OpenOnLaptop: ({ title, secondaryAction }: { title?: string; secondaryAction?: React.ReactNode }) => (
+    <div data-testid="open-on-laptop">
+      {title}
+      {secondaryAction}
+    </div>
+  ),
+}));
+
 const mockNotFound = notFound as jest.MockedFunction<typeof notFound>;
 
 /** Fixture with all A1 fields populated — python language, 3 test cases, author + date */
@@ -78,6 +102,14 @@ function mockApiResponse(data: unknown) {
 describe('Public Problem Page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Restore desktop default after clearAllMocks wiped the implementation.
+    mockUseMobileViewport.mockReturnValue({
+      isMobile: false,
+      isTablet: false,
+      isVerySmall: false,
+      isDesktop: true,
+      width: 1280,
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -334,6 +366,83 @@ describe('Public Problem Page', () => {
 
       // Sign-in CTA should be visible for anonymous visitors
       expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Mobile read-only swap (G8)
+  // -------------------------------------------------------------------------
+  describe('mobile read-only swap', () => {
+    it('replaces the solve/practice CTA path with OpenOnLaptop on mobile, keeping Statement + Tests', async () => {
+      /**
+       * Contract: On a mobile viewport the public problem drops the solve path
+       * (InstructorActions / StudentActions) and shows the read-only OpenOnLaptop
+       * affordance instead, while the read-only Statement and Tests sections stay
+       * visible. Breaking this either re-mounts the desktop solve path on phones or
+       * hides the read-only content the mobile surface is meant to show.
+       */
+      mockUseMobileViewport.mockReturnValue({
+        isMobile: true,
+        isTablet: false,
+        isVerySmall: true,
+        isDesktop: false,
+        width: 420,
+      });
+      mockApiResponse(mockProblem);
+      const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
+      render(page);
+
+      // OpenOnLaptop replaces the solve path.
+      expect(screen.getByTestId('open-on-laptop')).toBeInTheDocument();
+      expect(screen.queryByTestId('instructor-actions')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('student-actions')).not.toBeInTheDocument();
+
+      // Read-only content stays visible.
+      expect(screen.getByText('Statement')).toBeInTheDocument();
+      expect(screen.getByText('Tests')).toBeInTheDocument();
+      expect(screen.getByText('basic case')).toBeInTheDocument();
+    });
+
+    it('keeps the desktop solve path (InstructorActions/StudentActions) and renders no OpenOnLaptop on desktop', async () => {
+      /**
+       * Contract: On desktop the existing solve/practice CTAs render unchanged and
+       * the OpenOnLaptop affordance does NOT appear. This guards against the mobile
+       * swap regressing desktop behavior.
+       */
+      mockApiResponse(mockProblem);
+      const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
+      render(page);
+
+      expect(screen.getByTestId('instructor-actions')).toBeInTheDocument();
+      expect(screen.getByTestId('student-actions')).toBeInTheDocument();
+      expect(screen.queryByTestId('open-on-laptop')).not.toBeInTheDocument();
+    });
+
+    it('swaps the anon sign-in CTA for OpenOnLaptop on mobile when problem has no class_id', async () => {
+      /**
+       * Contract: The anon persona (no class_id) sign-in CTA is also part of the
+       * solve-path region and is replaced by OpenOnLaptop on mobile.
+       */
+      mockUseMobileViewport.mockReturnValue({
+        isMobile: true,
+        isTablet: false,
+        isVerySmall: true,
+        isDesktop: false,
+        width: 420,
+      });
+      mockApiResponse({ ...mockProblem, class_id: null, class_name: null });
+      const page = await PublicProblemPage({ params: Promise.resolve({ id: 'problem-123' }) });
+      render(page);
+
+      expect(screen.getByTestId('open-on-laptop')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /^sign in$/i })).not.toBeInTheDocument();
+
+      // The primary anon "Sign in" CTA is hidden, but a deep-linked anon mobile
+      // user is not dead-ended: a secondary sign-in link rides on OpenOnLaptop.
+      expect(screen.getByRole('link', { name: /you can still sign in/i })).toHaveAttribute(
+        'href',
+        '/auth/signin',
+      );
     });
   });
 
