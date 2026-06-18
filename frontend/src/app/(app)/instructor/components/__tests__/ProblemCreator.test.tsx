@@ -22,7 +22,8 @@ jest.mock('@/lib/api/problems', () => ({
   getProblem: jest.fn(),
   createProblem: jest.fn(),
   updateProblem: jest.fn(),
-  // generateSolution intentionally omitted — T6 deletes that import
+  // T6 removed the inline generator import; T7 reintroduces it via the modal.
+  generateSolution: jest.fn(),
 }));
 
 jest.mock('@/lib/api/execute', () => ({
@@ -428,6 +429,56 @@ describe('ProblemCreator Component (G2 T6)', () => {
 
     expect(screen.queryByRole('button', { name: /generate solution/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /generate solution/i })).not.toBeInTheDocument();
+  });
+
+  // ── T7: Generate Solution modal integration ──────────────────────────────────
+  /**
+   * Verifies the G7 Generate trigger opens the modal and that applying a generated
+   * draft flows into the Solution tab via setSolution. The modal wraps the existing
+   * generateSolution client. Catches: trigger not wired, onUse not routed to setSolution.
+   */
+  describe('Generate Solution modal (T7)', () => {
+    it('Generate trigger opens the modal and applying the result updates the Solution tab', async () => {
+      const { generateSolution } = require('@/lib/api/problems');
+      generateSolution.mockResolvedValue({ solution: 'def generated():\n    return 1' });
+
+      render(<ProblemCreator />);
+
+      // Modal is not open initially — no Generate (modal) action button yet
+      expect(
+        screen.queryByRole('button', { name: /use as solution\.py/i })
+      ).not.toBeInTheDocument();
+
+      // Click the header Generate trigger (only one before the modal opens)
+      fireEvent.click(screen.getByRole('button', { name: /^generate$/i }));
+
+      // Modal heading appears
+      expect(
+        screen.getByRole('heading', { name: /generate a solution/i })
+      ).toBeInTheDocument();
+
+      // Generate inside the modal — now two "Generate" buttons exist (header +
+      // modal footer); the footer one is rendered last.
+      const generateButtons = screen.getAllByRole('button', { name: /^generate$/i });
+      fireEvent.click(generateButtons[generateButtons.length - 1]);
+
+      await waitFor(() => expect(generateSolution).toHaveBeenCalled());
+
+      // Apply the generated draft
+      const useBtn = await screen.findByRole('button', { name: /use as solution\.py/i });
+      await waitFor(() => expect(useBtn).toBeEnabled());
+      fireEvent.click(useBtn);
+
+      // Solution tab code now reflects the generated solution
+      await waitFor(() => {
+        const solutionTab = capturedWorkspaceProps.editorTabs.find(
+          (t: any) => t.id === 'solution'
+        );
+        expect(solutionTab.code).toBe('def generated():\n    return 1');
+        // Active tab switched to solution
+        expect(capturedWorkspaceProps.activeTabId).toBe('solution');
+      });
+    });
   });
 
   // ── T6 test case 8: Edit body on rail row opens drawer in edit-test mode ─────
