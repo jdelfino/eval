@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ErrorAlert } from '@/components/ErrorAlert';
-import { Modal } from '@/components/ui';
+import { Modal, Button, Field, Input, Textarea } from '@/components/ui';
 import { createClass } from '@/lib/api/classes';
 
 interface CreateClassModalProps {
@@ -64,29 +64,18 @@ export default function CreateClassModal({ onClose, onSuccess }: CreateClassModa
 
   const footer = (
     <>
-      <button
-        type="button"
-        onClick={handleClose}
-        disabled={loading}
-        className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
+      <Button type="button" variant="secondary" onClick={handleClose} disabled={loading}>
         Cancel
-      </button>
-      <button
+      </Button>
+      <Button
         type="submit"
         form="create-class-form"
+        variant="primary"
+        loading={loading}
         disabled={loading || !name.trim()}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
       >
-        {loading ? (
-          <>
-            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-            Creating...
-          </>
-        ) : (
-          'Create class'
-        )}
-      </button>
+        {loading ? 'Creating...' : 'Create class'}
+      </Button>
     </>
   );
 
@@ -101,47 +90,32 @@ export default function CreateClassModal({ onClose, onSuccess }: CreateClassModa
       initialFocusSelector="#class-name"
     >
       <form id="create-class-form" onSubmit={handleSubmit}>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="class-name" className="block text-sm font-medium text-gray-700 mb-1">
-              Class Name *
-            </label>
-            <input
-              id="class-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., CS101 Fall 2025"
-              disabled={loading}
-              autoFocus
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100"
-              maxLength={100}
-            />
-          </div>
+        <Field label="Class Name *">
+          <Input
+            id="class-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., CS101 Fall 2025"
+            disabled={loading}
+            autoFocus
+            maxLength={100}
+          />
+        </Field>
 
-          <div>
-            <label htmlFor="class-description" className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              id="class-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the class"
-              disabled={loading}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100 resize-none"
-              maxLength={500}
-            />
-          </div>
+        <Field label="Description">
+          <Textarea
+            id="class-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief description of the class"
+            disabled={loading}
+            rows={3}
+            maxLength={500}
+          />
+        </Field>
 
-          {error && (
-            <ErrorAlert
-              error={error}
-              onDismiss={() => setError(null)}
-            />
-          )}
-        </div>
+        {error && <ErrorAlert error={error} onDismiss={() => setError(null)} />}
       </form>
     </Modal>
   );

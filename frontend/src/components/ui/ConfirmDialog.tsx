@@ -48,7 +48,8 @@ export interface ConfirmDialogProps {
  * body scroll-lock, and the portal/backdrop all come from Modal. ConfirmDialog
  * preserves its stable public API and testids (`data-confirm-button`,
  * `data-cancel-button`, `confirm-dialog-title`, `confirm-dialog-message`,
- * `confirm-dialog-backdrop`) so its call sites stay untouched.
+ * `confirm-dialog-backdrop` — now the Modal's real backdrop node) so its call
+ * sites stay untouched.
  *
  * Features:
  * - Title and context-aware message
@@ -157,7 +158,7 @@ export function ConfirmDialog({
       footer={footer}
       titleId="confirm-dialog-title"
       aria-describedby="confirm-dialog-message"
-      innerBackdropTestId="confirm-dialog-backdrop"
+      backdropTestId="confirm-dialog-backdrop"
       initialFocusSelector="[data-confirm-button]"
     >
       <div>

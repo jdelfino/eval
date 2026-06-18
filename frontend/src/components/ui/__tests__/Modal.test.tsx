@@ -132,6 +132,92 @@ describe('Modal', () => {
     document.body.removeChild(trigger);
   });
 
+  /**
+   * Regression (review fix #1): a parent re-render that changes the onClose
+   * identity (e.g. an inline-arrow onClose recreated on every live-event
+   * re-render) must NOT tear down + re-run the focus/scroll-lock effect. If it
+   * did, the user's in-modal focus would be yanked back to the first focusable
+   * element and scroll-lock would briefly clear. The focus/scroll effect is
+   * keyed on [open] only, so transient onClose changes are inert here.
+   */
+  it('keeps in-modal focus and scroll-lock when the parent re-renders with a new onClose identity', async () => {
+    const { rerender } = render(
+      <Modal open title="Stable" onClose={() => {}} contentTestId="stable-content">
+        <button>first</button>
+        <button>second</button>
+      </Modal>
+    );
+
+    // Let initial focus run (lands on the first focusable element).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // Move focus to the second button, simulating the user navigating.
+    const second = screen.getByRole('button', { name: 'second' });
+    second.focus();
+    expect(document.activeElement).toBe(second);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    // Parent re-renders with a brand-new onClose identity (and otherwise
+    // identical props) — as happens on a live useSectionEvents update.
+    rerender(
+      <Modal open title="Stable" onClose={() => {}} contentTestId="stable-content">
+        <button>first</button>
+        <button>second</button>
+      </Modal>
+    );
+
+    // Flush any pending timers; focus must NOT be stolen back to the first node.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(document.activeElement).toBe(second);
+    expect(document.body.style.overflow).toBe('hidden');
+  });
+
+  /**
+   * Review fix #2: real Tab/Shift+Tab focus trap. Tab from the last focusable
+   * wraps to the first; Shift+Tab from the first wraps to the last.
+   */
+  it('wraps Tab from the last focusable to the first', async () => {
+    render(
+      <Modal open title="Trap" onClose={jest.fn()}>
+        <button>alpha</button>
+        <button>omega</button>
+      </Modal>
+    );
+
+    const omega = screen.getByRole('button', { name: 'omega' });
+    omega.focus();
+    expect(document.activeElement).toBe(omega);
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    // First focusable is the header close button (title "Close").
+    const closeBtn = screen.getByRole('button', { name: 'Close' });
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it('wraps Shift+Tab from the first focusable to the last', () => {
+    render(
+      <Modal open title="Trap" onClose={jest.fn()}>
+        <button>alpha</button>
+        <button>omega</button>
+      </Modal>
+    );
+
+    const closeBtn = screen.getByRole('button', { name: 'Close' });
+    closeBtn.focus();
+    expect(document.activeElement).toBe(closeBtn);
+
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+
+    const omega = screen.getByRole('button', { name: 'omega' });
+    expect(document.activeElement).toBe(omega);
+  });
+
   it('locks body scroll while open and restores on close', () => {
     const { rerender } = render(
       <Modal open title="Scroll" onClose={jest.fn()}>

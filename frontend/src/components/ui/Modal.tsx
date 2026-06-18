@@ -39,18 +39,15 @@ export interface ModalProps {
   /** Value for the dialog's aria-describedby attribute, if any. */
   'aria-describedby'?: string;
   /**
-   * When set, renders a dedicated aria-hidden backdrop layer inside the dialog
-   * carrying this data-testid; clicking it calls onClose. Lets ConfirmDialog
-   * preserve its `confirm-dialog-backdrop` aria-hidden node.
-   */
-  innerBackdropTestId?: string;
-  /**
    * CSS selector (queried within the panel) for the element to focus on open,
    * instead of the first focusable element. ConfirmDialog uses this to focus
    * its confirm button rather than the close (X) button.
    */
   initialFocusSelector?: string;
 }
+
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 const TONE_MAP: Record<ModalTone, { bg: string; fg: string }> = {
   danger: { bg: 'var(--danger-soft)', fg: 'var(--danger)' },
@@ -64,10 +61,10 @@ const TONE_MAP: Record<ModalTone, { bg: string; fg: string }> = {
  *
  * Renders into `document.body` via createPortal with a blurred backdrop,
  * token-styled raised panel, optional tone-icon header, scrollable body, and an
- * optional right-aligned footer. A11y (focus trap on open, focus restore on
- * close, Escape-to-close, body scroll-lock, role/aria-modal/aria-labelledby) is
- * lifted verbatim from the previous hand-rolled ConfirmDialog pattern so the
- * G7 modals (and ConfirmDialog's rebuild) all share one accessible shell.
+ * optional right-aligned footer. A11y (initial focus on open, Tab/Shift+Tab
+ * focus trap, focus restore on close, Escape-to-close, body scroll-lock,
+ * role/aria-modal/aria-labelledby) so the G7 modals (and ConfirmDialog's
+ * rebuild) all share one accessible shell.
  *
  * Tabs are NOT built in — callers compose the existing Tabs primitive into the
  * body where needed (Solution viewer, Replay).
@@ -86,7 +83,6 @@ export function Modal({
   contentTestId,
   titleId: titleIdProp,
   'aria-describedby': ariaDescribedBy,
-  innerBackdropTestId,
   initialFocusSelector,
 }: ModalProps): React.ReactElement | null {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -99,36 +95,71 @@ export function Modal({
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
+        return;
+      }
+
+      // Tab/Shift+Tab focus trap: cycle within the panel's focusable elements.
+      if (event.key === 'Tab') {
+        const panel = panelRef.current;
+        if (!panel) return;
+        const focusable = Array.from(
+          panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+        ).filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1);
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        if (event.shiftKey) {
+          // Shift+Tab from the first element (or outside the panel) wraps to last.
+          if (active === first || !panel.contains(active)) {
+            event.preventDefault();
+            last.focus();
+          }
+        } else {
+          // Tab from the last element (or outside the panel) wraps to first.
+          if (active === last || !panel.contains(active)) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
       }
     },
     [onClose]
   );
 
+  // Keydown listener (Escape + focus trap). Keyed on the handler identity so it
+  // stays current, but kept separate from focus/scroll management below so that
+  // a transient onClose identity change does not re-run focus capture/restore.
+  useEffect(() => {
+    if (!open) return;
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, handleKeyDown]);
+
+  // Focus capture/restore + body scroll-lock. Keyed only on [open] (and the
+  // initial-focus selector) so parent re-renders that change the onClose
+  // identity do NOT tear this down and steal the user's in-modal focus.
   useEffect(() => {
     if (!open) return;
 
     // Store the previously focused element so we can restore it on close.
     previousActiveElement.current = document.activeElement;
 
-    document.addEventListener('keydown', handleKeyDown);
-
-    // Focus the first focusable element in the panel (the close button) once
+    // Focus the initial target (or first focusable element) in the panel once
     // the portal content is rendered.
     const timer = setTimeout(() => {
       const focusTarget =
         (initialFocusSelector
           ? panelRef.current?.querySelector<HTMLElement>(initialFocusSelector)
-          : null) ??
-        panelRef.current?.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
+          : null) ?? panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
       focusTarget?.focus();
     }, 0);
 
     document.body.style.overflow = 'hidden';
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
       clearTimeout(timer);
       document.body.style.overflow = '';
 
@@ -136,7 +167,7 @@ export function Modal({
         previousActiveElement.current.focus();
       }
     };
-  }, [open, handleKeyDown, initialFocusSelector]);
+  }, [open, initialFocusSelector]);
 
   if (!open || typeof document === 'undefined') {
     return null;
@@ -168,14 +199,6 @@ export function Modal({
         }
       }}
     >
-      {innerBackdropTestId && (
-        <div
-          aria-hidden="true"
-          data-testid={innerBackdropTestId}
-          onClick={onClose}
-          style={{ position: 'absolute', inset: 0 }}
-        />
-      )}
       <div
         ref={panelRef}
         data-testid={contentTestId}

@@ -115,6 +115,32 @@ describe('useRevisionHistory', () => {
 
       expect(mockApiGet).not.toHaveBeenCalled();
     });
+
+    /**
+     * Review fix #5: when session_id goes null (modal closed), the prior
+     * session's revisions must be cleared so reopening a different session does
+     * not briefly flash stale revisions.
+     */
+    it('clears revisions when session_id becomes null', async () => {
+      mockApiGet.mockResolvedValueOnce([
+        { id: 'rev-1', timestamp: '2024-01-01T10:00:00Z', full_code: 'old code' },
+      ]);
+
+      const { result, rerender } = renderHook(
+        ({ session_id }: { session_id: string | null }) =>
+          useRevisionHistory({ session_id, studentId: 'student-1' }),
+        { initialProps: { session_id: 'session-1' as string | null } }
+      );
+
+      await waitFor(() => expect(result.current.totalRevisions).toBe(1));
+
+      // Close the modal: session_id -> null.
+      rerender({ session_id: null });
+
+      expect(result.current.revisions).toHaveLength(0);
+      expect(result.current.currentIndex).toBe(0);
+      expect(result.current.currentRevision).toBeNull();
+    });
   });
 
   describe('navigation methods', () => {

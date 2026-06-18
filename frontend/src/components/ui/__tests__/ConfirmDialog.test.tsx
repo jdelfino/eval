@@ -272,11 +272,13 @@ describe('ConfirmDialog', () => {
       expect(message).toHaveAttribute('id', 'confirm-dialog-message');
     });
 
-    it('should have aria-hidden on backdrop', () => {
+    it('should expose the dialog backdrop via the confirm-dialog-backdrop testid', () => {
       render(<ConfirmDialog {...defaultProps} />);
 
+      // The backdrop is the Modal's real (clickable) backdrop node, which is
+      // the role="dialog" element itself.
       const backdrop = screen.getByTestId('confirm-dialog-backdrop');
-      expect(backdrop).toHaveAttribute('aria-hidden', 'true');
+      expect(backdrop).toBe(screen.getByRole('dialog'));
     });
   });
 

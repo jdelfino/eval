@@ -11,7 +11,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import GenerateSolutionModal from '../GenerateSolutionModal';
 
@@ -162,5 +162,54 @@ describe('GenerateSolutionModal (G7 T7)', () => {
   it('renders nothing when closed', () => {
     renderModal({ open: false });
     expect(screen.queryByRole('button', { name: /^generate$/i })).not.toBeInTheDocument();
+  });
+
+  /**
+   * Contract (review fix #4): reopening the modal resets transient state — a
+   * stale generated draft, error, hints, and toggles must not leak from a prior
+   * open. Mirrors ConfirmDialog/SolutionViewerModal reset-on-open behavior.
+   */
+  it('resets generated draft, error and hints when reopened', async () => {
+    mockGenerateSolution.mockResolvedValue({ solution: 'stale draft code' });
+    const onClose = jest.fn();
+    const { rerender } = render(
+      <GenerateSolutionModal
+        open
+        onClose={onClose}
+        description={DESCRIPTION}
+        onUse={jest.fn()}
+      />
+    );
+
+    // Type a hint and generate a draft.
+    fireEvent.change(screen.getByPlaceholderText(/prefer a one-pass dict/i), {
+      target: { value: 'leftover hint' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^generate$/i }));
+    await waitFor(() => expect(screen.getByText('stale draft code')).toBeInTheDocument());
+
+    // Close and reopen.
+    rerender(
+      <GenerateSolutionModal
+        open={false}
+        onClose={onClose}
+        description={DESCRIPTION}
+        onUse={jest.fn()}
+      />
+    );
+    rerender(
+      <GenerateSolutionModal
+        open
+        onClose={onClose}
+        description={DESCRIPTION}
+        onUse={jest.fn()}
+      />
+    );
+
+    // The stale draft is gone, hints are cleared, and Use is disabled again.
+    expect(screen.queryByText('stale draft code')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/prefer a one-pass dict/i)).toHaveValue('');
+    expect(screen.getByRole('button', { name: /use as solution\.py/i })).toBeDisabled();
+    cleanup();
   });
 });

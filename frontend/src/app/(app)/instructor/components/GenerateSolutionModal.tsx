@@ -14,7 +14,7 @@
  * editor via `onUse`, and is gated on a successful generation.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Field, Input, Button, CodeBlock, Spinner, Icon } from '@/components/ui';
 import { generateSolution } from '@/lib/api/problems';
 
@@ -69,6 +69,18 @@ export function GenerateSolutionModal({
   const [generated, setGenerated] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset transient state whenever the modal opens, so a stale draft, error, or
+  // hint/toggle selection from a previous session doesn't reappear on reopen
+  // (mirrors ConfirmDialog/SolutionViewerModal).
+  useEffect(() => {
+    if (open) {
+      setGenerated(null);
+      setError(null);
+      setHints('');
+      setEnabled(Object.fromEntries(OPTIONS.map((o) => [o.key, o.defaultOn])));
+    }
+  }, [open]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);

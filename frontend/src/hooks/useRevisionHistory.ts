@@ -37,7 +37,13 @@ export function useRevisionHistory({
   // Load revisions via API. Instructor mode requires a studentId to filter on;
   // student mode (omitUser) fetches the caller's own revisions without a filter.
   useEffect(() => {
-    if (!session_id) return;
+    if (!session_id) {
+      // Modal closed (or no session): clear any prior session's revisions so
+      // reopening a different session doesn't briefly flash stale data.
+      setRevisions([]);
+      setCurrentIndex(0);
+      return;
+    }
     if (!omitUser && !studentId) return;
 
     const loadRevisions = async () => {
