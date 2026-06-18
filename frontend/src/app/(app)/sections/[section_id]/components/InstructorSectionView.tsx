@@ -135,10 +135,9 @@ export default function InstructorSectionView({
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-4 flex items-center" style={{ color: 'var(--fg)' }}>
           {activeSessions.length > 0 && (
-            <span
-              className="w-3 h-3 rounded-full mr-3 animate-pulse"
-              style={{ background: 'var(--run)' }}
-            ></span>
+            <span className="mr-3 inline-flex">
+              <ConnectionDot status="live" compact />
+            </span>
           )}
           Active Sessions
           {activeSessions.length > 0 && (
@@ -209,18 +208,11 @@ export default function InstructorSectionView({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg shadow p-8 text-center" style={{ background: 'var(--bg-raised)' }}>
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-              style={{ background: 'var(--bg-sunken)' }}
-            >
-              <svg className="w-8 h-8" style={{ color: 'var(--fg-subtle)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <p style={{ color: 'var(--fg-muted)' }}>No active sessions at the moment</p>
-            <p className="text-sm mt-2" style={{ color: 'var(--fg-muted)' }}>Start a new session to engage with your students</p>
-          </div>
+          <EmptyState
+            icon="zap"
+            title="No active sessions at the moment"
+            body="Start a new session to engage with your students."
+          />
         )}
       </div>
 
@@ -375,17 +367,11 @@ export default function InstructorSectionView({
               ))}
             </div>
           ) : (
-            <div className="rounded-lg shadow p-8 text-center" style={{ background: 'var(--bg-raised)' }}>
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                style={{ background: 'var(--bg-sunken)' }}
-              >
-                <svg className="w-8 h-8" style={{ color: 'var(--fg-subtle)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <p style={{ color: 'var(--fg-muted)' }}>No past sessions yet</p>
-            </div>
+            <EmptyState
+              icon="history"
+              title="No past sessions yet"
+              body="Completed sessions will appear here once you run one."
+            />
           )}
         </Tabs.Panel>
 
@@ -411,7 +397,7 @@ export default function InstructorSectionView({
                   {students.map((student) => (
                     <tr
                       key={student.user_id}
-                      className="transition-colors"
+                      className="hover:bg-bg-sunken transition-colors"
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Link
@@ -438,17 +424,11 @@ export default function InstructorSectionView({
               </table>
             </div>
           ) : (
-            <div className="rounded-lg shadow p-8 text-center" style={{ background: 'var(--bg-raised)' }}>
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-                style={{ background: 'var(--bg-sunken)' }}
-              >
-                <svg className="w-8 h-8" style={{ color: 'var(--fg-subtle)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              </div>
-              <p style={{ color: 'var(--fg-muted)' }}>No students enrolled yet</p>
-            </div>
+            <EmptyState
+              icon="users"
+              title="No students enrolled yet"
+              body="Share your section join code to get students enrolled."
+            />
           )}
         </Tabs.Panel>
       </Tabs>

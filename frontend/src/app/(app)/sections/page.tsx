@@ -111,8 +111,8 @@ export default function MySectionsPage() {
           <EmptyState
             icon="book"
             title="No sections yet"
-            blurb="Join a section using a code from your instructor to get started."
-            action={
+            body="Join a section using a code from your instructor to get started."
+            primary={
               <Link
                 href="/sections/join"
                 className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
