@@ -210,23 +210,68 @@ describe('JoinSectionForm', () => {
     });
   });
 
-  // Test case 7: error mapping - invalid join code
-  it('shows "Invalid join code" danger Banner on not-found/invalid error', async () => {
+  // T5b: invalid join code (404 "not found") routes to the dedicated
+  // invalid/unavailable join state with "Try a new code" / "Sign in instead",
+  // NOT the inline danger Banner.
+  it('shows the invalid/unavailable join-code state on a not-found error', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    const onSubmit = jest.fn().mockRejectedValue(new Error('not found'));
+    const onSubmit = jest.fn().mockRejectedValue(new Error('section not found'));
     render(<JoinSectionForm onSubmit={onSubmit} />);
 
     const input = screen.getByRole('textbox');
     await user.type(input, 'ABC123');
-
-    const submitBtn = screen.getByRole('button', { name: /join section/i });
-    await user.click(submitBtn);
+    await user.click(screen.getByRole('button', { name: /join section/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /try a new code/i })).toBeInTheDocument();
+    });
+    // dedicated state, not the inline danger Banner
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sign in instead/i })).toBeInTheDocument();
+    // no "expired" / "403" wording (backend has neither)
+    expect(screen.queryByText(/expired/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/403/)).not.toBeInTheDocument();
+  });
+
+  // T5b amendment: the 400 "section is not active" case was previously UNCAUGHT
+  // and fell through to the raw message. It must now route to the same state.
+  it('shows the invalid/unavailable join-code state on an inactive-section error', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const onSubmit = jest.fn().mockRejectedValue(new Error('section is not active'));
+    render(<JoinSectionForm onSubmit={onSubmit} />);
+
+    const input = screen.getByRole('textbox');
+    await user.type(input, 'ABC123');
+    await user.click(screen.getByRole('button', { name: /join section/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /try a new code/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    // raw "not active" message must NOT leak through to the user
+    expect(screen.queryByText(/section is not active/i)).not.toBeInTheDocument();
+  });
+
+  // T5b: "Try a new code" returns to the form and clears the code field
+  it('"Try a new code" returns to the form with a cleared code field', async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    const onSubmit = jest.fn().mockRejectedValue(new Error('section not found'));
+    render(<JoinSectionForm onSubmit={onSubmit} />);
+
+    const input = screen.getByRole('textbox');
+    await user.type(input, 'ABC123');
+    await user.click(screen.getByRole('button', { name: /join section/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /try a new code/i })).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/invalid join code/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /try a new code/i }));
+
+    // back to the form: textbox visible again and empty
+    await waitFor(() => {
+      expect(screen.getByRole('textbox')).toHaveValue('');
+    });
   });
 
   // Test case 7: error mapping - already a member
@@ -251,7 +296,7 @@ describe('JoinSectionForm', () => {
   it('retry action in error Banner re-submits with the last submitted code', async () => {
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
     const onSubmit = jest.fn()
-      .mockRejectedValueOnce(new Error('not found'))
+      .mockRejectedValueOnce(new Error('network error'))
       .mockResolvedValueOnce(undefined);
 
     render(<JoinSectionForm onSubmit={onSubmit} />);

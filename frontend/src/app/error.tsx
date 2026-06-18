@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 import { reportError } from '@/lib/api/error-reporting';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -9,29 +11,42 @@ interface ErrorBoundaryProps {
 }
 
 /**
- * Next.js App Router error boundary.
- * Displays a user-friendly error message and reports the error
- * to the backend for centralized logging.
+ * Next.js App Router error boundary (500 surface).
+ *
+ * Reskinned onto the shared EmptyState (ServerError500AA in v4-empty-error.jsx):
+ * danger tone, "500 · …" code badge, "your work is safe" reassurance, and a
+ * "Try again" primary that calls `reset()`.
+ *
+ * Reports the error to the backend on mount. There is no server-returned
+ * incident id (reportError resolves to void), so the incident footer surfaces
+ * Next.js's `error.digest` when present and is omitted otherwise.
  */
 export default function ErrorBoundary({ error, reset }: ErrorBoundaryProps) {
   useEffect(() => {
     reportError(error);
   }, [error]);
 
+  const incidentId = error.digest;
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <div className="max-w-md text-center">
-        <h1 className="mb-4 text-2xl font-bold">Something went wrong</h1>
-        <p className="mb-6 text-gray-600">
-          An unexpected error occurred. Please try again.
+    <main className="flex min-h-screen flex-col items-center justify-center p-4">
+      <EmptyState
+        code="500 · Something on our end"
+        icon="alert"
+        tone="danger"
+        title="We hit an error loading this page."
+        body="Your work is safe — sessions and code drafts persist. Try again, or wait a minute and reload. If you're an instructor mid-session, students stay connected."
+        primary={
+          <Button variant="accent" onClick={reset}>
+            Try again
+          </Button>
+        }
+      />
+      {incidentId && (
+        <p className="mt-4 font-mono text-xs text-gray-400">
+          Incident ID {incidentId} · auto-reported.
         </p>
-        <button
-          onClick={reset}
-          className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-        >
-          Try again
-        </button>
-      </div>
-    </div>
+      )}
+    </main>
   );
 }
