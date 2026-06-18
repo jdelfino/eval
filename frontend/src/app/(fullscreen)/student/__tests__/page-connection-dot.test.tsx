@@ -43,11 +43,11 @@ jest.mock('@/lib/api/sections', () => ({
 }));
 
 jest.mock('@/hooks/useSectionEvents', () => ({
-  useSectionEvents: () => ({
+  useSectionEvents: jest.fn(() => ({
     currentSessionId: 'session-1',
     currentProblem: { id: 'problem-1', title: 'Two Sum' },
     lastActivity: new Date().toISOString(),
-  }),
+  })),
   LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
@@ -173,5 +173,99 @@ describe('Student page inline ConnectionDot', () => {
     await waitFor(() => {
       expect(screen.getByText('Warming up')).toBeInTheDocument();
     });
+  });
+});
+
+describe('Student page ReconnectingBanner integration', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetStudentWork.mockResolvedValue(fakeStudentWork);
+    mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: [] });
+  });
+
+  /**
+   * Test Case 4: when the realtime link is lost mid-session (failed) while
+   * live + joined, the workspace shell AND ConnectionDot stay rendered AND the
+   * reconnecting banner appears. This is the risky-integration guard: a link loss
+   * must degrade gracefully (banner added) without unmounting the run/autosave shell.
+   */
+  it('shows the reconnecting banner while keeping shell + dot when the link fails mid-session', async () => {
+    mockUseRealtimeSession.mockReturnValue(makeRealtimeReturn('failed'));
+
+    render(<StudentPageWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+    });
+
+    // Connection indicator appears once live + joined (dot gate).
+    await waitFor(() => {
+      expect(screen.getByText('Offline')).toBeInTheDocument();
+    });
+
+    // Shell survives the link loss (graceful degradation, not an error boundary).
+    expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+
+    // Banner appears with the honest reconnecting copy.
+    expect(screen.getByText(/Reconnecting to the live session/i)).toBeInTheDocument();
+  });
+
+  /**
+   * Test Case 4 (online half): when connected, the dot renders but the banner does NOT.
+   * Catches the banner leaking into the normal online workspace.
+   */
+  it('does not show the reconnecting banner when connected', async () => {
+    mockUseRealtimeSession.mockReturnValue(makeRealtimeReturn('connected'));
+
+    render(<StudentPageWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Reconnecting to the live session/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * Test Case 5: practice mode (no live pointer → session_id stays '', the hook
+   * never subscribes and connectionStatus stays 'disconnected' forever) must NOT
+   * show the banner. This is the bare-`disconnected` false-fire guard, and confirms
+   * the `mode === 'live' && joined` + wasConnected gate.
+   */
+  it('does not show the reconnecting banner in practice mode (bare disconnected)', async () => {
+    // Practice mode: section pointer is null, so the page never enters live mode
+    // and the realtime hook is never subscribed (status stays 'disconnected').
+    const { getSection } = jest.requireMock('@/lib/api/sections') as {
+      getSection: jest.Mock;
+    };
+    getSection.mockResolvedValueOnce({
+      id: 'section-1',
+      name: 'CS 101',
+      current_session_id: null,
+      current_problem_id: null,
+    });
+
+    const { useSectionEvents } = jest.requireMock('@/hooks/useSectionEvents') as {
+      useSectionEvents: jest.Mock;
+    };
+    useSectionEvents.mockReturnValueOnce({
+      currentSessionId: null,
+      currentProblem: null,
+      lastActivity: new Date().toISOString(),
+    });
+
+    mockUseRealtimeSession.mockReturnValue(makeRealtimeReturn('disconnected'));
+
+    render(<StudentPageWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+    });
+
+    // Not live + joined → no dot, and crucially no false-fired banner.
+    expect(screen.queryByText('Offline')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Reconnecting to the live session/i)).not.toBeInTheDocument();
   });
 });
