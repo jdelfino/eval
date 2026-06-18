@@ -43,6 +43,7 @@ jest.mock('../InstructorRoster', () => ({
     enrolled,
     focusedStudentId,
     featured_student_id,
+    joinCode,
     onFocusStudent,
   }: any) {
     return (
@@ -53,6 +54,11 @@ jest.mock('../InstructorRoster', () => ({
         data-enrolled={enrolled.length}
         data-rt={realtimeStudents.length}
         data-students={students.length}
+        data-join-code={joinCode ?? ''}
+        data-rt-summary={realtimeStudents[0]?.last_run_summary?.passed ?? ''}
+        data-rt-last-update={
+          realtimeStudents[0]?.last_update instanceof Date ? 'date' : ''
+        }
       >
         <button data-testid="roster-focus-btn" onClick={() => onFocusStudent('student-1')}>
           focus s1
@@ -64,12 +70,18 @@ jest.mock('../InstructorRoster', () => ({
 
 jest.mock('../ClassMinimap', () => ({
   ClassMinimap: function MockClassMinimap({
+    realtimeStudents,
     enrolled,
     focusedStudentId,
     onFocusStudent,
   }: any) {
     return (
-      <div data-testid="class-minimap" data-focused={focusedStudentId ?? ''} data-enrolled={enrolled.length}>
+      <div
+        data-testid="class-minimap"
+        data-focused={focusedStudentId ?? ''}
+        data-enrolled={enrolled.length}
+        data-rt-summary={realtimeStudents[0]?.last_run_summary?.passed ?? ''}
+      >
         <button data-testid="minimap-focus-btn" onClick={() => onFocusStudent('student-2')}>
           focus s2
         </button>
@@ -79,9 +91,14 @@ jest.mock('../ClassMinimap', () => ({
 }));
 
 jest.mock('../SignalsPanel', () => ({
-  SignalsPanel: function MockSignalsPanel({ session_id, enrolled }: any) {
+  SignalsPanel: function MockSignalsPanel({ session_id, enrolled, realtimeStudents }: any) {
     return (
-      <div data-testid="signals-panel" data-session-id={session_id} data-enrolled={enrolled.length} />
+      <div
+        data-testid="signals-panel"
+        data-session-id={session_id}
+        data-enrolled={enrolled.length}
+        data-rt-summary={realtimeStudents[0]?.last_run_summary?.passed ?? ''}
+      />
     );
   },
 }));
@@ -174,7 +191,13 @@ describe('SessionView', () => {
   ];
 
   const mockRealtimeStudents = [
-    { id: 'student-1', name: 'Alice', code: 'print("Hello")' },
+    {
+      id: 'student-1',
+      name: 'Alice',
+      code: 'print("Hello")',
+      last_update: new Date(),
+      last_run_summary: { passed: 3, failed: 0, errors: 0, total: 3, at: new Date().toISOString() },
+    },
     { id: 'student-2', name: 'Bob', code: '' },
   ];
 
@@ -397,6 +420,30 @@ describe('SessionView', () => {
       render(<SessionView {...defaultProps} featured_student_id="student-2" />);
       expect(screen.getByTestId('instructor-roster')).toHaveAttribute('data-featured', 'student-2');
       expect(screen.getByTestId('focused-student-panel')).toHaveAttribute('data-featured', 'student-2');
+    });
+  });
+
+  describe('F8 run-summary + last_update threading (eval-cej.8.14)', () => {
+    it('threads last_run_summary + last_update into roster/minimap/signals (not stripped)', () => {
+      render(<SessionView {...defaultProps} />);
+      // Each column receives the first student's run summary (passed=3) unchanged.
+      expect(screen.getByTestId('instructor-roster')).toHaveAttribute('data-rt-summary', '3');
+      expect(screen.getByTestId('class-minimap')).toHaveAttribute('data-rt-summary', '3');
+      expect(screen.getByTestId('signals-panel')).toHaveAttribute('data-rt-summary', '3');
+      // last_update arrives as a Date so deriveStudentStatus's idle math works.
+      expect(screen.getByTestId('instructor-roster')).toHaveAttribute('data-rt-last-update', 'date');
+    });
+  });
+
+  describe('joinCode threading to roster (eval-cej.8.14)', () => {
+    it('passes the session join code to InstructorRoster (empty-state line source)', () => {
+      render(<SessionView {...defaultProps} join_code="XYZ789" />);
+      expect(screen.getByTestId('instructor-roster')).toHaveAttribute('data-join-code', 'XYZ789');
+    });
+
+    it('passes empty join code when join_code is null', () => {
+      render(<SessionView {...defaultProps} join_code={null} />);
+      expect(screen.getByTestId('instructor-roster')).toHaveAttribute('data-join-code', '');
     });
   });
 

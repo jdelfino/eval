@@ -97,8 +97,9 @@ const allPass: RunSummary = { passed: 3, failed: 0, errors: 0, total: 3, at: '20
 const withFailures: RunSummary = { passed: 1, failed: 2, errors: 0, total: 3, at: '2026-06-18T00:00:00Z' };
 const errorsOnly: RunSummary = { passed: 2, failed: 0, errors: 1, total: 3, at: '2026-06-18T00:00:00Z' };
 
-/** A recent activity timestamp so deriveStudentStatus does not read as idle. */
-const recent = new Date().toISOString();
+/** A recent activity timestamp (Date, matching the wired prop) so
+ * deriveStudentStatus does not read as idle. */
+const recent = new Date();
 
 const enrolled = [
   { user_id: 's1', name: 'Alice' },
@@ -115,10 +116,10 @@ const enrolled = [
 //   s4 joined recently but never ran → idle (excluded)
 //   s5 enrolled but not joined → missing (excluded)
 const realtimeStudents = [
-  { id: 's1', name: 'Alice', code: 'a', last_run_summary: allPass, last_activity: recent },
-  { id: 's2', name: 'Bob', code: 'b', last_run_summary: withFailures, last_activity: recent },
-  { id: 's3', name: 'Carol', code: 'c', last_run_summary: errorsOnly, last_activity: recent },
-  { id: 's4', name: 'Dave', code: 'd', last_activity: recent },
+  { id: 's1', name: 'Alice', code: 'a', last_run_summary: allPass, last_update: recent },
+  { id: 's2', name: 'Bob', code: 'b', last_run_summary: withFailures, last_update: recent },
+  { id: 's3', name: 'Carol', code: 'c', last_run_summary: errorsOnly, last_update: recent },
+  { id: 's4', name: 'Dave', code: 'd', last_update: recent },
 ];
 
 const baseProps = {
@@ -222,6 +223,20 @@ describe('SignalsPanel — signal cards', () => {
   it('labels the passing/failing card "at last run" so it reads as last-known state (amendment #7)', () => {
     render(<SignalsPanel {...baseProps} />);
     expect(screen.getByTestId('signal-passing-failing')).toHaveTextContent(/at last run/i);
+  });
+
+  // eval-cej.8.14: the dashboard threads `last_update` (a Date) — not
+  // `last_activity` — through the column prop contract. Verify the card computes
+  // non-zero counts from that wired shape so the F8 status is not inert.
+  it('computes non-zero Passing/Failing from the wired last_update (Date) field', () => {
+    const wired = [
+      { id: 's1', name: 'Alice', code: 'a', last_run_summary: allPass, last_update: new Date() },
+      { id: 's2', name: 'Bob', code: 'b', last_run_summary: withFailures, last_update: new Date() },
+    ];
+    render(<SignalsPanel {...baseProps} realtimeStudents={wired} />);
+    const card = screen.getByTestId('signal-passing-failing');
+    expect(card).toHaveTextContent('Passing 1');
+    expect(card).toHaveTextContent('Failing 1');
   });
 
   it('does not render any "Stuck" card or copy (dropped scope)', () => {

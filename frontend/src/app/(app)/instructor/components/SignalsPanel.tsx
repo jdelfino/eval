@@ -35,7 +35,6 @@ import StudentAnalysisDetails from './StudentAnalysisDetails';
 import useAnalysisGroups from '../hooks/useAnalysisGroups';
 import { deriveStudentStatus } from '../lib/studentStatus';
 import { RealtimeStudent } from '../types';
-import type { RunSummary } from '@/types/api';
 import type { EnrolledStudent } from './InstructorRoster';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
@@ -59,18 +58,6 @@ const DEFAULT_PROMPT =
   `- Each issue must have at least 1 student.\n` +
   `- Omit students with empty or unmodified starter code from issue lists.\n` +
   `- Set overall_note to a 1-2 sentence summary of the class's performance.`;
-
-/**
- * Live status fields that real realtime students carry from useRealtimeSession
- * (last_run_summary + honest last-activity) but which the locked RealtimeStudent
- * prop type does not declare. Read defensively so the cards work when present and
- * degrade gracefully (idle) when absent.
- */
-type RealtimeStudentWithStatus = RealtimeStudent & {
-  last_run_summary?: RunSummary | null;
-  last_activity?: Date | string | null;
-  last_update?: Date | string | null;
-};
 
 const SECTION_LABEL_CLASS =
   'text-[11px] font-semibold uppercase tracking-wide text-gray-500';
@@ -140,10 +127,10 @@ export function SignalsPanel({
   const { passing, failing } = useMemo(() => {
     let passingCount = 0;
     let failingCount = 0;
-    for (const student of realtimeStudents as RealtimeStudentWithStatus[]) {
+    for (const student of realtimeStudents) {
       const status = deriveStudentStatus({
         lastRunSummary: student.last_run_summary,
-        lastUpdate: student.last_activity ?? student.last_update ?? null,
+        lastUpdate: student.last_update ?? null,
         joined: true,
       });
       if (status === 'run') passingCount += 1;

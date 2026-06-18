@@ -258,6 +258,7 @@ export function SessionView({
               enrolled={enrolled}
               focusedStudentId={focusedStudentId}
               featured_student_id={featured_student_id}
+              joinCode={join_code || undefined}
               onFocusStudent={handleFocusStudent}
             />
 

@@ -121,11 +121,15 @@ export function ClassMinimap({
       name: s.name,
       joined: true,
       code: s.code ?? '',
-      // RealtimeStudent carries only id/name/code today, so joined students
-      // resolve to 'idle' (present, no run result). When richer per-student
-      // state (last_run_summary/last_update) flows through this contract, the
-      // dot will track run status without changes here.
-      status: deriveStudentStatus({ joined: true }),
+      // Status tracks the threaded F8 run summary + honest last-activity via the
+      // shared locked semantics (eval-cej.8.14), so the tile dot reflects real
+      // run state (run/danger/warn) rather than collapsing every joined tile to
+      // idle. idle still applies for stale/never-ran students.
+      status: deriveStudentStatus({
+        lastRunSummary: s.last_run_summary,
+        lastUpdate: s.last_update,
+        joined: true,
+      }),
     }));
 
     const missingTiles: TileModel[] = enrolled

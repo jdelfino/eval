@@ -20,13 +20,26 @@ import {
 } from '../ClassMinimap';
 import type { RealtimeStudent } from '../../types';
 import type { EnrolledStudent } from '../InstructorRoster';
+import type { RunSummary } from '@/types/api';
 
 function realtime(
   id: string,
   name: string,
   code?: string,
+  extra?: Partial<Pick<RealtimeStudent, 'last_update' | 'last_run_summary'>>,
 ): RealtimeStudent {
-  return { id, name, code };
+  return { id, name, code, ...extra };
+}
+
+/** A run summary `at` now, plus a recent last_update, so status is not idle. */
+function recentSummary(
+  partial: Pick<RunSummary, 'passed' | 'failed' | 'errors' | 'total'>,
+): { last_update: Date; last_run_summary: RunSummary } {
+  const now = new Date();
+  return {
+    last_update: now,
+    last_run_summary: { ...partial, at: now.toISOString() },
+  };
 }
 
 function enrolledStudent(user_id: string, name: string): EnrolledStudent {
@@ -117,6 +130,44 @@ describe('ClassMinimap rendering', () => {
     expect(screen.getByTestId('minimap-dot-u3')).toHaveAttribute(
       'data-status',
       'missing',
+    );
+  });
+
+  // F8 cross-column contract (eval-cej.8.14): the minimap status dot must track
+  // the threaded run summary, not collapse every joined tile to idle. A
+  // regression here means the live status glyphs are inert.
+  it('reflects real run status from threaded F8 summaries (run / danger)', () => {
+    render(
+      <ClassMinimap
+        realtimeStudents={[
+          realtime(
+            'u1',
+            'Ada',
+            'print(1)',
+            recentSummary({ passed: 3, failed: 0, errors: 0, total: 3 }),
+          ),
+          realtime(
+            'u2',
+            'Babbage',
+            'x = 2',
+            recentSummary({ passed: 1, failed: 2, errors: 0, total: 3 }),
+          ),
+        ]}
+        enrolled={[]}
+        focusedStudentId={null}
+        onFocusStudent={jest.fn()}
+      />,
+    );
+
+    // All-pass + recent activity -> run (green), not idle.
+    expect(screen.getByTestId('minimap-dot-u1')).toHaveAttribute(
+      'data-status',
+      'run',
+    );
+    // Has failures -> danger.
+    expect(screen.getByTestId('minimap-dot-u2')).toHaveAttribute(
+      'data-status',
+      'danger',
     );
   });
 
