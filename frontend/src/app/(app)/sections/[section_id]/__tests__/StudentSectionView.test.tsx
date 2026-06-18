@@ -28,7 +28,7 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import StudentSectionView from '../components/StudentSectionView';
@@ -1221,10 +1221,11 @@ describe('StudentSectionView', () => {
 
       const dialog = screen.getByRole('dialog');
       expect(dialog).toBeInTheDocument();
-      // The modal should show a "Solution" header
-      expect(screen.getByRole('heading', { name: /Solution/i })).toBeInTheDocument();
-      // The modal should also show the problem title "FizzBuzz"
-      expect(within(dialog).getByText('FizzBuzz')).toBeInTheDocument();
+      // The consolidated Modal title is a heading carrying both the "Reference
+      // solution" copy and the problem title "FizzBuzz".
+      expect(
+        screen.getByRole('heading', { name: /Reference solution · FizzBuzz/i })
+      ).toBeInTheDocument();
     });
 
     it('does not show View Solution when show_solution is true but solution is null', () => {

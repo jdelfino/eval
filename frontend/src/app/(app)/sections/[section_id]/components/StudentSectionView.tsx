@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Session, PublishedProblemWithStatus, Problem } from '@/types/api';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
@@ -14,6 +13,7 @@ import { SectionLabel } from '@/components/ui/SectionLabel';
 import { useSectionEvents } from '@/hooks/useSectionEvents';
 import { isSectionLive } from '@/lib/liveness';
 import { formatShortDate } from '@/lib/format';
+import { SolutionViewerModal } from '@/components/SolutionViewerModal';
 import type { SectionDetail } from '../page';
 
 // ---------------------------------------------------------------------------
@@ -26,102 +26,6 @@ function deriveProblemState(p: PublishedProblemWithStatus): ProblemState {
   if (p.student_work?.last_run_all_passed === true) return 'solved';
   if (p.student_work != null) return 'in-progress';
   return 'not-started';
-}
-
-// ---------------------------------------------------------------------------
-// SolutionModal
-// ---------------------------------------------------------------------------
-
-interface SolutionModalProps {
-  modal: { title: string; solution: string } | null;
-  onClose: () => void;
-}
-
-function SolutionModal({ modal, onClose }: SolutionModalProps) {
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const previousActiveElement = useRef<Element | null>(null);
-
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
-    },
-    [onClose]
-  );
-
-  useEffect(() => {
-    if (modal) {
-      // Store the previously focused element
-      previousActiveElement.current = document.activeElement;
-
-      // Add keyboard listener
-      document.addEventListener('keydown', handleKeyDown);
-
-      // Focus the close button
-      const timer = setTimeout(() => {
-        closeButtonRef.current?.focus();
-      }, 0);
-
-      // Prevent body scroll
-      document.body.style.overflow = 'hidden';
-
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-        clearTimeout(timer);
-        document.body.style.overflow = '';
-
-        // Restore focus to the previously focused element
-        if (previousActiveElement.current instanceof HTMLElement) {
-          previousActiveElement.current.focus();
-        }
-      };
-    }
-  }, [modal, handleKeyDown]);
-
-  if (!modal) {
-    return null;
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="solution-modal-title"
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 transition-opacity"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Dialog content */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 id="solution-modal-title" className="text-xl font-bold text-gray-900">Solution</h2>
-            <p className="text-sm text-gray-500 mt-1">{modal.title}</p>
-          </div>
-          <button
-            ref={closeButtonRef}
-            onClick={onClose}
-            aria-label="Close"
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        <div className="p-6 overflow-auto">
-          <pre className="bg-gray-50 rounded-lg p-4 text-sm font-mono text-gray-800 overflow-x-auto whitespace-pre-wrap">
-            <code>{modal.solution}</code>
-          </pre>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -598,10 +502,16 @@ export default function StudentSectionView({
         )}
       </div>
 
-      {/* Solution Modal */}
-      <SolutionModal
-        modal={solutionModal}
+      {/* Solution Modal (consolidated — G7-T5).
+          The student section view has no per-problem session/user context for
+          the published solution, so the diff tab degrades to the graceful
+          "No prior revision to compare" fallback. */}
+      <SolutionViewerModal
+        open={solutionModal != null}
         onClose={() => setSolutionModal(null)}
+        problemTitle={solutionModal?.title ?? ''}
+        solution={solutionModal?.solution ?? ''}
+        variant="student"
       />
     </div>
   );
