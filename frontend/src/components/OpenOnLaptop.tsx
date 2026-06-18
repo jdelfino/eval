@@ -22,8 +22,15 @@ export interface OpenOnLaptopProps {
  *
  * Shown anywhere a mobile user would otherwise try to do real work (notably the
  * /student workspace guard). The "laptop URL" is simply the current URL, so the
- * "Copy link" button copies `window.location.href` via the Clipboard API — no QR
- * library, no short-URL/email backend. Clipboard failures degrade gracefully.
+ * "Copy link" button copies `window.location.href` — no QR library, no
+ * short-URL/email backend.
+ *
+ * Copy degrades through three tiers so the affordance always communicates:
+ *   1. navigator.clipboard.writeText (secure context) → "Link copied".
+ *   2. document.execCommand('copy') fallback (insecure context, where
+ *      navigator.clipboard is undefined) → "Link copied".
+ *   3. If neither works, the URL is revealed as selectable text so the user can
+ *      copy it manually — the button never silently no-ops (G8 polish).
  *
  * This is always a fragment of a larger page, never the page landmark itself —
  * every call site already sits inside a layout/shell `<main>`. So the root is a
@@ -36,16 +43,62 @@ export function OpenOnLaptop({
   secondaryAction,
 }: OpenOnLaptopProps): React.ReactElement {
   const [copied, setCopied] = useState(false);
+  // The URL is revealed as selectable text only after every copy mechanism fails,
+  // so an insecure-context user can still copy it by hand (tier 3).
+  const [showUrl, setShowUrl] = useState(false);
+
+  const markCopied = () => {
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
+  /**
+   * execCommand('copy') fallback for insecure contexts where
+   * navigator.clipboard is undefined. Selects a transient off-screen textarea and
+   * asks the document to copy it. Returns whether the copy succeeded.
+   */
+  const copyViaExecCommand = (text: string): boolean => {
+    if (typeof document.execCommand !== 'function') return false;
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    // Keep it out of view and unfocusable to the eye, but selectable.
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    try {
+      textarea.select();
+      return document.execCommand('copy');
+    } catch {
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  };
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API may be unavailable (insecure context) or rejected
-      // (permission denied). Leave the button usable; do not throw.
+    const url = window.location.href;
+
+    // Tier 1: Clipboard API (secure context).
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        markCopied();
+        return;
+      } catch {
+        // Permission denied or rejected — fall through to the execCommand tier.
+      }
     }
+
+    // Tier 2: execCommand('copy') (insecure context, where clipboard is absent).
+    if (copyViaExecCommand(url)) {
+      markCopied();
+      return;
+    }
+
+    // Tier 3: nothing copied — reveal the URL so the user can copy it manually.
+    setShowUrl(true);
   };
 
   return (
@@ -105,6 +158,22 @@ export function OpenOnLaptop({
         <Icon name="link" size={16} />
         {copied ? 'Link copied' : 'Copy link'}
       </Button>
+
+      {showUrl && (
+        <p
+          style={{
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: 'var(--fg-muted)',
+            margin: 0,
+            maxWidth: 360,
+            wordBreak: 'break-all',
+            userSelect: 'all',
+          }}
+        >
+          {window.location.href}
+        </p>
+      )}
 
       {secondaryAction}
     </div>

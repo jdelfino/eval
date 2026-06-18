@@ -16,6 +16,7 @@ import { formatShortDate } from '@/lib/format';
 import { SolutionViewerModal } from '@/components/SolutionViewerModal';
 import { ReplayModal } from '@/app/(app)/instructor/components/RevisionViewer';
 import { OpenOnLaptop } from '@/components/OpenOnLaptop';
+import { MobileSwap } from '@/components/MobileSwap';
 import { useMobileViewport } from '@/hooks/useResponsiveLayout';
 import type { SectionDetail } from '../page';
 
@@ -123,21 +124,21 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
             </p>
           </div>
         </div>
-        {isMobile ? (
-          // Mobile read-only (G8 T3): nudge to the laptop instead of presenting a
-          // primary navigate-to-workspace "Join now" action. The OpenOnLaptop
-          // affordance is the consistent, dependency-free Copy-link CTA used by
-          // the T1 /student guard; the real block stays that guard, not here.
-          <div
-            className="rounded-lg overflow-hidden bg-white"
-            style={{ color: 'var(--fg)' }}
-          >
+        {/* Mobile read-only (G8 T3): nudge to the laptop instead of presenting a
+            primary navigate-to-workspace "Join now" action. The OpenOnLaptop
+            affordance is the consistent, dependency-free Copy-link CTA used by the
+            T1 /student guard; the real block stays that guard, not here. The
+            mobile-vs-desktop swap shape is the shared <MobileSwap> wrapper. */}
+        <MobileSwap
+          mobileClassName="rounded-lg overflow-hidden bg-white"
+          mobileStyle={{ color: 'var(--fg)' }}
+          mobile={
             <OpenOnLaptop
               title="Open this session on your laptop"
               body="Class is live — you'll join and write code on a bigger screen."
             />
-          </div>
-        ) : (
+          }
+        >
           <button
             onClick={onJoin}
             className="px-6 py-2.5 bg-white text-green-600 text-sm font-semibold rounded-lg hover:bg-green-50 transition-colors shadow hover:shadow-md flex items-center gap-2"
@@ -147,7 +148,7 @@ function LiveSessionCard({ hasCurrentProblem, liveNow, isMobile, onJoin }: LiveS
             </svg>
             {liveNow ? 'Join now' : 'Jump in'}
           </button>
-        )}
+        </MobileSwap>
       </div>
     </div>
   );
