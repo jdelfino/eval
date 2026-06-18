@@ -1,20 +1,32 @@
 'use client';
 
 /**
- * ClassMinimap - center-column top of the G4 instructor live dashboard.
+ * ClassMinimap - center-column top of the G4 instructor live dashboard (T8).
  *
- * PLACEHOLDER INTERNALS (T6): this file locks the final prop contract so T8
- * (eval-cej.8.8) can fill in the real minimap (per-student tiles rendering live
- * code as line-bars, status dots, click-to-focus). For now it renders only a
- * labelled container so the dashboard shell is verifiable end to end.
+ * A glanceable grid of per-student tiles. Each joined student's tile renders
+ * their REAL live code as 2px line-bars (bar widths derived from line lengths),
+ * a status dot (shared `deriveStudentStatus` glyph), and a 1-based tile number.
+ * Clicking a joined tile focuses that student; hovering shows an accent outline
+ * plus a small read-only code-peek popover. Enrolled-but-not-joined students
+ * render as muted, inert placeholder tiles.
  *
- * Note (#9): the minimap deliberately does NOT receive `featured_student_id` —
- * the featured affordance lives on the roster (T7) and focused panel (T10).
+ * Aggregation is fully client-side over already-streamed per-student state
+ * (DEC-5). The component is built to stay cheap under keystroke-rate
+ * `student_code_updated` churn: line-bars are memoized per code string via a
+ * module-level cache so repeated renders with unchanged code do no work.
+ *
+ * Note (#9): the minimap deliberately renders NO featured-student indicator -
+ * the featured affordance lives on the roster (T7) and focused panel (T10). The
+ * only persistent per-tile decoration is the focused outline.
  */
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { RealtimeStudent } from '../types';
 import type { EnrolledStudent } from './InstructorRoster';
+import {
+  deriveStudentStatus,
+  type StudentStatus,
+} from '../lib/studentStatus';
 
 export interface ClassMinimapProps {
   /** Raw realtime students with live code (tile source). */
@@ -27,22 +39,215 @@ export interface ClassMinimapProps {
   onFocusStudent: (userId: string) => void;
 }
 
+/** Maximum number of line-bars rendered per tile. */
+export const MAX_BARS = 14;
+/** Number of code lines shown in the hover peek popover. */
+const PEEK_LINES = 12;
+
+/**
+ * Module-level memo cache: code string -> derived bar widths. Keyed by the raw
+ * code so keystroke-rate re-renders that don't change a student's code reuse the
+ * previously computed array (reference-stable) and skip recomputation entirely.
+ *
+ * Exported for tests to assert the cache-hit (no-recompute) contract.
+ */
+export const barsCache = new Map<string, number[]>();
+
+function computeBars(code: string): number[] {
+  // Split into lines, drop a single trailing empty line (from a final newline),
+  // and cap the count so tall files don't overflow the tile.
+  const lines = code.split('\n');
+  if (lines.length > 1 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  const capped = lines.slice(0, MAX_BARS);
+  if (capped.length === 0) {
+    // Empty code -> a single minimal bar so the tile reads as "present, blank".
+    return [8];
+  }
+  return capped.map((line) => {
+    // Clamp width from line length: short lines stay visible, long lines cap.
+    const trimmedLen = line.trimEnd().length;
+    return Math.min(100, 8 + trimmedLen * 3);
+  });
+}
+
+/**
+ * Derive the 2px line-bar widths (percent) for a student's code. Pure and
+ * memoized per code string via {@link barsCache}: repeated calls with the same
+ * code return the identical array reference without recomputing.
+ */
+export function codeToBars(code: string | undefined): number[] {
+  const key = code ?? '';
+  const cached = barsCache.get(key);
+  if (cached !== undefined) return cached;
+  const bars = computeBars(key);
+  barsCache.set(key, bars);
+  return bars;
+}
+
+/** Tailwind background class for each status dot color. */
+const STATUS_DOT_CLASS: Record<StudentStatus, string> = {
+  run: 'bg-green-500',
+  danger: 'bg-red-500',
+  warn: 'bg-amber-500',
+  idle: 'bg-gray-400',
+  missing: 'bg-gray-300',
+};
+
+interface TileModel {
+  user_id: string;
+  name: string;
+  joined: boolean;
+  code: string;
+  status: StudentStatus;
+}
+
 export function ClassMinimap({
   realtimeStudents,
-  // Locked contract consumed by T8; referenced superficially in the placeholder.
-  enrolled: _enrolled,
-  focusedStudentId: _focusedStudentId,
-  onFocusStudent: _onFocusStudent,
+  enrolled,
+  focusedStudentId,
+  onFocusStudent,
 }: ClassMinimapProps) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // Build the ordered tile list: joined students first (stable join order),
+  // then muted placeholder tiles for enrolled students who have not joined.
+  const tiles = useMemo<TileModel[]>(() => {
+    const joinedIds = new Set(realtimeStudents.map((s) => s.id));
+
+    const joinedTiles: TileModel[] = realtimeStudents.map((s) => ({
+      user_id: s.id,
+      name: s.name,
+      joined: true,
+      code: s.code ?? '',
+      // RealtimeStudent carries only id/name/code today, so joined students
+      // resolve to 'idle' (present, no run result). When richer per-student
+      // state (last_run_summary/last_update) flows through this contract, the
+      // dot will track run status without changes here.
+      status: deriveStudentStatus({ joined: true }),
+    }));
+
+    const missingTiles: TileModel[] = enrolled
+      .filter((e) => !joinedIds.has(e.user_id))
+      .map((e) => ({
+        user_id: e.user_id,
+        name: e.name,
+        joined: false,
+        code: '',
+        status: deriveStudentStatus({ joined: false }),
+      }));
+
+    return [...joinedTiles, ...missingTiles];
+  }, [realtimeStudents, enrolled]);
+
+  const hoveredTile = hoveredId
+    ? tiles.find((t) => t.user_id === hoveredId && t.joined) ?? null
+    : null;
+
   return (
     <div
       data-testid="class-minimap"
-      className="border-b border-gray-200 bg-white p-3"
+      className="relative border-b border-gray-200 bg-white p-3"
     >
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 m-0">
-        Minimap
-      </h3>
-      <p className="text-xs text-gray-400 mt-0.5">{realtimeStudents.length} tiles</p>
+      <div className="mb-2.5 flex items-center justify-between">
+        <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          Class minimap
+        </h3>
+      </div>
+
+      <div
+        className="grid gap-1.5"
+        style={{
+          gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))',
+        }}
+      >
+        {tiles.map((tile, index) => {
+          const isFocused = tile.joined && tile.user_id === focusedStudentId;
+          const isHovered = tile.user_id === hoveredId;
+          const bars = tile.joined ? codeToBars(tile.code) : [];
+
+          const outline = isFocused
+            ? '2px solid #2563eb' // focused: persistent accent outline
+            : isHovered && tile.joined
+              ? '2px solid #93c5fd' // hover: lighter accent outline
+              : '1px solid #e5e7eb';
+
+          return (
+            <div
+              key={tile.user_id}
+              data-testid={`minimap-tile-${tile.user_id}`}
+              role={tile.joined ? 'button' : undefined}
+              tabIndex={tile.joined ? 0 : undefined}
+              aria-label={
+                tile.joined
+                  ? `Focus ${tile.name}`
+                  : `${tile.name} (not joined)`
+              }
+              title={tile.name}
+              aria-pressed={tile.joined ? isFocused : undefined}
+              onClick={
+                tile.joined ? () => onFocusStudent(tile.user_id) : undefined
+              }
+              onKeyDown={
+                tile.joined
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onFocusStudent(tile.user_id);
+                      }
+                    }
+                  : undefined
+              }
+              onMouseEnter={() => setHoveredId(tile.user_id)}
+              onMouseLeave={() =>
+                setHoveredId((cur) => (cur === tile.user_id ? null : cur))
+              }
+              className={`relative flex h-[70px] flex-col justify-end overflow-hidden rounded p-1 ${
+                tile.joined
+                  ? 'cursor-pointer bg-gray-50'
+                  : 'cursor-default bg-gray-100 opacity-50'
+              }`}
+              style={{ outline }}
+            >
+              {bars.map((width, j) => (
+                <div
+                  key={j}
+                  className="mb-0.5 bg-gray-400 opacity-50"
+                  style={{ height: 2, width: `${width}%` }}
+                />
+              ))}
+
+              {/* Status dot (top-right). */}
+              <span
+                data-testid={`minimap-dot-${tile.user_id}`}
+                data-status={tile.status}
+                className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLASS[tile.status]}`}
+              />
+
+              {/* 1-based tile number (top-left). */}
+              <span className="absolute left-1.5 top-1 font-mono text-[9px] text-gray-400">
+                {index + 1}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover code-peek popover (read-only; never captures pointer events). */}
+      {hoveredTile && (
+        <div
+          data-testid="minimap-peek"
+          className="pointer-events-none absolute bottom-3 right-3 z-10 w-[280px] rounded-md bg-gray-900 p-2.5 font-mono text-[11.5px] leading-relaxed text-gray-100 shadow-lg"
+        >
+          <div className="mb-1 text-[10px] text-gray-400">
+            {hoveredTile.name} · live preview
+          </div>
+          <pre className="m-0 overflow-hidden whitespace-pre">
+            {hoveredTile.code.split('\n').slice(0, PEEK_LINES).join('\n')}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
