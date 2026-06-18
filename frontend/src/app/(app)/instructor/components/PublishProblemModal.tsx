@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Modal } from '@/components/ui';
 import { getClassSections } from '@/lib/api/sections';
 import {
   listProblemSections,
@@ -26,12 +27,15 @@ interface SectionState {
 interface PublishProblemModalProps {
   problemId: string;
   classId: string;
+  /** Title of the problem being published, shown in the modal heading. */
+  problemTitle: string;
   onClose: () => void;
 }
 
 export default function PublishProblemModal({
   problemId,
   classId,
+  problemTitle,
   onClose,
 }: PublishProblemModalProps) {
   const [sections, setSections] = useState<SectionState[]>([]);
@@ -139,28 +143,47 @@ export default function PublishProblemModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[80vh] flex flex-col">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Publish Problem</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Select sections and configure solution visibility
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            disabled={loading}
-            aria-label="Close modal"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+  const selectedCount = sections.filter((s) => s.isPublished).length;
 
+  const footer = (
+    <>
+      <button
+        onClick={onClose}
+        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+        disabled={loading}
+        aria-label="Cancel"
+      >
+        Cancel
+      </button>
+      <button
+        onClick={handleSave}
+        disabled={loading || loadingData || sections.length === 0}
+        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Saving...
+          </span>
+        ) : (
+          `Publish to ${selectedCount} ${selectedCount === 1 ? 'section' : 'sections'}`
+        )}
+      </button>
+    </>
+  );
+
+  return (
+    <Modal
+      open
+      title={`Publish ${problemTitle}`}
+      sub="Publishing makes this problem visible to students for solo practice. It does NOT start a session."
+      width={560}
+      onClose={onClose}
+      footer={footer}
+    >
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             {error}
@@ -226,37 +249,6 @@ export default function PublishProblemModal({
             </div>
           </div>
         )}
-
-        {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-            disabled={loading}
-            aria-label="Cancel"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={loading || loadingData || sections.length === 0}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            aria-label="Save"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Saving...
-              </span>
-            ) : (
-              'Save'
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -38,7 +38,7 @@ describe('CreateClassModal', () => {
   it('renders the modal with form fields', () => {
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    expect(screen.getByText('Create New Class')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'New class' })).toBeInTheDocument();
     expect(screen.getByLabelText(/class name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create class/i })).toBeInTheDocument();
@@ -53,13 +53,12 @@ describe('CreateClassModal', () => {
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it('closes modal when clicking outside the modal content', () => {
+  it('closes modal when clicking the backdrop', () => {
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    const backdrop = screen.getByText('Create New Class').closest('div')?.parentElement?.parentElement;
-    if (backdrop) {
-      fireEvent.click(backdrop);
-    }
+    // The Modal backdrop is the dialog element; clicking it (target === currentTarget) closes.
+    const backdrop = screen.getByRole('dialog');
+    fireEvent.click(backdrop);
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
@@ -67,18 +66,34 @@ describe('CreateClassModal', () => {
   it('does not close modal when clicking inside the modal content', () => {
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    const modalContent = screen.getByText('Create New Class').parentElement;
-    if (modalContent) {
-      fireEvent.click(modalContent);
-    }
+    const heading = screen.getByRole('heading', { name: 'New class' });
+    fireEvent.click(heading);
 
     expect(mockOnClose).not.toHaveBeenCalled();
+  });
+
+  it('closes modal when Escape is pressed', () => {
+    render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('autofocuses the class name input on mount', () => {
+    render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
+
+    // The declarative autoFocus on the class-name input focuses it synchronously
+    // on mount, so the field is the intended entry point after the shell swap.
+    // (The Modal shell's own focus management runs later on a timer; this
+    // assertion intentionally checks the synchronous mount-time focus.)
+    expect(screen.getByLabelText(/class name/i)).toHaveFocus();
   });
 
   it('shows validation error when submitting empty form', async () => {
     render(<CreateClassModal onClose={mockOnClose} onSuccess={mockOnSuccess} />);
 
-    const form = screen.getByRole('button', { name: /create class/i }).closest('form');
+    const form = screen.getByLabelText(/class name/i).closest('form');
     if (form) {
       fireEvent.submit(form);
     }
@@ -241,7 +256,7 @@ describe('CreateClassModal', () => {
     const nameInput = screen.getByLabelText(/class name/i);
     fireEvent.change(nameInput, { target: { value: 'CS101' } });
 
-    const form = screen.getByRole('button', { name: /create class/i }).closest('form');
+    const form = screen.getByLabelText(/class name/i).closest('form');
     fireEvent.submit(form!);
 
     // Wait for createClass to be called and error to be displayed
