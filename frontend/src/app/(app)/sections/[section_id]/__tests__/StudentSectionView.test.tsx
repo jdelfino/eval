@@ -43,12 +43,14 @@ jest.mock('@/lib/api/student-work', () => ({
   getOrCreateStudentWork: jest.fn(),
 }));
 
-// Mock useSectionEvents so existing tests keep working: it returns whatever
-// initialActiveSessions is passed to the component (via the hook's return value).
-// This also lets us verify the hook is invoked with the right arguments.
+// Mock useSectionEvents (section-pointer model). By default it echoes the
+// initial pointer/problem/activity passed to the component, so a test can drive
+// the live card by setting the component's props. This also lets us verify the
+// hook is invoked with the right arguments.
 const mockUseSectionEvents = jest.fn();
 jest.mock('@/hooks/useSectionEvents', () => ({
   useSectionEvents: (...args: any[]) => mockUseSectionEvents(...args),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 const mockPush = jest.fn();
@@ -337,14 +339,30 @@ const pastSessions: Session[] = [
   },
 ];
 
+// A "live now" pointer: set + recently active (within the 60-min window).
+const FRESH_ACTIVITY = new Date().toISOString();
+const POINTER_PROBLEM = activeSessionWithProblem.problem!; // problem id = PROBLEM_ID_1
+
 describe('StudentSectionView', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
-    // Default: hook returns whatever activeSessions are passed in as initialActiveSessions
+    // Default: hook echoes the initial pointer/problem/activity passed to the
+    // component, so tests drive the live card via props.
     mockUseSectionEvents.mockImplementation(
-      ({ initialActiveSessions }: { sectionId: string; initialActiveSessions: Session[] }) => ({
-        activeSessions: initialActiveSessions,
+      ({
+        initialCurrentSessionId = null,
+        initialCurrentProblem = null,
+        initialLastActivity = null,
+      }: {
+        sectionId: string;
+        initialCurrentSessionId?: string | null;
+        initialCurrentProblem?: unknown;
+        initialLastActivity?: string | null;
+      }) => ({
+        currentSessionId: initialCurrentSessionId,
+        currentProblem: initialCurrentProblem,
+        lastActivity: initialLastActivity,
       })
     );
   });
@@ -354,7 +372,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -371,7 +389,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -394,7 +412,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -412,7 +430,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={noSemester}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -428,7 +446,9 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -443,7 +463,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -453,16 +473,17 @@ describe('StudentSectionView', () => {
       expect(screen.queryByText(/Class is live!/i)).not.toBeInTheDocument();
     });
 
-    it('does not show banner when active session has no problem.id', () => {
-      const sessionNoProblemId = {
-        ...activeSessionWithProblem,
-        problem: { ...activeSessionWithProblem.problem!, id: undefined as unknown as string },
-      };
+    it('does not show the live card when the pointer has no resolvable problem id', () => {
+      // Pointer is set but the problem snapshot lacks an id → no late-join target,
+      // so the live card (which would offer a dead "Jump in") is not shown.
+      const problemNoId = { ...POINTER_PROBLEM, id: undefined as unknown as string };
 
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[sessionNoProblemId]}
+          currentSessionId="session-active-1"
+          currentProblem={problemNoId}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -490,7 +511,9 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -514,7 +537,9 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -535,7 +560,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -551,7 +576,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -566,7 +591,9 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -584,7 +611,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -603,7 +630,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -622,7 +649,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -643,7 +670,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -665,7 +692,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -682,7 +709,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -697,7 +724,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -711,7 +738,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -725,7 +752,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -741,7 +768,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -767,7 +794,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -797,7 +824,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -817,7 +844,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -837,7 +864,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -865,7 +892,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -885,7 +912,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -905,7 +932,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={threeStateProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -955,7 +982,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={noSolvedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1014,7 +1041,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={allWorkedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1029,11 +1056,13 @@ describe('StudentSectionView', () => {
   });
 
   describe('useSectionEvents integration', () => {
-    it('calls useSectionEvents with correct sectionId and initialActiveSessions', () => {
+    it('calls useSectionEvents with the section id and the initial pointer values', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1043,27 +1072,69 @@ describe('StudentSectionView', () => {
       expect(mockUseSectionEvents).toHaveBeenCalledWith(
         expect.objectContaining({
           sectionId: SECTION_ID,
-          initialActiveSessions: [activeSessionWithProblem],
+          initialCurrentSessionId: 'session-active-1',
+          initialCurrentProblem: POINTER_PROBLEM,
+          initialLastActivity: FRESH_ACTIVITY,
         })
       );
     });
 
-    it('renders the live banner using activeSessions returned by useSectionEvents, not the prop directly', () => {
-      // The hook overrides the initial sessions — e.g. session ended in real-time
-      mockUseSectionEvents.mockReturnValue({ activeSessions: [] });
+    it('renders the live card from the pointer returned by useSectionEvents, not the prop directly', () => {
+      // The hook overrides the initial pointer — e.g. instructor ended class in
+      // real time (section_current_changed → null).
+      mockUseSectionEvents.mockReturnValue({
+        currentSessionId: null,
+        currentProblem: null,
+        lastActivity: null,
+      });
 
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
         />
       );
 
-      // Banner should not appear because the hook returned empty sessions
+      // Card should not be live because the hook returned a null pointer.
       expect(screen.queryByText(/Class is live!/i)).not.toBeInTheDocument();
+    });
+
+    it('shows the current-problem affordance without the live pulse for a stale pointer (G4-R3)', () => {
+      /**
+       * Contract: liveness emphasis requires recent activity (within 60 min) in
+       * addition to the pointer. A stale pointer still offers the current problem
+       * (late-join target) but without the green "Class is live!" pulse.
+       * Catches: stale-pointer-as-live regression (G4-R3).
+       */
+      const STALE_ACTIVITY = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      mockUseSectionEvents.mockReturnValue({
+        currentSessionId: 'session-active-1',
+        currentProblem: POINTER_PROBLEM,
+        lastActivity: STALE_ACTIVITY,
+      });
+
+      render(
+        <StudentSectionView
+          section={sectionDetail}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={STALE_ACTIVITY}
+          publishedProblems={[]}
+          pastSessions={[]}
+          sectionId={SECTION_ID}
+        />
+      );
+
+      // No live pulse...
+      expect(screen.queryByText(/Class is live!/i)).not.toBeInTheDocument();
+      // ...but the current-problem affordance is offered (Jump in).
+      expect(screen.getByText(/Current problem/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Jump in/i })).toBeInTheDocument();
     });
   });
 
@@ -1111,7 +1182,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={problemWithSolution}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1139,7 +1210,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={problemWithSolution}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1186,7 +1257,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={problemShowSolutionNoContent}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1200,7 +1271,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={problemWithSolution}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1219,7 +1290,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={problemWithSolution}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1245,7 +1316,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1270,7 +1341,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={pastSessions}
           sectionId={SECTION_ID}
@@ -1297,7 +1368,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={pastSessions}
           sectionId={SECTION_ID}
@@ -1320,7 +1391,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={pastSessions}
           sectionId={SECTION_ID}
@@ -1336,7 +1407,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1350,7 +1421,7 @@ describe('StudentSectionView', () => {
       render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1369,7 +1440,9 @@ describe('StudentSectionView', () => {
       const { container } = render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1392,7 +1465,9 @@ describe('StudentSectionView', () => {
       const { container } = render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[activeSessionWithProblem]}
+          currentSessionId="session-active-1"
+          currentProblem={POINTER_PROBLEM}
+          currentLastActivity={FRESH_ACTIVITY}
           publishedProblems={[]}
           pastSessions={[]}
           sectionId={SECTION_ID}
@@ -1412,7 +1487,7 @@ describe('StudentSectionView', () => {
       const { container } = render(
         <StudentSectionView
           section={sectionDetail}
-          activeSessions={[]}
+          currentSessionId={null}
           publishedProblems={publishedProblems}
           pastSessions={[]}
           sectionId={SECTION_ID}

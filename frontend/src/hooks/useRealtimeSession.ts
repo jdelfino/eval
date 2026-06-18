@@ -88,7 +88,6 @@ export function useRealtimeSession({
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [students, setStudents] = useState<Map<string, Student>>(new Map());
   const [featuredStudent, setFeaturedStudent] = useState<FeaturedStudent>({});
-  const [replacementInfo, setReplacementInfo] = useState<{ new_session_id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,7 +143,6 @@ export function useRealtimeSession({
       setJoinCode(null);
       setStudents(new Map());
       setFeaturedStudent({});
-      setReplacementInfo(null);
       setLoading(true);
       setError(null);
     }
@@ -300,20 +298,13 @@ export function useRealtimeSession({
           break;
         }
 
-        case 'session_ended': {
-          setSession(prev => {
-            if (!prev) {
-              console.warn('[useRealtimeSession] Dropping session_ended event: state not yet initialized');
-              return prev;
-            }
-            return {
-              ...prev,
-              status: 'completed',
-              ended_at: new Date(),
-            };
-          });
-          break;
-        }
+        // NOTE (G4 section-pointer model, T12): `session_ended` and
+        // `session_replaced` are intentionally NOT handled here. Sessions are
+        // persistent documents — they are never ended or replaced for students,
+        // so the student-side hook must never flip a live session to completed.
+        // (The legacy Delete handler still emits `session_ended` for the
+        // past-sessions flow, which is out of the live path; `session_replaced`
+        // was retired on the backend by T1.)
 
         case 'featured_student_changed': {
           // data: FeaturedStudentChangedData{user_id, code, test_cases?}
@@ -338,23 +329,6 @@ export function useRealtimeSession({
             studentId,
             code,
             testCases: test_cases,
-          });
-          break;
-        }
-
-        case 'session_replaced': {
-          // data: SessionReplacedData{new_session_id}
-          const { new_session_id } = parsed.data;
-          setReplacementInfo({ new_session_id });
-          setSession(prev => {
-            if (!prev) {
-              console.warn('[useRealtimeSession] Dropping session_replaced event: state not yet initialized');
-              return prev;
-            }
-            return {
-              ...prev,
-              status: 'completed',
-            };
           });
           break;
         }
@@ -534,7 +508,6 @@ export function useRealtimeSession({
     joinCode,
     students: Array.from(students.values()),
     featuredStudent,
-    replacementInfo,
     loading,
     error,
 

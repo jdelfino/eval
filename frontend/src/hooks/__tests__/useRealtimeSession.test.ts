@@ -747,7 +747,14 @@ describe('useRealtimeSession', () => {
       expect(result.current.students[0].code).toBe('print("early update")');
     });
 
-    it('should handle session_ended event', async () => {
+    it('ignores session_ended events for students (sessions are persistent under the pointer model)', async () => {
+      /**
+       * Contract: under the section-pointer model the student-side hook no longer
+       * marks the session completed on session_ended. Sessions are persistent;
+       * students never see a "session ended" treatment. The legacy Delete handler
+       * still emits the event for the past-sessions flow, but it must NOT flip the
+       * live student's session state. Catches: reintroduced ended treatment.
+       */
       const { result } = renderHook(() =>
         useRealtimeSession({
           session_id: 'session-1',
@@ -759,47 +766,14 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      const beforeTime = new Date();
       act(() => {
         simulatePublication('session_ended', {
           session_id: 'session-1',
           reason: 'instructor_ended',
         });
       });
-      const afterTime = new Date();
 
-      expect(result.current.session?.status).toBe('completed');
-      const ended_at = result.current.session?.ended_at;
-      expect(ended_at).toBeInstanceOf(Date);
-      expect((ended_at as Date).getTime()).toBeGreaterThanOrEqual(beforeTime.getTime());
-      expect((ended_at as Date).getTime()).toBeLessThanOrEqual(afterTime.getTime());
-    });
-
-    it('should handle session_ended event with default ended_at', async () => {
-      const { result } = renderHook(() =>
-        useRealtimeSession({
-          session_id: 'session-1',
-          user_id: 'user-1',
-        })
-      );
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      const beforeTime = new Date();
-      act(() => {
-        simulatePublication('session_ended', {
-          session_id: 'session-1',
-        });
-      });
-      const afterTime = new Date();
-
-      expect(result.current.session?.status).toBe('completed');
-      const ended_at = result.current.session?.ended_at;
-      expect(ended_at).toBeInstanceOf(Date);
-      expect((ended_at as Date).getTime()).toBeGreaterThanOrEqual(beforeTime.getTime());
-      expect((ended_at as Date).getTime()).toBeLessThanOrEqual(afterTime.getTime());
+      expect(result.current.session?.status).not.toBe('completed');
     });
 
     it('should handle featured_student_changed event', async () => {
@@ -885,30 +859,6 @@ describe('useRealtimeSession', () => {
       });
 
       expect(result.current.session?.problem).toEqual({ id: 'problem-1' });
-    });
-
-    it('should handle session_replaced event', async () => {
-      const { result } = renderHook(() =>
-        useRealtimeSession({
-          session_id: 'session-1',
-          user_id: 'user-1',
-        })
-      );
-
-      await waitFor(() => {
-        expect(result.current.loading).toBe(false);
-      });
-
-      expect(result.current.replacementInfo).toBeNull();
-
-      act(() => {
-        simulatePublication('session_replaced', {
-          new_session_id: 'session-2',
-        });
-      });
-
-      expect(result.current.replacementInfo).toEqual({ new_session_id: 'session-2' });
-      expect(result.current.session?.status).toBe('completed');
     });
 
     it('should expose isBroadcastConnected status', async () => {
@@ -1114,7 +1064,7 @@ describe('useRealtimeSession', () => {
       expect(result.current.session).toBeTruthy();
       expect(result.current.students).toHaveLength(1);
 
-      // Simulate featured student and replacement info via publications
+      // Populate transient state (featured student) via a publication.
       act(() => {
         simulatePublication('featured_student_changed', {
           user_id: 'student-1',
@@ -1123,14 +1073,6 @@ describe('useRealtimeSession', () => {
       });
 
       expect(result.current.featuredStudent.studentId).toBe('student-1');
-
-      act(() => {
-        simulatePublication('session_replaced', {
-          new_session_id: 'session-3',
-        });
-      });
-
-      expect(result.current.replacementInfo).toEqual({ new_session_id: 'session-3' });
 
       // Set up mock for the new session (use a never-resolving promise to
       // capture the intermediate cleared state before the new load completes)
@@ -1150,7 +1092,6 @@ describe('useRealtimeSession', () => {
       });
       expect(result.current.students).toHaveLength(0);
       expect(result.current.featuredStudent).toEqual({});
-      expect(result.current.replacementInfo).toBeNull();
       expect(result.current.loading).toBe(true);
       expect(result.current.error).toBeNull();
 

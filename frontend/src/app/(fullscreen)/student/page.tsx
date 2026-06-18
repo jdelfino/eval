@@ -8,8 +8,9 @@ import { useRealtimeSession } from '@/hooks/useRealtimeSession';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Problem } from '@/types/api';
 import type { TestResponse, IOTestCase, CaseResult, CaseResultIO, CaseResultPytest } from '@/types/api';
-import { getStudentWork, updateStudentWork } from '@/lib/api/student-work';
-import { getActiveSessions, getSection } from '@/lib/api/sections';
+import { getStudentWork, updateStudentWork, getOrCreateStudentWork } from '@/lib/api/student-work';
+import { getSection } from '@/lib/api/sections';
+import { useSectionEvents } from '@/hooks/useSectionEvents';
 import { warmExecutor, executeCode, ioTestCasesToCaseDefs, ioTestCasesToGradedCaseDefs, type ExecuteOptions } from '@/lib/api/execute';
 import { ApiError } from '@/lib/api-error';
 import { useApiDebugger } from '@/hooks/useApiDebugger';
@@ -20,10 +21,9 @@ import { Button } from '@/components/ui/Button';
 import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { buildDrawerDebug } from '@/lib/debuggerAdapter';
 import { deriveDrawerModeBase } from '@/lib/drawerState';
-import SessionEndedNotification from './components/SessionEndedNotification';
+import StudentNewProblemBanner from './components/StudentNewProblemBanner';
 import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { mapToDotStatus } from '@/lib/connectionStatus';
-import type { Session } from '@/types/api';
 import type { DrawerMode, DrawerFailure, DrawerRuntimeError } from '@/components/workspace/Drawer';
 
 // ─── Drawer mode derivation ──────────────────────────────────────────────────
@@ -120,8 +120,14 @@ function StudentPage() {
   // Mode state
   const [mode, setMode] = useState<'loading' | 'practice' | 'live' | 'error'>('loading');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [sessionEnded, setSessionEnded] = useState(false);
-  const [activeSessions, setActiveSessions] = useState<Session[] | null>(null);
+  // The section's current-session pointer at load time (G4 section-pointer model,
+  // B1). null until the section fetch resolves; drives live-vs-practice. We track
+  // a separate "resolved" flag because null is a valid pointer value (no problem).
+  const [sectionPointerResolved, setSectionPointerResolved] = useState(false);
+  const [sectionCurrentSessionId, setSectionCurrentSessionId] = useState<string | null>(null);
+  // "Instructor moved on" banner state: set when section_current_changed reports
+  // a session different from the one the student is in.
+  const [movedOnTo, setMovedOnTo] = useState<{ sessionId: string; problemId: string; title: string } | null>(null);
 
   // Execution state
   const [execution_result, setExecutionResult] = useState<TestResponse | null>(null);
@@ -148,7 +154,6 @@ function StudentPage() {
 
   // Realtime session hook (only used in live mode)
   const {
-    session,
     loading: _realtimeLoading,
     error: realtimeError,
     isConnected: _isConnected,
@@ -157,7 +162,6 @@ function StudentPage() {
     updateCode: realtimeUpdateCode,
     updateCodeImmediate: realtimeUpdateCodeImmediate,
     joinSession,
-    replacementInfo,
   } = useRealtimeSession({
     session_id: activeSessionId || '',
     user_id: user?.id,
@@ -166,6 +170,15 @@ function StudentPage() {
 
   // Debugger hook
   const debuggerHook = useApiDebugger();
+
+  // Subscribe to the section channel to detect when the instructor moves on to a
+  // new problem (G4 section-pointer model). Only meaningful in live mode while
+  // the student is in a session. The hook also seeds the pointer from getSection.
+  const { currentSessionId: sectionPointerLive, currentProblem: sectionPointerProblem } =
+    useSectionEvents({
+      sectionId: mode === 'live' && sectionId ? sectionId : '',
+      initialCurrentSessionId: sectionCurrentSessionId,
+    });
 
 
   // Step 1: Load student_work data from work_id
@@ -195,39 +208,41 @@ function StudentPage() {
     loadWork();
   }, [workId, user?.id]);
 
-  // Fetch section name
+  // Step 2a: Fetch section name + the section pointer (G4 B1). The page decides
+  // live-vs-practice from the section's current_session_id pointer, NOT from a
+  // status==='active' session list (which is always empty under the pointer
+  // model — that bug stranded every student in practice mode).
   useEffect(() => {
     if (!sectionId) return;
 
     getSection(sectionId)
-      .then((section) => setSectionName(section.name))
+      .then((section) => {
+        setSectionName(section.name);
+        setSectionCurrentSessionId(section.current_session_id ?? null);
+        setSectionPointerResolved(true);
+      })
       .catch(() => {
-        // Graceful degradation: section name is cosmetic only
+        // Graceful degradation: treat as no pointer (practice). Section name is
+        // cosmetic; the pointer defaults to null on failure.
+        setSectionCurrentSessionId(null);
+        setSectionPointerResolved(true);
       });
   }, [sectionId]);
 
-  // Step 2a: Fetch active sessions
+  // Step 2b: Determine mode from the section pointer (G4 B1). Live when the
+  // pointer is set: under the pointer model a student reaches /student for a
+  // live problem only via the pointer flow (the section card / "Jump in" /
+  // moved-on banner all route through getOrCreateStudentWork(pointerProblem)),
+  // so the opened work's problem IS the pointer's problem — the student arrived
+  // via the pointer's session. We therefore join the pointer's session.
+  // Otherwise practice (warm the executor as today).
   useEffect(() => {
-    if (!sectionId) return;
+    if (mode !== 'loading' || !sectionPointerResolved || !problemId) return;
 
-    getActiveSessions(sectionId)
-      .then(setActiveSessions)
-      .catch((err: unknown) => {
-        console.error('Failed to check for active sessions:', err);
-        setActiveSessions([]);
-      });
-  }, [sectionId]);
-
-  // Step 2b: Determine mode from active sessions + problem
-  useEffect(() => {
-    if (mode !== 'loading' || activeSessions === null || !problemId) return;
-
-    const activeSession = activeSessions.find(
-      (s: Session) => s.status === 'active' && s.problem?.id === problemId
-    );
-
-    if (activeSession) {
-      setActiveSessionId(activeSession.id);
+    if (sectionCurrentSessionId) {
+      // The section has a current problem: enter live mode and join the pointer's
+      // session. Late-joiners land here with zero instructor action.
+      setActiveSessionId(sectionCurrentSessionId);
       setMode('live');
     } else {
       setMode('practice');
@@ -235,7 +250,7 @@ function StudentPage() {
         // Fire-and-forget
       });
     }
-  }, [mode, activeSessions, problemId]);
+  }, [mode, sectionPointerResolved, sectionCurrentSessionId, problemId]);
 
   // Step 3: Auto-join session in live mode
   const joinAttemptedRef = useRef<string | null>(null);
@@ -269,10 +284,6 @@ function StudentPage() {
         if (result.test_cases && Array.isArray(result.test_cases)) {
           setStudentTestCases(result.test_cases as IOTestCase[]);
         }
-
-        if (session?.status === 'completed') {
-          setSessionEnded(true);
-        }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to join session';
         setError(message);
@@ -281,14 +292,27 @@ function StudentPage() {
     };
 
     performJoin();
-  }, [mode, activeSessionId, user?.id, user?.email, user?.display_name, joined, isJoining, joinSession, session?.status]);
+  }, [mode, activeSessionId, user?.id, user?.email, user?.display_name, joined, isJoining, joinSession]);
 
-  // Detect session end in live mode
+  // "Instructor moved on" detection (G4 section-pointer model). When the section
+  // pointer moves to a session different from the one the student is in, show
+  // the move-along banner (mock 09) instead of any "session ended/replaced"
+  // treatment — sessions are persistent and are never ended/replaced for
+  // students. Students are NEVER shown a "session ended" banner anymore.
   useEffect(() => {
-    if (mode === 'live' && session?.status === 'completed') {
-      setSessionEnded(true);
+    if (mode !== 'live' || !joined || !activeSessionId) return;
+    if (!sectionPointerLive || sectionPointerLive === activeSessionId) {
+      // Pointer cleared or unchanged → nothing to prompt.
+      setMovedOnTo(null);
+      return;
     }
-  }, [mode, session?.status]);
+    if (!sectionPointerProblem?.id) return;
+    setMovedOnTo({
+      sessionId: sectionPointerLive,
+      problemId: sectionPointerProblem.id,
+      title: sectionPointerProblem.title,
+    });
+  }, [mode, joined, activeSessionId, sectionPointerLive, sectionPointerProblem?.id, sectionPointerProblem?.title]);
 
   // Auto-save code in practice mode (debounced 500ms)
   useEffect(() => {
@@ -308,28 +332,34 @@ function StudentPage() {
 
   // Auto-save code in live mode (via realtime)
   useEffect(() => {
-    if (mode !== 'live' || !joined || !user?.id || !activeSessionId || sessionEnded) return;
+    if (mode !== 'live' || !joined || !user?.id || !activeSessionId) return;
 
     const timeout = setTimeout(() => {
       realtimeUpdateCode(user.id, code, studentTestCases.length > 0 ? studentTestCases : undefined);
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [mode, joined, user?.id, activeSessionId, sessionEnded, code, studentTestCases, realtimeUpdateCode]);
+  }, [mode, joined, user?.id, activeSessionId, code, studentTestCases, realtimeUpdateCode]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
-  const handleLeaveSession = useCallback(() => {
-    if (activeSessionId) {
-      sessionStorage.setItem(`left-session:${activeSessionId}`, 'true');
-    }
-    router.push(sectionId ? `/sections/${sectionId}` : '/');
-  }, [activeSessionId, router, sectionId]);
+  // "Stay here" on the moved-on banner: dismiss and keep working in place.
+  const handleStayHere = useCallback(() => {
+    setMovedOnTo(null);
+  }, []);
 
-  const handleJoinNewSession = useCallback(() => {
-    if (!replacementInfo) return;
-    router.push(sectionId ? `/sections/${sectionId}` : '/');
-  }, [replacementInfo, router, sectionId]);
+  // "Jump in" on the moved-on banner: navigate to the new (pointer's) session
+  // via getOrCreateStudentWork for the new problem, same flow as a fresh join.
+  const handleJumpIn = useCallback(async () => {
+    if (!movedOnTo || !sectionId) return;
+    try {
+      const work = await getOrCreateStudentWork(sectionId, movedOnTo.problemId);
+      router.push(`/student?work_id=${work.id}&section_id=${sectionId}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to join new problem';
+      setError(message);
+    }
+  }, [movedOnTo, sectionId, router]);
 
   const handleRunAll = useCallback(async () => {
     const effectiveTestCases =
@@ -671,13 +701,12 @@ function StudentPage() {
         />
       )}
 
-      {sessionEnded && mode === 'live' && (
-        <SessionEndedNotification
-          onLeaveToDashboard={handleLeaveSession}
-          code={code}
-          codeSaved={true}
-          replacementSessionId={replacementInfo?.new_session_id}
-          onJoinNewSession={replacementInfo ? handleJoinNewSession : undefined}
+      {movedOnTo && mode === 'live' && (
+        <StudentNewProblemBanner
+          toProblemTitle={movedOnTo.title}
+          fromProblemTitle={problem?.title}
+          onJumpIn={handleJumpIn}
+          onStayHere={handleStayHere}
         />
       )}
 

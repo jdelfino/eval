@@ -18,7 +18,6 @@ export type RealtimeEventType =
   | 'student_joined'
   | 'student_code_updated'
   | 'session_ended'
-  | 'session_replaced'
   | 'featured_student_changed'
   | 'problem_updated'
   | 'session_started_in_section'
@@ -59,10 +58,9 @@ export interface SessionEndedData {
   reason: string;
 }
 
-/** Payload for session_replaced — matches Go SessionReplacedData. */
-export interface SessionReplacedData {
-  new_session_id: string;
-}
+// NOTE (G4 section-pointer model): `session_replaced` was retired — the backend
+// no longer emits it (T1) and the FE no longer handles it (T12). Sessions are
+// persistent; they are never replaced.
 
 /** Payload for featured_student_changed — matches Go FeaturedStudentChangedData. */
 export interface FeaturedStudentChangedData {

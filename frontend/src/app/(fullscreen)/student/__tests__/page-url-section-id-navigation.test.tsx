@@ -30,6 +30,7 @@ jest.mock('@/lib/api/student-work', () => ({
 const mockUseSectionEvents = jest.fn();
 jest.mock('@/hooks/useSectionEvents', () => ({
   useSectionEvents: (...args: any[]) => mockUseSectionEvents(...args),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 import StudentSectionView from '@/app/(app)/sections/[section_id]/components/StudentSectionView';
@@ -115,8 +116,19 @@ describe('StudentSectionView — navigation includes section_id (PLAT-6y2j.1)', 
     jest.clearAllMocks();
     (useRouter as jest.Mock).mockReturnValue({ push: mockPush });
     mockUseSectionEvents.mockImplementation(
-      ({ initialActiveSessions }: { sectionId: string; initialActiveSessions: Session[] }) => ({
-        activeSessions: initialActiveSessions,
+      ({
+        initialCurrentSessionId = null,
+        initialCurrentProblem = null,
+        initialLastActivity = null,
+      }: {
+        sectionId: string;
+        initialCurrentSessionId?: string | null;
+        initialCurrentProblem?: unknown;
+        initialLastActivity?: string | null;
+      }) => ({
+        currentSessionId: initialCurrentSessionId,
+        currentProblem: initialCurrentProblem,
+        lastActivity: initialLastActivity,
       })
     );
   });
@@ -135,7 +147,7 @@ describe('StudentSectionView — navigation includes section_id (PLAT-6y2j.1)', 
     render(
       <StudentSectionView
         section={sectionDetail}
-        activeSessions={[]}
+        currentSessionId={null}
         publishedProblems={publishedProblems}
         sectionId={SECTION_ID}
       />
@@ -165,7 +177,9 @@ describe('StudentSectionView — navigation includes section_id (PLAT-6y2j.1)', 
     render(
       <StudentSectionView
         section={sectionDetail}
-        activeSessions={[activeSessionWithProblem]}
+        currentSessionId="session-active-1"
+        currentProblem={activeSessionWithProblem.problem}
+        currentLastActivity={new Date().toISOString()}
         publishedProblems={[]}
         sectionId={SECTION_ID}
       />

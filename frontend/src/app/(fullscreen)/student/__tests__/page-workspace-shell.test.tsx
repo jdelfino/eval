@@ -17,7 +17,7 @@ import StudentPageWrapper from '../page';
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 const mockGetStudentWork = jest.fn();
-const mockGetActiveSessions = jest.fn();
+const mockGetSection = jest.fn();
 const mockUpdateStudentWork = jest.fn();
 const mockExecuteCode = jest.fn();
 const mockJoinSession = jest.fn();
@@ -27,19 +27,21 @@ const mockRequestTrace = jest.fn();
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
+  getOrCreateStudentWork: jest.fn(),
 }));
 
+// G4 section-pointer model: live-vs-practice gated on current_session_id.
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
-  getSection: jest.fn().mockResolvedValue({
-    id: 'section-1',
-    name: 'Test Section',
-    class_id: 'class-1',
-    namespace_id: 'ns-1',
-    join_code: 'ABCD',
-    created_at: '2024-01-01T00:00:00Z',
-    updated_at: '2024-01-01T00:00:00Z',
+  getSection: (...args: unknown[]) => mockGetSection(...args),
+}));
+
+jest.mock('@/hooks/useSectionEvents', () => ({
+  useSectionEvents: () => ({
+    currentSessionId: 'session-1',
+    currentProblem: { id: 'problem-1', title: 'Test Problem' },
+    lastActivity: new Date().toISOString(),
   }),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 jest.mock('@/lib/api/execute', () => ({
@@ -98,11 +100,6 @@ jest.mock('@/contexts/AuthContext', () => ({
   useAuth: jest.fn(() => ({
     user: { id: 'user-1', email: 'test@example.com', display_name: 'Test User' },
   })),
-}));
-
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
 }));
 
 // ─── WorkspaceShell mock — captures props for assertions ─────────────────────
@@ -244,7 +241,17 @@ beforeEach(() => {
   capturedShellProps = null;
   mockUseRealtimeSession.mockReturnValue(defaultRealtimeSession);
   mockUpdateStudentWork.mockResolvedValue(undefined);
-  mockGetActiveSessions.mockResolvedValue([]);
+  // Default: no pointer → practice mode.
+  mockGetSection.mockResolvedValue({
+    id: 'section-1',
+    name: 'Test Section',
+    class_id: 'class-1',
+    namespace_id: 'ns-1',
+    join_code: 'ABCD',
+    current_session_id: null,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  });
   // Reset useApiDebugger to default (no active trace)
   const { useApiDebugger } = require('@/hooks/useApiDebugger');
   useApiDebugger.mockReturnValue({ ...mockDebuggerState });
@@ -606,15 +613,13 @@ describe('StudentPage wired to WorkspaceShell', () => {
       };
       mockUseRealtimeSession.mockReturnValue(realtimeSession);
 
-      const activeSession = {
-        id: 'session-1',
-        problem: { id: 'problem-1' },
-        status: 'active',
-        section_id: 'section-1',
-      };
-
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([activeSession]);
+      // Section pointer set → live mode; the page joins the pointer's session.
+      mockGetSection.mockResolvedValue({
+        id: 'section-1',
+        name: 'Test Section',
+        current_session_id: 'session-1',
+      });
       mockJoinSession.mockResolvedValue({
         code: 'print("hello")',
         test_cases: [

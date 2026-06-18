@@ -17,7 +17,6 @@ import type {
   StudentJoinedData,
   StudentCodeUpdatedData,
   SessionEndedData,
-  SessionReplacedData,
   FeaturedStudentChangedData,
   ProblemUpdatedData,
   SessionStartedInSectionData,
@@ -122,11 +121,6 @@ export function validateStudentCodeUpdatedShape(obj: StudentCodeUpdatedData): vo
 /** Validate the shape of a session_ended event payload. */
 export function validateSessionEndedShape(obj: SessionEndedData): void {
   typia.assertEquals<SessionEndedData>(obj);
-}
-
-/** Validate the shape of a session_replaced event payload. */
-export function validateSessionReplacedShape(obj: SessionReplacedData): void {
-  typia.assertEquals<SessionReplacedData>(obj);
 }
 
 /** Validate the shape of a featured_student_changed event payload. */

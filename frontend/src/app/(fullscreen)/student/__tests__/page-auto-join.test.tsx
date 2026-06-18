@@ -13,15 +13,15 @@ import '@testing-library/jest-dom';
 import StudentPageWrapper from '../page';
 
 const mockGetStudentWork = jest.fn();
-const mockGetActiveSessions = jest.fn();
+const mockGetSection = jest.fn();
 const mockUpdateStudentWork = jest.fn();
 const mockJoinSession = jest.fn();
 const mockUpdateCode = jest.fn();
-const mockExecuteCode = jest.fn();
 
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
+  getOrCreateStudentWork: jest.fn(),
 }));
 
 jest.mock('@/lib/api/execute', () => ({
@@ -29,12 +29,21 @@ jest.mock('@/lib/api/execute', () => ({
   executeCode: jest.fn().mockResolvedValue({ results: [{ name: 'run', type: 'io', status: 'run', input: '', actual: '', time_ms: 10 }], summary: { total: 1, passed: 0, failed: 0, errors: 0, run: 1, time_ms: 10 } }),
 }));
 
+// G4 section-pointer model: the page enters live mode from the section's
+// current_session_id pointer (set to the live session below).
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
-  getSection: jest.fn().mockResolvedValue({
-    id: 'section-1',
-    name: 'Test Section',
+  getSection: (...args: unknown[]) => mockGetSection(...args),
+}));
+
+// Mock useSectionEvents so the page's moved-on detection sees a stable pointer
+// equal to the joined session (no spurious "instructor moved on" banner).
+jest.mock('@/hooks/useSectionEvents', () => ({
+  useSectionEvents: () => ({
+    currentSessionId: 'session-live',
+    currentProblem: { id: 'problem-1', title: 'Test Problem' },
+    lastActivity: new Date().toISOString(),
   }),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 const mockUseRealtimeSession = jest.fn();
@@ -77,11 +86,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
 
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 const fakeStudentWork = {
   id: 'work-123',
   user_id: 'user-1',
@@ -106,20 +110,19 @@ const fakeStudentWork = {
   },
 };
 
-const activeSession = {
-  id: 'session-live',
-  problem: { id: 'problem-1' },
-  status: 'active',
-  section_id: 'section-1',
-};
-
 describe('StudentPage auto-join (PLAT-6y2j.1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sessionStorage.clear();
     mockJoinSession.mockResolvedValue({ code: 'print("hello")', test_cases: null });
     mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-    mockGetActiveSessions.mockResolvedValue([activeSession]);
+    // Section pointer set to the live session → the page enters live mode and
+    // auto-joins the pointer's session.
+    mockGetSection.mockResolvedValue({
+      id: 'section-1',
+      name: 'Test Section',
+      current_session_id: 'session-live',
+    });
   });
 
   it('auto-joins session immediately even when isConnected is false', async () => {

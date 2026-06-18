@@ -86,11 +86,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   default: () => <div data-testid="workspace-shell">WorkspaceShell</div>,
 }));
 
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 const fakeStudentWork = {
   id: 'work-123',
   user_id: 'user-1',
@@ -187,28 +182,26 @@ describe('StudentPage breadcrumb', () => {
     expect(problemTitleEl.closest('a')).toBeNull();
   });
 
-  it('shows fallback "Section" text while section name is loading', async () => {
-    // Delay getSection to simulate loading
+  it('stays in loading until the section pointer resolves, then shows the section name', async () => {
+    // G4 B1: the page resolves live-vs-practice from getSection().current_session_id,
+    // so mode (and thus the workspace shell) cannot settle until getSection resolves.
     let resolveSection: (value: any) => void;
     const sectionPromise = new Promise((resolve) => {
       resolveSection = resolve;
     });
     mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-    mockGetActiveSessions.mockResolvedValue([]);
     mockGetSection.mockReturnValue(sectionPromise);
 
     render(<StudentPageWrapper />);
 
-    // After student work loads but before section loads, breadcrumb shows fallback
+    // While getSection is pending, the page is still loading (no shell yet).
     await waitFor(() => {
-      expect(screen.getByTestId('workspace-shell')).toBeInTheDocument();
+      expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
+    expect(screen.queryByTestId('workspace-shell')).not.toBeInTheDocument();
 
-    // The breadcrumb should show a fallback while waiting
-    expect(screen.getByText('Section')).toBeInTheDocument();
-
-    // Resolve section
-    resolveSection!(fakeSection);
+    // Resolve section → mode settles (practice), shell + breadcrumb render.
+    resolveSection!({ ...fakeSection, current_session_id: null });
     await waitFor(() => {
       expect(screen.getByText('CS 101 - Section A')).toBeInTheDocument();
     });

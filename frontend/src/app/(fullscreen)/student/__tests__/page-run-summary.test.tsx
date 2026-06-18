@@ -16,7 +16,7 @@ import '@testing-library/jest-dom';
 import StudentPageWrapper from '../page';
 
 const mockGetStudentWork = jest.fn();
-const mockGetActiveSessions = jest.fn();
+const mockGetSection = jest.fn();
 const mockUpdateStudentWork = jest.fn();
 const mockWarmExecutor = jest.fn();
 const mockExecuteCode = jest.fn();
@@ -27,11 +27,21 @@ const mockUpdateCodeImmediate = jest.fn();
 jest.mock('@/lib/api/student-work', () => ({
   getStudentWork: (...args: unknown[]) => mockGetStudentWork(...args),
   updateStudentWork: (...args: unknown[]) => mockUpdateStudentWork(...args),
+  getOrCreateStudentWork: jest.fn(),
 }));
 
+// G4 section-pointer model: live mode is gated on the section pointer.
 jest.mock('@/lib/api/sections', () => ({
-  getActiveSessions: (...args: unknown[]) => mockGetActiveSessions(...args),
-  getSection: jest.fn().mockResolvedValue({ id: 'section-1', name: 'Test Section' }),
+  getSection: (...args: unknown[]) => mockGetSection(...args),
+}));
+
+jest.mock('@/hooks/useSectionEvents', () => ({
+  useSectionEvents: () => ({
+    currentSessionId: 'session-1',
+    currentProblem: { id: 'problem-1', title: 'Test Problem' },
+    lastActivity: new Date().toISOString(),
+  }),
+  LIVENESS_WINDOW_MS: 60 * 60 * 1000,
 }));
 
 jest.mock('@/lib/api/execute', () => ({
@@ -91,11 +101,6 @@ jest.mock('@/components/workspace/WorkspaceShell', () => ({
   },
 }));
 
-jest.mock('../components/SessionEndedNotification', () => ({
-  __esModule: true,
-  default: () => <div data-testid="session-ended">Session Ended</div>,
-}));
-
 const fakeTestCaseIO = {
   kind: 'io' as const,
   name: 'Case 1',
@@ -132,11 +137,11 @@ const fakeStudentWork = {
   },
 };
 
-// A live session matching the problem so the page enters live mode.
-const liveSession = {
-  id: 'session-1',
-  status: 'active',
-  problem: { id: 'problem-1' },
+// Section pointer set to a live session so the page enters live mode.
+const liveSectionData = {
+  id: 'section-1',
+  name: 'Test Section',
+  current_session_id: 'session-1',
 };
 
 const defaultRealtimeSession = {
@@ -159,7 +164,7 @@ const mockTestResponse = {
 
 async function renderLiveAndJoin() {
   mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-  mockGetActiveSessions.mockResolvedValue([liveSession]);
+  mockGetSection.mockResolvedValue(liveSectionData);
   mockJoinSession.mockResolvedValue({ code: fakeStudentWork.code, test_cases: [] });
 
   render(<StudentPageWrapper />);
@@ -183,6 +188,7 @@ describe('StudentPage F8 run-summary send (eval-cej.8.2)', () => {
     mockWarmExecutor.mockResolvedValue(undefined);
     mockExecuteCode.mockResolvedValue(mockTestResponse);
     mockUpdateCodeImmediate.mockResolvedValue(undefined);
+    mockGetSection.mockResolvedValue(liveSectionData);
   });
 
   it('live-mode run-all sends exactly one immediate update carrying run_summary', async () => {
@@ -223,7 +229,7 @@ describe('StudentPage F8 run-summary send (eval-cej.8.2)', () => {
     jest.useFakeTimers();
     try {
       mockGetStudentWork.mockResolvedValue(fakeStudentWork);
-      mockGetActiveSessions.mockResolvedValue([liveSession]);
+      mockGetSection.mockResolvedValue(liveSectionData);
       mockJoinSession.mockResolvedValue({ code: fakeStudentWork.code, test_cases: [] });
 
       render(<StudentPageWrapper />);

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { Session, PublishedProblemWithStatus } from '@/types/api';
+import type { Session, PublishedProblemWithStatus, Problem } from '@/types/api';
 import { getOrCreateStudentWork } from '@/lib/api/student-work';
 import { BackButton } from '@/components/ui/BackButton';
 import { Button } from '@/components/ui/Button';
@@ -11,7 +11,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Chip } from '@/components/ui/Chip';
 import { AuthHeading } from '@/components/ui/AuthHeading';
 import { SectionLabel } from '@/components/ui/SectionLabel';
-import { useSectionEvents } from '@/hooks/useSectionEvents';
+import { useSectionEvents, LIVENESS_WINDOW_MS } from '@/hooks/useSectionEvents';
 import { formatShortDate } from '@/lib/format';
 import type { SectionDetail } from '../page';
 
@@ -128,12 +128,19 @@ function SolutionModal({ modal, onClose }: SolutionModalProps) {
 // ---------------------------------------------------------------------------
 
 interface LiveSessionCardProps {
+  /** The section has a current-problem pointer set (late-join target available). */
+  hasCurrentProblem: boolean;
+  /**
+   * The pointer is "live right now" — set AND recently active (within the 60-min
+   * liveness window). Drives the green "Class is live!" pulse vs. the quieter
+   * "current problem available" affordance for a stale pointer (G4-R3).
+   */
   liveNow: boolean;
   onJoin: () => void;
 }
 
-function LiveSessionCard({ liveNow, onJoin }: LiveSessionCardProps) {
-  if (!liveNow) {
+function LiveSessionCard({ hasCurrentProblem, liveNow, onJoin }: LiveSessionCardProps) {
+  if (!hasCurrentProblem) {
     return (
       <div
         style={{
@@ -183,8 +190,14 @@ function LiveSessionCard({ liveNow, onJoin }: LiveSessionCardProps) {
             <span style={{ fontSize: 14, fontWeight: 700 }}>▶</span>
           </div>
           <div>
-            <h2 className="text-lg font-bold mb-0.5">Class is live!</h2>
-            <p className="text-green-50 text-sm">Your instructor started a session. Join now to participate.</p>
+            <h2 className="text-lg font-bold mb-0.5">
+              {liveNow ? 'Class is live!' : 'Current problem'}
+            </h2>
+            <p className="text-green-50 text-sm">
+              {liveNow
+                ? 'Your instructor started a session. Join now to participate.'
+                : 'Your class is working on this problem. Jump in to join.'}
+            </p>
           </div>
         </div>
         <button
@@ -194,7 +207,7 @@ function LiveSessionCard({ liveNow, onJoin }: LiveSessionCardProps) {
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
           </svg>
-          Join now
+          {liveNow ? 'Join now' : 'Jump in'}
         </button>
       </div>
     </div>
@@ -335,7 +348,17 @@ const FILTER_CHIPS: { value: FilterValue; label: string }[] = [
 
 interface StudentSectionViewProps {
   section: SectionDetail;
-  activeSessions: Session[];
+  /**
+   * The section's current-session pointer at load time (G4 section-pointer
+   * model). The live card / "Live" badge / "Jump in" key on this pointer (kept
+   * fresh in real time by useSectionEvents), NOT on a status==='active' session
+   * list. null when no problem is currently set.
+   */
+  currentSessionId: string | null;
+  /** The pointer's problem snapshot at load time (resolved from the pointer's session). */
+  currentProblem?: Problem | null;
+  /** The pointer's last activity ISO timestamp at load time (feeds the liveness heuristic). */
+  currentLastActivity?: string | null;
   publishedProblems: PublishedProblemWithStatus[];
   pastSessions?: Session[];
   sectionId: string;
@@ -349,7 +372,9 @@ interface StudentSectionViewProps {
 
 export default function StudentSectionView({
   section,
-  activeSessions: initialActiveSessions,
+  currentSessionId: initialCurrentSessionId,
+  currentProblem: initialCurrentProblem = null,
+  currentLastActivity = null,
   publishedProblems,
   pastSessions = [],
   sectionId,
@@ -357,9 +382,11 @@ export default function StudentSectionView({
 }: StudentSectionViewProps) {
   const router = useRouter();
 
-  const { activeSessions } = useSectionEvents({
+  const { currentSessionId, currentProblem, lastActivity } = useSectionEvents({
     sectionId,
-    initialActiveSessions,
+    initialCurrentSessionId,
+    initialCurrentProblem,
+    initialLastActivity: currentLastActivity,
   });
   const [filter, setFilter] = useState<FilterValue>('all');
   const [error, setError] = useState<string | null>(null);
@@ -375,13 +402,16 @@ export default function StudentSectionView({
     }
   };
 
+  // The pointer's problem id, from the resolved problem snapshot (seeded by the
+  // parent from the pointer's session, refreshed by section_current_changed).
+  // Late join needs a problem id to call getOrCreateStudentWork.
+  const pointerProblemId = currentProblem?.id ?? null;
+
   const handleActiveSessionJoin = async () => {
-    if (activeSessions.length === 0) return;
-    const session = activeSessions[0];
-    if (!session.problem?.id) return;
+    if (!currentSessionId || !pointerProblemId) return;
 
     try {
-      const work = await getOrCreateStudentWork(sectionId, session.problem.id);
+      const work = await getOrCreateStudentWork(sectionId, pointerProblemId);
       router.push(`/student?work_id=${work.id}&section_id=${sectionId}`);
     } catch (err) {
       console.error('Error joining session:', err);
@@ -389,7 +419,24 @@ export default function StudentSectionView({
     }
   };
 
-  const isLive = activeSessions.length > 0 && !!activeSessions[0].problem?.id;
+  // "Has a current problem": the section pointer is set. This is the correct
+  // late-join target at any time, even if stale (G4-R3).
+  const hasCurrentProblem = currentSessionId != null;
+
+  // "Live right now" (visual pulse only): pointer set AND recently active within
+  // the 60-min liveness window. A stale pointer (no recent activity / unknown
+  // activity from a cold load) shows the current-problem affordance without the
+  // live pulse. There is no server-side presence to query (G4-R3).
+  //
+  // Snapshot "now" once at mount (lazy initializer, not an impure render call):
+  // the live pulse is a one-shot emphasis. Any realtime pointer change sets
+  // lastActivity to the current time, which always reads as live against this
+  // snapshot, so the card stays correct as the pointer moves.
+  const [mountNow] = useState(() => Date.now());
+  const liveNow =
+    hasCurrentProblem &&
+    lastActivity != null &&
+    mountNow - new Date(lastActivity).getTime() <= LIVENESS_WINDOW_MS;
 
   const filteredProblems = useMemo(
     () =>
@@ -438,7 +485,11 @@ export default function StudentSectionView({
       )}
 
       {/* Live / Idle session card */}
-      <LiveSessionCard liveNow={isLive} onJoin={handleActiveSessionJoin} />
+      <LiveSessionCard
+        hasCurrentProblem={hasCurrentProblem && pointerProblemId != null}
+        liveNow={liveNow}
+        onJoin={handleActiveSessionJoin}
+      />
 
       {/* Published Problems */}
       <div>
@@ -471,7 +522,9 @@ export default function StudentSectionView({
             }}
           >
             {filteredProblems.map((problem, i) => {
-              const problemIsLive = activeSessions.some((s) => s.problem?.id === problem.problem.id);
+              // The "Live" badge marks the section's current-problem pointer only.
+              const problemIsLive =
+                hasCurrentProblem && pointerProblemId === problem.problem.id;
               const isLast = i === filteredProblems.length - 1;
               return (
                 <div
