@@ -11,7 +11,6 @@ export type { AuthLoadingProps } from './AuthLoading';
 export { AppShell } from './AppShell';
 export { AppBarLite } from './AppBarLite';
 export { Sidebar } from './Sidebar';
-export { MobileNav } from './MobileNav';
 export { PageBreadcrumb } from './PageBreadcrumb';
 export { RightPanelContainer } from './RightPanelContainer';
 export { Panel } from './Panel';

@@ -92,9 +92,10 @@ describe('AppShell', () => {
 
     it('does not render MobileNav by default', () => {
       /**
-       * Contract: v4 AppShell drops MobileNav — narrow viewports show cramped sidebar until G8.
-       * Why it matters: MobileNav depended on GlobalHeader trigger which no longer exists.
-       * What breaks: Stale MobileNav render would mount an unreachable component.
+       * Contract: AppShell never renders a mobile nav drawer. MobileNav was
+       * deleted in G8 (mobile is flat/read-only — no nav drawer); this assertion
+       * guards against accidental re-introduction.
+       * What breaks: A re-added mobile-nav drawer would mount an unreachable component.
        */
       const { container } = render(
         <AppShell>
