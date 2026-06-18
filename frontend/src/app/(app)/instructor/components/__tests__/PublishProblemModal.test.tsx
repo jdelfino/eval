@@ -27,6 +27,7 @@ jest.mock('@/lib/api/section-problems', () => ({
 const defaultProps = {
   problemId: 'prob-1',
   classId: 'class-1',
+  problemTitle: 'Two Sum',
   onClose: jest.fn(),
 };
 
@@ -65,7 +66,9 @@ describe('PublishProblemModal', () => {
 
     render(<PublishProblemModal {...defaultProps} />);
 
-    expect(screen.getByText('Publish Problem')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Publish Two Sum' })
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /close/i })).toBeInTheDocument();
   });
 
@@ -156,7 +159,7 @@ describe('PublishProblemModal', () => {
     const checkbox = screen.getByRole('checkbox', { name: /Section A Spring 2024/i });
     fireEvent.click(checkbox);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
+    const saveButton = screen.getByRole('button', { name: /publish to/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -181,7 +184,7 @@ describe('PublishProblemModal', () => {
     const checkbox = screen.getByRole('checkbox', { name: /Section A Spring 2024/i });
     fireEvent.click(checkbox);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
+    const saveButton = screen.getByRole('button', { name: /publish to/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -205,7 +208,7 @@ describe('PublishProblemModal', () => {
     const solutionToggle = screen.getByRole('checkbox', { name: /Show Solution/i });
     fireEvent.click(solutionToggle);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
+    const saveButton = screen.getByRole('button', { name: /publish to/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -240,7 +243,7 @@ describe('PublishProblemModal', () => {
     const checkboxB = screen.getByRole('checkbox', { name: /Section B Spring 2024/i });
     fireEvent.click(checkboxB);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
+    const saveButton = screen.getByRole('button', { name: /publish to/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -265,7 +268,7 @@ describe('PublishProblemModal', () => {
     const checkbox = screen.getByRole('checkbox', { name: /Section A Spring 2024/i });
     fireEvent.click(checkbox);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
+    const saveButton = screen.getByRole('button', { name: /publish to/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -287,7 +290,7 @@ describe('PublishProblemModal', () => {
     const checkbox = screen.getByRole('checkbox', { name: /Section A Spring 2024/i });
     fireEvent.click(checkbox);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
+    const saveButton = screen.getByRole('button', { name: /publish to/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -309,7 +312,7 @@ describe('PublishProblemModal', () => {
     const checkbox = screen.getByRole('checkbox', { name: /Section A Spring 2024/i });
     fireEvent.click(checkbox);
 
-    const saveButton = screen.getByRole('button', { name: /save/i });
+    const saveButton = screen.getByRole('button', { name: /publish to/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {

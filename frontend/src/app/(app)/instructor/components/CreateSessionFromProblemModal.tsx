@@ -25,6 +25,7 @@ import { getClassSections } from '@/lib/api/sections';
 import { getInstructorDashboard } from '@/lib/api/instructor';
 import { createSession } from '@/lib/api/sessions';
 import type { Section } from '@/types/api';
+import { Modal } from '@/components/ui/Modal';
 import SessionComposer, { ComposerSection } from './SessionComposer';
 import { useProblemPublishState } from '../hooks/useProblemPublishState';
 import { PublishOptions } from '../hooks/PublishOptions';
@@ -134,46 +135,33 @@ export default function CreateSessionFromProblemModal({
   }));
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Create Session</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              From problem: <span className="font-medium">{problem_title}</span>
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            disabled={loading}
-            aria-label="Close"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <Modal
+      open
+      title="Start a session"
+      sub={`From problem: ${problem_title}`}
+      width={560}
+      onClose={onClose}
+      backdropTestId="modal-backdrop"
+      contentTestId="modal-content"
+    >
+      {/* Class (read-only — problem belongs to this class) */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
+        <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
+          {classDisplayName}
         </div>
-
-        {/* Class (read-only — problem belongs to this class) */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
-          <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900">
-            {classDisplayName}
-          </div>
-        </div>
-
-        <SessionComposer
-          sections={composerSections}
-          selectedSectionId={selectedSectionId || null}
-          onSelectSection={setSelectedSectionId}
-          optionsSlot={<PublishOptions publish={publish} active={!!selectedSectionId} />}
-          onStart={handleStart}
-          onCancel={onClose}
-          starting={loading}
-          error={error}
-        />
       </div>
-    </div>
+
+      <SessionComposer
+        sections={composerSections}
+        selectedSectionId={selectedSectionId || null}
+        onSelectSection={setSelectedSectionId}
+        optionsSlot={<PublishOptions publish={publish} active={!!selectedSectionId} />}
+        onStart={handleStart}
+        onCancel={onClose}
+        starting={loading}
+        error={error}
+      />
+    </Modal>
   );
 }

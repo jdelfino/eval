@@ -78,9 +78,11 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   } | null>(null);
 
   // Publish modal state
-  const [publishProblem, setPublishProblem] = useState<{ id: string; class_id: string } | null>(
-    null
-  );
+  const [publishProblem, setPublishProblem] = useState<{
+    id: string;
+    title: string;
+    class_id: string;
+  } | null>(null);
 
   // Export state
   const [exporting, setExporting] = useState(false);
@@ -271,7 +273,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
   const handlePublish = (problem_id: string) => {
     const problem = problems.find((p) => p.id === problem_id);
     if (problem) {
-      setPublishProblem({ id: problem.id, class_id: problem.class_id });
+      setPublishProblem({ id: problem.id, title: problem.title, class_id: problem.class_id });
     }
   };
 
@@ -618,6 +620,7 @@ export default function ProblemLibrary({ onCreateNew, onEdit }: ProblemLibraryPr
       {publishProblem && (
         <PublishProblemModal
           problemId={publishProblem.id}
+          problemTitle={publishProblem.title}
           classId={publishProblem.class_id}
           onClose={() => setPublishProblem(null)}
         />

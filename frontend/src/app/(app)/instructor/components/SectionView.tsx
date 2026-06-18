@@ -32,7 +32,7 @@ export default function SectionView({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [sectionToDelete, setSectionToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [sectionToDelete, setSectionToDelete] = useState<{ id: string; name: string; join_code: string } | null>(null);
 
   useEffect(() => {
     loadSections();
@@ -58,8 +58,8 @@ export default function SectionView({
     }
   };
 
-  const handleDeleteSectionClick = (section_id: string, section_name: string) => {
-    setSectionToDelete({ id: section_id, name: section_name });
+  const handleDeleteSectionClick = (section_id: string, section_name: string, join_code: string) => {
+    setSectionToDelete({ id: section_id, name: section_name, join_code });
     setShowDeleteConfirm(true);
   };
 
@@ -206,7 +206,7 @@ export default function SectionView({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleDeleteSectionClick(section.id, section.name);
+                    handleDeleteSectionClick(section.id, section.name, section.join_code);
                   }}
                   disabled={deletingId === section.id}
                   className="absolute top-4 right-4 p-2 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-700 transition-opacity duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
@@ -244,6 +244,7 @@ export default function SectionView({
           message={`Delete "${sectionToDelete?.name}"? This will also delete all sessions and memberships within this section.`}
           confirmLabel="Delete"
           variant="danger"
+          confirmPhrase={sectionToDelete?.join_code}
           onConfirm={handleConfirmDeleteSection}
           onCancel={() => {
             setShowDeleteConfirm(false);

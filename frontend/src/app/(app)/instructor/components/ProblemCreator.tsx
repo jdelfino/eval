@@ -12,10 +12,13 @@
  *
  * G2: WorkspaceShell embedded=true, railMode='edit'.
  *
- * TODO(G7): Generate Solution feature lives in G7's modal.
+ * G7: "Generate" trigger in the header opens GenerateSolutionModal, which wraps
+ * the existing generateSolution client and writes the chosen draft into the
+ * Solution tab via setSolution.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import GenerateSolutionModal from './GenerateSolutionModal';
 import { listClasses } from '@/lib/api/classes';
 import { getProblem, createProblem, updateProblem } from '@/lib/api/problems';
 import type { Class } from '@/types/api';
@@ -59,6 +62,7 @@ export default function ProblemCreator({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(!!problem_id);
   const [error, setError] = useState<string | null>(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   // Class and tags state
   const [classes, setClasses] = useState<Class[]>([]);
@@ -551,6 +555,22 @@ export default function ProblemCreator({
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button
             type="button"
+            onClick={() => setGenerateOpen(true)}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: '#0d6efd',
+              backgroundColor: 'white',
+              border: '1px solid #0d6efd',
+              borderRadius: '0.25rem',
+              cursor: 'pointer',
+            }}
+          >
+            Generate
+          </button>
+          <button
+            type="button"
             onClick={handleSubmit}
             disabled={isSubmitting || isLoading || !title.trim() || (!isEditMode && !selectedClassId)}
             style={{
@@ -639,6 +659,17 @@ export default function ProblemCreator({
           }
         />
       )}
+
+      <GenerateSolutionModal
+        open={generateOpen}
+        onClose={() => setGenerateOpen(false)}
+        description={description}
+        starterCode={starter_code}
+        onUse={(generatedSolution) => {
+          setSolution(generatedSolution);
+          setActiveTab('solution');
+        }}
+      />
     </div>
   );
 }

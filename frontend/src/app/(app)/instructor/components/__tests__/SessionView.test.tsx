@@ -162,17 +162,19 @@ TabsMock.List = ({ children }: { children: React.ReactNode }) => <div data-testi
 TabsMock.Tab = ({ children }: { children: React.ReactNode }) => <button>{children}</button>;
 TabsMock.Panel = ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
 
-jest.mock('../RevisionViewer', () => {
-  return function MockRevisionViewer({ studentId, studentName, onClose }: any) {
+jest.mock('../RevisionViewer', () => ({
+  __esModule: true,
+  default: function MockRevisionViewer({ studentId, studentName, problemTitle, onClose }: any) {
     return (
       <div data-testid="revision-viewer">
         <span data-testid="revision-student-id">{studentId}</span>
         <span data-testid="revision-student-name">{studentName}</span>
+        <span data-testid="revision-problem-title">{problemTitle}</span>
         <button onClick={onClose} data-testid="close-revision-btn">Close</button>
       </div>
     );
-  };
-});
+  },
+}));
 
 // SessionStudentPane has been retired (T11): the shell now composes the four
 // single-purpose column components below. The "no longer renders" assertion
@@ -345,6 +347,8 @@ describe('SessionView', () => {
       expect(screen.getByTestId('revision-viewer')).toBeInTheDocument();
       expect(screen.getByTestId('revision-student-id')).toHaveTextContent('student-1');
       expect(screen.getByTestId('revision-student-name')).toHaveTextContent('Alice');
+      // T6: the session problem title is passed through to the Replay modal.
+      expect(screen.getByTestId('revision-problem-title')).toHaveTextContent('Test Problem');
       fireEvent.click(screen.getByTestId('close-revision-btn'));
       expect(screen.queryByTestId('revision-viewer')).not.toBeInTheDocument();
     });

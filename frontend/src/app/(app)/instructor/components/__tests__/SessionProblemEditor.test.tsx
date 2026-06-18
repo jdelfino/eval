@@ -466,7 +466,8 @@ describe('SessionProblemEditor (G2 T6)', () => {
         />
       );
       fireEvent.click(screen.getByTestId('view-solution-button'));
-      fireEvent.click(screen.getByText('Close'));
+      // The consolidated Modal's header close (X) button is labelled "Close".
+      fireEvent.click(screen.getByRole('button', { name: /close/i }));
       expect(screen.queryByTestId('solution-viewer-modal')).not.toBeInTheDocument();
     });
   });

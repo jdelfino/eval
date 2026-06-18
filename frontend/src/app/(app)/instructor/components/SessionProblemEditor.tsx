@@ -15,8 +15,9 @@
  * G2: railMode='edit'.
  */
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
+import { SolutionViewerModal } from '@/components/SolutionViewerModal';
 import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
 import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem, IOTestCase, IOTestCaseIO, IOTestCasePytest, CaseResult, TestResponse } from '@/types/api';
@@ -78,39 +79,9 @@ export default function SessionProblemEditor({
     }
   }, [initialProblem?.title, initialProblem?.description, initialProblem?.starter_code, initialSolution]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const previousActiveElement = useRef<Element | null>(null);
-
   const handleCloseSolutionViewer = useCallback(() => {
     setShowSolutionViewer(false);
   }, []);
-
-  useEffect(() => {
-    if (!showSolutionViewer) return;
-
-    previousActiveElement.current = document.activeElement;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleCloseSolutionViewer();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    const timer = setTimeout(() => {
-      closeButtonRef.current?.focus();
-    }, 0);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      clearTimeout(timer);
-      document.body.style.overflow = '';
-      if (previousActiveElement.current instanceof HTMLElement) {
-        previousActiveElement.current.focus();
-      }
-    };
-  }, [showSolutionViewer, handleCloseSolutionViewer]);
 
   const handleUpdate = () => {
     const base = initialProblem;
@@ -610,39 +581,17 @@ export default function SessionProblemEditor({
         drawerCloseAction={drawerCloseAction}
       />
 
-      {/* Solution viewer modal */}
-      {showSolutionViewer && solution && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="solution-viewer-title"
-          data-testid="solution-viewer-modal"
-        >
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={handleCloseSolutionViewer}
-            aria-hidden="true"
-          />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center px-6 py-4 border-b">
-              <h3 id="solution-viewer-title" className="text-lg font-semibold text-gray-900">Solution</h3>
-              <button
-                ref={closeButtonRef}
-                onClick={handleCloseSolutionViewer}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-            <div className="px-6 py-4 overflow-auto">
-              <pre className="bg-gray-900 text-gray-100 rounded-lg p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-                {solution}
-              </pre>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Solution viewer modal (consolidated — G7-T5).
+          This is the problem-author view; there is no focused student / session
+          context in scope here, so the diff tab gracefully shows the
+          "No prior revision to compare" fallback. */}
+      <SolutionViewerModal
+        open={showSolutionViewer && !!solution}
+        onClose={handleCloseSolutionViewer}
+        problemTitle={title}
+        solution={solution}
+        variant="instructor"
+      />
     </div>
   );
 }

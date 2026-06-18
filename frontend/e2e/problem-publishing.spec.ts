@@ -163,12 +163,18 @@ test.describe('Problem Publishing + Student Practice', () => {
       // "View Solution" button should be visible because show_solution=true
       await expect(page.locator('button:has-text("View Solution")')).toBeVisible({ timeout: 10000 });
 
-      // Click "View Solution" and verify solution modal appears with solution code
+      // Click "View Solution" and verify solution modal appears with solution code.
+      // G7-T5 consolidated the student + instructor inline viewers into the single
+      // SolutionViewerModal (Modal + Tabs): role="dialog" and the
+      // solution-viewer-modal testid are preserved, and the code tab (solution.py)
+      // shows the reference solution. Asserting the testid here exercises the
+      // consolidated component in a real browser, catching T5 regressions.
       await page.locator('button:has-text("View Solution")').click();
 
-      // A dialog/modal should appear with the solution code
-      await expect(page.locator('[role="dialog"]')).toBeVisible({ timeout: 5000 });
-      await expect(page.locator('[role="dialog"]').locator('text=solution code here')).toBeVisible({ timeout: 5000 });
+      const solutionModal = page.locator('[data-testid="solution-viewer-modal"]');
+      await expect(solutionModal).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('[role="dialog"]')).toBeVisible();
+      await expect(solutionModal.locator('text=solution code here')).toBeVisible({ timeout: 5000 });
 
     } finally {
       try {

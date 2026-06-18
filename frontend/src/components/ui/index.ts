@@ -34,6 +34,12 @@ export type { SkeletonProps } from './Skeleton';
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps, ConfirmDialogVariant } from './ConfirmDialog';
 
+export { Modal } from './Modal';
+export type { ModalProps, ModalTone } from './Modal';
+
+export { CodeBlock } from './CodeBlock';
+export type { CodeBlockProps } from './CodeBlock';
+
 export { Table } from './Table';
 export type {
   TableProps,

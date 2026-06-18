@@ -314,6 +314,7 @@ export function SessionView({
           session_id={session_id}
           studentId={revisionViewerState.studentId}
           studentName={revisionViewerState.studentName}
+          problemTitle={sessionProblem?.title}
           onClose={handleCloseRevisionViewer}
         />
       )}

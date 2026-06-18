@@ -51,6 +51,28 @@ describe('CreateSessionFromProblemModal', () => {
     expect(screen.queryByText('-- Select a class --')).not.toBeInTheDocument();
   });
 
+  it('renders through the Modal shell with backdrop/content testids and the v4 title', async () => {
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce([]);
+
+    render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+    expect(screen.getByTestId('modal-backdrop')).toBeInTheDocument();
+    expect(screen.getByTestId('modal-content')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Start a session' })).toBeInTheDocument();
+    // SessionComposer body present.
+    expect(screen.getByRole('button', { name: /start session/i })).toBeInTheDocument();
+  });
+
+  it('Escape invokes the close handler once', async () => {
+    (sectionsApi.getClassSections as jest.Mock).mockResolvedValueOnce([]);
+
+    render(<CreateSessionFromProblemModal {...defaultProps} />);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('loads sections for the given class_id on mount', async () => {
     const mockSections = [
       { id: 'sec-1', name: 'Section A', join_code: 'ABC' },

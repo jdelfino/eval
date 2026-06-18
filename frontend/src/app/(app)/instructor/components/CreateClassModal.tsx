@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { ErrorAlert } from '@/components/ErrorAlert';
+import { Modal, Button, Field, Input, Textarea } from '@/components/ui';
 import { createClass } from '@/lib/api/classes';
 
 interface CreateClassModalProps {
@@ -61,90 +62,61 @@ export default function CreateClassModal({ onClose, onSuccess }: CreateClassModa
     }
   };
 
+  const footer = (
+    <>
+      <Button type="button" variant="secondary" onClick={handleClose} disabled={loading}>
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        form="create-class-form"
+        variant="primary"
+        loading={loading}
+        disabled={loading || !name.trim()}
+      >
+        {loading ? 'Creating...' : 'Create class'}
+      </Button>
+    </>
+  );
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleClose}>
-      <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Create New Class</h2>
-          <button
-            onClick={handleClose}
+    <Modal
+      open
+      title="New class"
+      sub="A class is a long-running container. Sections are the meeting times that share its problem set."
+      width={520}
+      onClose={handleClose}
+      footer={footer}
+      initialFocusSelector="#class-name"
+    >
+      <form id="create-class-form" onSubmit={handleSubmit}>
+        <Field label="Class Name *">
+          <Input
+            id="class-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., CS101 Fall 2025"
             disabled={loading}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+            autoFocus
+            maxLength={100}
+          />
+        </Field>
 
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="class-name" className="block text-sm font-medium text-gray-700 mb-1">
-                Class Name *
-              </label>
-              <input
-                id="class-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., CS101 Fall 2025"
-                disabled={loading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100"
-                maxLength={100}
-              />
-            </div>
+        <Field label="Description">
+          <Textarea
+            id="class-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief description of the class"
+            disabled={loading}
+            rows={3}
+            maxLength={500}
+          />
+        </Field>
 
-            <div>
-              <label htmlFor="class-description" className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                id="class-description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description of the class"
-                disabled={loading}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-100 resize-none"
-                maxLength={500}
-              />
-            </div>
-
-            {error && (
-              <ErrorAlert
-                error={error}
-                onDismiss={() => setError(null)}
-              />
-            )}
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={loading}
-              className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !name.trim()}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  Creating...
-                </>
-              ) : (
-                'Create Class'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {error && <ErrorAlert error={error} onDismiss={() => setError(null)} />}
+      </form>
+    </Modal>
   );
 }

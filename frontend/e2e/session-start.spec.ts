@@ -102,14 +102,20 @@ test.describe('Session Start via UI', () => {
     // Click the start-session button — this opens the StartSessionModal
     await startBtn.click();
 
-    // The Start Session modal should appear with a "Start Session" heading
-    await expect(page.locator('h2:has-text("Start Session")')).toBeVisible({ timeout: 10000 });
+    // The Start Session modal (G7 reskin on the Modal primitive) shows the v4
+    // heading copy "Start a session" as the modal title heading.
+    await expect(page.locator('h2:has-text("Start a session")')).toBeVisible({ timeout: 10000 });
+
+    // The modal is rendered through the shared Modal primitive — assert its
+    // preserved markup testids so a shell regression (T3) is caught here.
+    await expect(page.locator('[data-testid="modal-content"]')).toBeVisible();
 
     // Select the "Create blank session" option in the modal
     await page.locator('button:has-text("Create blank session")').click();
 
-    // Confirm the selection and start the session
-    await page.locator('button:has-text("Start Session")').last().click();
+    // Confirm the selection and start the session (SessionComposer footer button
+    // is labelled "Start session" per the v4 composer copy).
+    await page.locator('button:has-text("Start session")').last().click();
 
     // Verify redirect to the active session page
     await page.waitForURL(/\/instructor\/session\//, { timeout: 15000 });

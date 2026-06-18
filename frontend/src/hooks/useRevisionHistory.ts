@@ -2,44 +2,65 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getRevisions } from '@/lib/api/sessions';
+import type { TestResponse } from '@/types/api';
 
 export interface CodeRevision {
   id: string;
   timestamp: Date;
   code: string;
+  /** Execution result captured with the revision, if any (drives pass/fail). */
+  executionResult: TestResponse | null;
 }
 
 interface UseRevisionHistoryProps {
   session_id: string | null;
   studentId: string | null;
+  /**
+   * When true, fetch the caller's OWN revisions for the session by omitting the
+   * `user_id` query param (the backend infers the caller). Used by the student
+   * replay variant, where there is no foreign studentId to filter on. When
+   * false/omitted, the hook requires a non-null studentId and filters by it.
+   */
+  omitUser?: boolean;
 }
 
 export function useRevisionHistory({
   session_id,
   studentId,
+  omitUser = false,
 }: UseRevisionHistoryProps) {
   const [revisions, setRevisions] = useState<CodeRevision[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load revisions via API
+  // Load revisions via API. Instructor mode requires a studentId to filter on;
+  // student mode (omitUser) fetches the caller's own revisions without a filter.
   useEffect(() => {
-    if (!session_id || !studentId) return;
+    if (!session_id) {
+      // Modal closed (or no session): clear any prior session's revisions so
+      // reopening a different session doesn't briefly flash stale data.
+      setRevisions([]);
+      setCurrentIndex(0);
+      return;
+    }
+    if (!omitUser && !studentId) return;
 
     const loadRevisions = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        // Backend returns plain array
-        const data = await getRevisions(session_id, studentId);
+        // Backend returns plain array. Omit the user filter in student mode so
+        // the backend returns the caller's own revisions for the session.
+        const data = await getRevisions(session_id, omitUser ? undefined : studentId!);
 
         // Convert to CodeRevision format
         const processedRevisions: CodeRevision[] = data.map((rev) => ({
           id: rev.id,
           timestamp: new Date(rev.timestamp),
           code: rev.full_code || '',
+          executionResult: rev.execution_result ?? null,
         }));
 
         setRevisions(processedRevisions);
@@ -52,7 +73,7 @@ export function useRevisionHistory({
     };
 
     loadRevisions();
-  }, [session_id, studentId]);
+  }, [session_id, studentId, omitUser]);
 
   const goToRevision = useCallback((index: number) => {
     if (index >= 0 && index < revisions.length) {
