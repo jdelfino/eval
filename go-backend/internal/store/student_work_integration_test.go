@@ -826,6 +826,61 @@ func TestIntegration_ListStudentSessionStats(t *testing.T) {
 		}
 	})
 
+	t.Run("EmptyStringProblemIDYieldsNullNotError", func(t *testing.T) {
+		// Regression for eval-qb5: a session whose problem JSONB has an empty-string
+		// id ({"id": ""}) must yield a nil ProblemID, not raise Postgres 22P02
+		// (invalid input syntax for type uuid: ""). The NULLIF guard around the
+		// ->>'id' cast converts '' to NULL before the ::uuid cast. Without the guard,
+		// this query errors out entirely (failing every session/class/section endpoint
+		// that touches such a session). Note: this differs from the {} blank-session
+		// case above — there the id key is absent so ->>'id' is already NULL; here the
+		// key is present but empty, which is the literal value that triggers 22P02.
+		emptyIDSessionID := uuid.New()
+		emptyIDProblemJSON := json.RawMessage(`{"id": "", "title": "Empty ID Problem"}`)
+		_, err := db.pool.Exec(ctx,
+			`INSERT INTO sessions (id, namespace_id, section_id, section_name, problem, creator_id)
+			VALUES ($1, $2, $3, 'Section A', $4, $5)`,
+			emptyIDSessionID, db.nsID, sectionID, emptyIDProblemJSON, instructorID)
+		if err != nil {
+			t.Fatalf("create empty-id session: %v", err)
+		}
+
+		// Add a revision so the session appears in results.
+		_, err = db.pool.Exec(ctx,
+			`INSERT INTO revisions (namespace_id, session_id, user_id, is_diff, full_code, student_work_id)
+			VALUES ($1, $2, $3, false, 'empty-id-code', $4)`,
+			db.nsID, emptyIDSessionID, studentID, workID)
+		if err != nil {
+			t.Fatalf("create revision for empty-id session: %v", err)
+		}
+
+		s, conn := db.storeWithRLS(ctx, t, instructorUser)
+		defer conn.Release()
+
+		stats, err := s.ListStudentSessionStats(ctx, sectionID, studentID)
+		if err != nil {
+			// Against the unguarded cast this fails with 22P02.
+			t.Fatalf("ListStudentSessionStats failed (expected NULL, not 22P02): %v", err)
+		}
+
+		var emptyStat *StudentSessionStat
+		for i := range stats {
+			if stats[i].SessionID == emptyIDSessionID {
+				emptyStat = &stats[i]
+				break
+			}
+		}
+		if emptyStat == nil {
+			t.Fatalf("empty-id session %s not found in results", emptyIDSessionID)
+		}
+		if emptyStat.ProblemID != nil {
+			t.Errorf("empty-id session: expected nil ProblemID, got %v", emptyStat.ProblemID)
+		}
+		if emptyStat.ProblemTitle == nil || *emptyStat.ProblemTitle != "Empty ID Problem" {
+			t.Errorf("empty-id session: expected ProblemTitle 'Empty ID Problem', got %v", emptyStat.ProblemTitle)
+		}
+	})
+
 	t.Run("ResultsOrderedByCreatedAtDesc", func(t *testing.T) {
 		// Verifies: results come back with the most recently created session first.
 		s, conn := db.storeWithRLS(ctx, t, instructorUser)
