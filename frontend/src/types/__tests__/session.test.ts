@@ -6,9 +6,9 @@
  * - Session.featured_test_cases is IOTestCase[] | null (replaces ExecutionSettings | null)
  * - api.ts Session and SessionPublicState.featured_test_cases are IOTestCase[] | null
  */
-import type { Session as ApiSession, Problem, SessionPublicState, IOTestCase } from '../api';
+import type { Session as ApiSession, SessionPublicState, IOTestCase } from '../api';
 import type { Student, Session as ClientSession } from '../session';
-import { mapApiSession } from '../session';
+import { mapSession } from '../session';
 
 describe('Session type hierarchy', () => {
   const apiSession: ApiSession = {
@@ -42,15 +42,18 @@ describe('Session type hierarchy', () => {
     ended_at: '2025-01-15T12:00:00.000Z',
   };
 
-  it('mapApiSession converts string timestamps to Date objects', () => {
-    const client = mapApiSession(apiSession);
+  it('mapSession converts string timestamps to Date objects', () => {
+    const client = mapSession(apiSession);
     expect(client.created_at).toBeInstanceOf(Date);
     expect(client.last_activity).toBeInstanceOf(Date);
     expect(client.ended_at).toBeInstanceOf(Date);
+    expect(client.created_at.toISOString()).toBe('2025-01-15T10:00:00.000Z');
+    expect(client.last_activity.toISOString()).toBe('2025-01-15T11:00:00.000Z');
+    expect((client.ended_at as Date).toISOString()).toBe('2025-01-15T12:00:00.000Z');
   });
 
-  it('mapApiSession preserves all scalar fields', () => {
-    const client = mapApiSession(apiSession);
+  it('mapSession preserves all scalar fields', () => {
+    const client = mapSession(apiSession);
     expect(client.id).toBe('s-1');
     expect(client.namespace_id).toBe('ns-1');
     expect(client.section_id).toBe('sec-1');
@@ -60,12 +63,68 @@ describe('Session type hierarchy', () => {
     expect(client.status).toBe('active');
     expect(client.featured_student_id).toBe('u-2');
     expect(client.featured_code).toBe('print("hi")');
+    expect(client.featured_test_cases).toBeNull();
   });
 
-  it('mapApiSession handles null ended_at', () => {
+  it('mapSession handles null ended_at', () => {
     const session = { ...apiSession, ended_at: null };
-    const client = mapApiSession(session);
+    const client = mapSession(session);
     expect(client.ended_at).toBeNull();
+  });
+
+  it('mapSession maps the nested wire problem into a rich Problem (Date timestamps, normalized test_cases)', () => {
+    const client = mapSession(apiSession);
+    expect(client.problem).not.toBeNull();
+    const problem = client.problem!;
+    // Scalars carried through
+    expect(problem.id).toBe('p-1');
+    expect(problem.title).toBe('Test');
+    expect(problem.description).toBe('A test problem');
+    expect(problem.starter_code).toBe('print("hello")');
+    expect(problem.language).toBe('python');
+    // Wire null test_cases normalized to []
+    expect(problem.test_cases).toEqual([]);
+    // ISO-string timestamps parsed to Date objects
+    expect(problem.created_at).toBeInstanceOf(Date);
+    expect(problem.updated_at).toBeInstanceOf(Date);
+    expect(problem.created_at.toISOString()).toBe('2025-01-15T10:00:00.000Z');
+  });
+
+  it('mapSession preserves the nested problem test_cases when present', () => {
+    const testCases: IOTestCase[] = [
+      { kind: 'io' as const, name: 'case 1', input: 'hello', match_type: 'exact', order: 0 },
+    ];
+    const session: ApiSession = {
+      ...apiSession,
+      problem: { ...apiSession.problem!, test_cases: testCases },
+    };
+    const client = mapSession(session);
+    expect(client.problem!.test_cases).toEqual(testCases);
+  });
+
+  it('mapSession maps a blank session (null problem) to null', () => {
+    const session: ApiSession = { ...apiSession, problem: null };
+    const client = mapSession(session);
+    expect(client.problem).toBeNull();
+  });
+
+  it('mapSession carries featured_test_cases through', () => {
+    const testCases: IOTestCase[] = [
+      { kind: 'io' as const, name: 'feat', input: 'in', match_type: 'exact', order: 0 },
+    ];
+    const session: ApiSession = { ...apiSession, featured_test_cases: testCases };
+    const client = mapSession(session);
+    expect(client.featured_test_cases).toEqual(testCases);
+  });
+
+  it('mapSession return type exposes a typed rich problem (Date timestamps)', () => {
+    const mapped = mapSession(apiSession);
+    // Access problem.created_at as a Date directly — only compiles if problem is
+    // the rich Problem type (not the wire string-timestamp shape).
+    if (mapped.problem !== null) {
+      expect(mapped.problem.title).toBe('Test');
+      expect(mapped.problem.created_at.getFullYear()).toBe(2025);
+    }
   });
 
   it('Session.problem is typed as Problem | null, not unknown', () => {
@@ -82,16 +141,6 @@ describe('Session type hierarchy', () => {
   it('Session.problem null case is accepted by type', () => {
     const session: ApiSession = { ...apiSession, problem: null };
     expect(session.problem).toBeNull();
-  });
-
-  it('mapApiSession return type has typed problem field (Problem | null)', () => {
-    const mapped = mapApiSession(apiSession);
-    // Access problem.title directly — only compiles if problem is typed (not unknown)
-    if (mapped.problem !== null) {
-      expect(mapped.problem.title).toBe('Test');
-      expect(mapped.problem.description).toBe('A test problem');
-      expect(mapped.problem.starter_code).toBe('print("hello")');
-    }
   });
 
   it('ApiSession.featured_test_cases accepts IOTestCase[] | null', () => {
