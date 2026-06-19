@@ -11,8 +11,6 @@ import {
   createSection as apiCreateSection,
   updateSection as apiUpdateSection,
   regenerateJoinCode as apiRegenerateJoinCode,
-  addCoInstructor as apiAddCoInstructor,
-  removeCoInstructor as apiRemoveCoInstructor,
 } from '@/lib/api/classes';
 import type { Class, Section } from '@/types/api';
 
@@ -27,8 +25,6 @@ interface UseClassesReturn {
   createSection: (class_id: string, name: string, semester?: string) => Promise<Section>;
   updateSection: (section_id: string, updates: Partial<Section>) => Promise<Section>;
   regenerateJoinCode: (section_id: string) => Promise<Section>;
-  addCoInstructor: (section_id: string, email: string) => Promise<void>;
-  removeCoInstructor: (section_id: string, user_id: string) => Promise<void>;
 }
 
 export function useClasses(): UseClassesReturn {
@@ -87,16 +83,6 @@ export function useClasses(): UseClassesReturn {
     return section;
   }, []);
 
-  const addCoInstructor = useCallback(async (section_id: string, email: string): Promise<void> => {
-    setError(null);
-    await apiAddCoInstructor(section_id, email);
-  }, []);
-
-  const removeCoInstructor = useCallback(async (section_id: string, user_id: string): Promise<void> => {
-    setError(null);
-    await apiRemoveCoInstructor(section_id, user_id);
-  }, []);
-
   return {
     classes,
     loading,
@@ -108,7 +94,5 @@ export function useClasses(): UseClassesReturn {
     createSection,
     updateSection,
     regenerateJoinCode,
-    addCoInstructor,
-    removeCoInstructor,
   };
 }

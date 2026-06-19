@@ -27,7 +27,6 @@ type classesTestRepos struct {
 	updateClassFn              func(ctx context.Context, id uuid.UUID, params store.UpdateClassParams) (*store.Class, error)
 	deleteClassFn              func(ctx context.Context, id uuid.UUID) error
 	listClassInstructorNamesFn      func(ctx context.Context, classID uuid.UUID) (map[string]string, error)
-	listClassSectionInstructorsFn   func(ctx context.Context, classID uuid.UUID) (map[string][]string, error)
 	listSectionsByClassFn           func(ctx context.Context, classID uuid.UUID) ([]store.Section, error)
 }
 
@@ -60,13 +59,6 @@ func (m *classesTestRepos) DeleteClass(ctx context.Context, id uuid.UUID) error 
 func (m *classesTestRepos) ListClassInstructorNames(ctx context.Context, classID uuid.UUID) (map[string]string, error) {
 	if m.listClassInstructorNamesFn != nil {
 		return m.listClassInstructorNamesFn(ctx, classID)
-	}
-	return nil, nil
-}
-
-func (m *classesTestRepos) ListClassSectionInstructors(ctx context.Context, classID uuid.UUID) (map[string][]string, error) {
-	if m.listClassSectionInstructorsFn != nil {
-		return m.listClassSectionInstructorsFn(ctx, classID)
 	}
 	return nil, nil
 }
@@ -852,7 +844,6 @@ type mockClassRepo struct {
 	updateClassFn                 func(ctx context.Context, id uuid.UUID, params store.UpdateClassParams) (*store.Class, error)
 	deleteClassFn                 func(ctx context.Context, id uuid.UUID) error
 	listClassInstructorNamesFn    func(ctx context.Context, classID uuid.UUID) (map[string]string, error)
-	listClassSectionInstructorsFn func(ctx context.Context, classID uuid.UUID) (map[string][]string, error)
 }
 
 func (m *mockClassRepo) ListClasses(ctx context.Context) ([]store.Class, error) {
@@ -889,9 +880,3 @@ func (m *mockClassRepo) ListClassInstructorNames(ctx context.Context, classID uu
 	return nil, nil
 }
 
-func (m *mockClassRepo) ListClassSectionInstructors(ctx context.Context, classID uuid.UUID) (map[string][]string, error) {
-	if m.listClassSectionInstructorsFn != nil {
-		return m.listClassSectionInstructorsFn(ctx, classID)
-	}
-	return nil, nil
-}

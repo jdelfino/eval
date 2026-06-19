@@ -45,8 +45,6 @@ jest.mock('@/lib/api/classes', () => ({
   deleteClass: jest.fn(),
   createSection: jest.fn(),
   updateSection: jest.fn(),
-  addCoInstructor: jest.fn(),
-  removeCoInstructor: jest.fn(),
 }));
 
 jest.mock('@/lib/api/sections', () => ({
@@ -107,7 +105,6 @@ const defaultApiResponse = {
     makeSection({ id: 'sec-2', name: 'Period 3', join_code: 'K7M2A9', active: true }),
   ],
   instructorNames: {},
-  sectionInstructors: {},
 };
 
 // Import the page after all mocks are set up
