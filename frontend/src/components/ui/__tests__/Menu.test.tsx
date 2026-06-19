@@ -218,6 +218,86 @@ describe('Menu', () => {
     });
   });
 
+  describe('content slot (children mode)', () => {
+    /**
+     * Content-mode lets consumers (e.g. CopyLinkDropdown) render arbitrary
+     * popover bodies — async loading/empty/error states plus dynamic lists —
+     * instead of a static item array. The popover shell (role="menu",
+     * positioning, outside-click, Escape, anchor toggle) must behave identically
+     * to items-mode; only the body differs.
+     */
+    it('renders arbitrary children inside the popover when open=true', () => {
+      render(
+        <Menu anchor={<button>Trigger</button>} open={true} onOpenChange={jest.fn()}>
+          <div data-testid="custom-body">Loading...</div>
+        </Menu>
+      );
+      const menu = screen.getByRole('menu');
+      expect(menu).toBeInTheDocument();
+      expect(screen.getByTestId('custom-body')).toHaveTextContent('Loading...');
+      // No item buttons are rendered in content-mode.
+      expect(screen.queryByRole('menuitem')).toBeNull();
+    });
+
+    it('hides children when open=false', () => {
+      render(
+        <Menu anchor={<button>Trigger</button>} open={false} onOpenChange={jest.fn()}>
+          <div data-testid="custom-body">Loading...</div>
+        </Menu>
+      );
+      expect(screen.getByRole('button', { name: 'Trigger' })).toBeInTheDocument();
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(screen.queryByTestId('custom-body')).toBeNull();
+    });
+
+    it('closes on outside-click in content-mode', () => {
+      const onOpenChange = jest.fn();
+      render(
+        <Menu anchor={<button>Trigger</button>} open={true} onOpenChange={onOpenChange}>
+          <div>body</div>
+        </Menu>
+      );
+      fireEvent.mouseDown(document.body);
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('closes on Escape in content-mode', () => {
+      const onOpenChange = jest.fn();
+      render(
+        <Menu anchor={<button>Trigger</button>} open={true} onOpenChange={onOpenChange}>
+          <div>body</div>
+        </Menu>
+      );
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('toggles open state when anchor is clicked in content-mode', () => {
+      const onOpenChange = jest.fn();
+      render(
+        <Menu anchor={<button>Trigger</button>} open={false} onOpenChange={onOpenChange}>
+          <div>body</div>
+        </Menu>
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Trigger' }));
+      expect(onOpenChange).toHaveBeenCalledWith(true);
+    });
+
+    it('applies right:0 style in content-mode when align="right"', () => {
+      render(
+        <Menu
+          anchor={<button>Trigger</button>}
+          open={true}
+          onOpenChange={jest.fn()}
+          align="right"
+        >
+          <div>body</div>
+        </Menu>
+      );
+      expect(screen.getByRole('menu')).toHaveStyle({ right: '0' });
+    });
+  });
+
   describe('anchor click toggles open state', () => {
     /**
      * The anchor's onClick should call onOpenChange(!open), allowing the

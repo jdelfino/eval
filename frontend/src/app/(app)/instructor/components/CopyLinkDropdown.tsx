@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { Menu } from '@/components/ui/Menu';
 import { getLastUsedSection } from '@/lib/last-used-section';
 import { getClassSections } from '@/lib/api/sections';
 
@@ -20,7 +21,6 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
   const [sections, setSections] = useState<Section[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   const showCopiedFeedback = useCallback(() => {
     setCopied(true);
@@ -48,13 +48,9 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
     setIsOpen(false);
   }, [problem_id, showCopiedFeedback]);
 
-  const openDropdown = useCallback(async () => {
-    if (isOpen) {
-      setIsOpen(false);
-      return;
-    }
-    setIsOpen(true);
-    if (sections === null) {
+  const handleOpenChange = useCallback(async (next: boolean) => {
+    setIsOpen(next);
+    if (next && sections === null) {
       setLoading(true);
       setFetchError(false);
       try {
@@ -66,29 +62,7 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
         setLoading(false);
       }
     }
-  }, [isOpen, sections, class_id]);
-
-  // Click outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Escape key
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && isOpen) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
+  }, [sections, class_id]);
 
   const sortedSections = (() => {
     if (!sections) return [];
@@ -103,7 +77,7 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
   })();
 
   return (
-    <div className="relative inline-flex" ref={ref}>
+    <div className="relative inline-flex">
       <button
         onClick={copyGenericLink}
         className="px-3 py-1.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 border-r-0 hover:bg-gray-50 rounded-l-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
@@ -111,24 +85,24 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
       >
         {copied ? 'Copied!' : 'Copy Link'}
       </button>
-      <button
-        onClick={openDropdown}
-        className="px-1.5 py-1.5 text-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-r-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        aria-label="Show sections"
-        aria-expanded={isOpen}
-        aria-haspopup="true"
+      <Menu
+        open={isOpen}
+        onOpenChange={handleOpenChange}
+        align="right"
+        anchor={
+          <button
+            className="px-1.5 py-1.5 text-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-r-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            aria-label="Show sections"
+            aria-expanded={isOpen}
+            aria-haspopup="true"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </button>
+        }
       >
-        <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <div
-          className="absolute right-0 top-full mt-1 w-56 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50"
-          role="menu"
-          aria-orientation="vertical"
-        >
+        <div className="w-56">
           {loading && (
             <div className="px-4 py-2 text-sm text-gray-500">Loading...</div>
           )}
@@ -150,7 +124,7 @@ export function CopyLinkDropdown({ problem_id, class_id }: CopyLinkDropdownProps
               </button>
             ))}
         </div>
-      )}
+      </Menu>
     </div>
   );
 }

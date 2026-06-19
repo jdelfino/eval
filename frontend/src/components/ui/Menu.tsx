@@ -10,15 +10,37 @@ export interface MenuItem {
 
 type AnchorProps = { onClick?: React.MouseEventHandler };
 
-export interface MenuProps {
+interface MenuPropsBase {
   /** Trigger element. The Menu clones this and attaches an onClick handler. */
   anchor: React.ReactElement<AnchorProps>;
-  items: MenuItem[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Horizontal alignment of the popover relative to the anchor. Defaults to 'left'. */
   align?: 'left' | 'right';
 }
+
+/**
+ * Items-mode: the popover renders a `<ul>` of `<MenuItem>` buttons. This is the
+ * default mode used by chip dropdowns and split-button caret menus.
+ */
+export interface MenuItemsProps extends MenuPropsBase {
+  items: MenuItem[];
+  children?: never;
+}
+
+/**
+ * Content-mode: the popover renders arbitrary `children` instead of an item
+ * list. Use this for menus whose contents are not a simple static list — e.g.
+ * async loading/empty/error states plus a dynamically-fetched section list.
+ * The popover shell (positioning, outside-click, Escape, anchor toggle,
+ * `role="menu"`) is identical to items-mode; only the body differs.
+ */
+export interface MenuContentProps extends MenuPropsBase {
+  items?: never;
+  children: React.ReactNode;
+}
+
+export type MenuProps = MenuItemsProps | MenuContentProps;
 
 /**
  * Menu — a lightweight positioned popover primitive for chip dropdowns and
@@ -28,8 +50,8 @@ export interface MenuProps {
  * that toggles open state. When open, renders an absolutely-positioned <ul>
  * below the anchor. Outside-click and Escape key close the menu.
  */
-export function Menu({ anchor, items, open, onOpenChange, align = 'left' }: MenuProps) {
-  const popoverRef = useRef<HTMLUListElement>(null);
+export function Menu({ anchor, open, onOpenChange, align = 'left', ...rest }: MenuProps) {
+  const popoverRef = useRef<HTMLElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Outside-click close
@@ -72,28 +94,50 @@ export function Menu({ anchor, items, open, onOpenChange, align = 'left' }: Menu
       ? { top: 'calc(100% + 4px)', right: 0 }
       : { top: 'calc(100% + 4px)', left: 0 };
 
+  const popoverStyle: React.CSSProperties = {
+    position: 'absolute',
+    ...popoverPositionStyle,
+    background: 'var(--bg-raised)',
+    border: '1px solid var(--border)',
+    borderRadius: 6,
+    padding: 4,
+    minWidth: 140,
+    boxShadow: '0 4px 12px rgba(0,0,0,.08)',
+    fontFamily: 'var(--font-sans)',
+    fontSize: 12,
+    zIndex: 50,
+    margin: 0,
+    listStyle: 'none',
+  };
+
+  // Content-mode: render arbitrary children inside the same popover shell.
+  if ('children' in rest) {
+    return (
+      <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-block' }}>
+        {clonedAnchor}
+        {open && (
+          <div
+            ref={(el) => { popoverRef.current = el; }}
+            role="menu"
+            style={popoverStyle}
+          >
+            {rest.children}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Items-mode (default): render a list of selectable item buttons.
+  const items = rest.items;
   return (
     <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-block' }}>
       {clonedAnchor}
       {open && (
         <ul
-          ref={popoverRef}
+          ref={(el) => { popoverRef.current = el; }}
           role="menu"
-          style={{
-            position: 'absolute',
-            ...popoverPositionStyle,
-            background: 'var(--bg-raised)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            padding: 4,
-            minWidth: 140,
-            boxShadow: '0 4px 12px rgba(0,0,0,.08)',
-            fontFamily: 'var(--font-sans)',
-            fontSize: 12,
-            zIndex: 50,
-            margin: 0,
-            listStyle: 'none',
-          }}
+          style={popoverStyle}
         >
           {items.map((item) => (
             <li key={item.label}>
