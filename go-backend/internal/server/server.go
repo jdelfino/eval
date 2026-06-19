@@ -279,8 +279,16 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			})
 
 			// Initialize AI clients early so they can be used by multiple handlers.
+			// The deterministic fake provider (FAKE_AI / AI_PROVIDER=fake) short-circuits
+			// real provider construction so e2e tests can exercise AI-backed flows
+			// without any API key or network access.
+			useFakeAI := cfg.UseFakeAI()
+			if useFakeAI {
+				logger.Info("AI provider: using deterministic fake client (FAKE_AI/AI_PROVIDER=fake)")
+			}
+
 			var geminiClient *ai.GeminiClient
-			if cfg.GeminiAPIKey != "" {
+			if !useFakeAI && cfg.GeminiAPIKey != "" {
 				var geminiErr error
 				geminiClient, geminiErr = ai.NewGeminiClient(cfg.GeminiAPIKey)
 				if geminiErr != nil {
@@ -290,7 +298,7 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			}
 
 			var claudeClient *ai.ClaudeClient
-			if cfg.AnthropicAPIKey != "" {
+			if !useFakeAI && cfg.AnthropicAPIKey != "" {
 				var claudeErr error
 				claudeClient, claudeErr = ai.NewClaudeClient(cfg.AnthropicAPIKey)
 				if claudeErr != nil {
@@ -300,9 +308,12 @@ func NewWithRegistry(cfg *config.Config, logger *slog.Logger, pool DatabasePool,
 			}
 
 			var aiClient ai.Client
-			if geminiClient == nil && claudeClient == nil {
+			switch {
+			case useFakeAI:
+				aiClient = &ai.FakeClient{}
+			case geminiClient == nil && claudeClient == nil:
 				aiClient = &ai.StubClient{}
-			} else {
+			default:
 				aiClient = ai.NewRouterClient(geminiClient, claudeClient)
 			}
 

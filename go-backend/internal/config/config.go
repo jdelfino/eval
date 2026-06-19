@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -73,6 +74,11 @@ type Config struct {
 	// AI Configuration
 	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
 	AnthropicAPIKey string `env:"ANTHROPIC_API_KEY"`
+	// AIProvider, when set to "fake", forces the deterministic fake AI provider
+	// regardless of API keys. Used by e2e tests to exercise AI-backed flows
+	// without a real provider. FAKE_AI=true is an equivalent shorthand.
+	AIProvider string `env:"AI_PROVIDER"`
+	FakeAI     bool   `env:"FAKE_AI" envDefault:"false"`
 
 	// Tracing Configuration
 	TracingEnabled    bool    `env:"TRACING_ENABLED" envDefault:"false"`
@@ -96,6 +102,13 @@ func (c *Config) validate() error {
 		return fmt.Errorf("RESEND_API_KEY is required in production")
 	}
 	return nil
+}
+
+// UseFakeAI reports whether the deterministic fake AI provider should be used.
+// It is enabled by FAKE_AI=true or AI_PROVIDER=fake (case-insensitive). When
+// enabled, the fake provider is selected regardless of any configured API keys.
+func (c *Config) UseFakeAI() bool {
+	return c.FakeAI || strings.EqualFold(c.AIProvider, "fake")
 }
 
 // DatabasePoolConfig returns a db.PoolConfig populated from this Config.

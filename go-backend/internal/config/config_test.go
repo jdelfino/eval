@@ -328,6 +328,37 @@ func TestLoad_GeminiAPIKeyDefaultsToEmpty(t *testing.T) {
 	}
 }
 
+// TestUseFakeAI verifies the fake AI provider selection logic for both the
+// FAKE_AI boolean and the AI_PROVIDER string toggles.
+func TestUseFakeAI(t *testing.T) {
+	tests := []struct {
+		name       string
+		fakeAI     string
+		aiProvider string
+		want       bool
+	}{
+		{name: "unset", fakeAI: "", aiProvider: "", want: false},
+		{name: "FAKE_AI=true", fakeAI: "true", aiProvider: "", want: true},
+		{name: "FAKE_AI=false", fakeAI: "false", aiProvider: "", want: false},
+		{name: "AI_PROVIDER=fake", fakeAI: "", aiProvider: "fake", want: true},
+		{name: "AI_PROVIDER=Fake mixed case", fakeAI: "", aiProvider: "Fake", want: true},
+		{name: "AI_PROVIDER=claude", fakeAI: "", aiProvider: "claude", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("FAKE_AI", tt.fakeAI)
+			t.Setenv("AI_PROVIDER", tt.aiProvider)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() returned error: %v", err)
+			}
+			if got := cfg.UseFakeAI(); got != tt.want {
+				t.Errorf("UseFakeAI() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoad_TracingDefaults(t *testing.T) {
 	t.Setenv("TRACING_ENABLED", "")
 	t.Setenv("TRACING_SAMPLE_RATE", "")
