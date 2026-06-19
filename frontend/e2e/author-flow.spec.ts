@@ -18,13 +18,23 @@
  *     (select#problem-class, input#problem-tags, input#problem-title,
  *     textarea#problem-description). Flow replaced by this spec; existing spec is
  *     re-selectored below to use new G2 chrome (including Ribbon title edit).
- *   No references to "Generate Solution" found in e2e/ specs (already out-of-scope).
+ *   Generate-solution flow (GenerateSolutionModal → Solution tab) is covered by
+ *     the dedicated test at the bottom of this file (eval-e91), driven against the
+ *     deterministic fake AI provider (FAKE_AI=true in scripts/ensure-test-api.sh).
  */
 
 import { test, expect } from './fixtures/test-fixture';
 import { signInAs } from './fixtures/auth';
 import { createClass, createProblem } from './fixtures/api-setup';
 import { waitForMonacoReady, setMonacoValue, getMonacoValue } from './fixtures/monaco';
+
+/**
+ * Deterministic marker embedded in every response from the Go fake AI provider
+ * (go-backend/internal/ai/fake.go — FakeMarker). The e2e API server runs with
+ * FAKE_AI=true, so the generate-solution flow returns a stub containing this
+ * marker, letting us assert the generated solution landed in the editor.
+ */
+const FAKE_AI_MARKER = 'FAKE_AI_DETERMINISTIC_SOLUTION';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -422,4 +432,80 @@ test('desktop editor pane does not overflow horizontally and ribbon actions stay
   await expect(updateBtn).toBeVisible();
   await expectWithinViewportWidth(page, generateBtn, 'Generate button');
   await expectWithinViewportWidth(page, updateBtn, 'Update Problem button');
+});
+
+/**
+ * Generate-solution flow (eval-e91).
+ *
+ * Drives the author "Generate" affordance end-to-end:
+ *   header "Generate" → GenerateSolutionModal → "Generate" → draft renders →
+ *   "Use as solution.py" → generated code lands in the Solution editor tab.
+ *
+ * The e2e Go API server runs with FAKE_AI=true (scripts/ensure-test-api.sh), so
+ * POST /problems/generate-solution is served by the deterministic FakeClient
+ * (go-backend/internal/ai/fake.go). The assertion keys off FAKE_AI_MARKER, which
+ * proves both that the AI flow ran end-to-end AND that the fake provider — not a
+ * "not configured" stub/error — served the request.
+ */
+test('generate solution: modal drives fake AI draft into the Solution editor tab', async ({
+  page,
+  testNamespace,
+  setupInstructor,
+}) => {
+  test.setTimeout(90000);
+
+  // ── API SETUP ─────────────────────────────────────────────────────────────
+  const instructor = await setupInstructor();
+  const cls = await createClass(instructor.token, `GenSolution Class ${testNamespace}`);
+  const problem = await createProblem(instructor.token, cls.id, {
+    title: `GenSolution Problem ${testNamespace}`,
+    description: 'Write a function that returns the answer to everything.',
+    language: 'python',
+    starterCode: 'def solution():\n    pass\n',
+  });
+
+  await signInAs(page, instructor.email);
+  await page.goto(`/instructor/problems?edit=${problem.id}`);
+  await expect(page.locator('h2:has-text("Edit Problem")')).toBeVisible({ timeout: 15000 });
+  await waitForMonacoReady(page);
+
+  // ── Open the Generate modal from the header affordance ────────────────────
+  await test.step('open GenerateSolutionModal', async () => {
+    // Header "Generate" button (exact text avoids matching "Regenerate"/footer).
+    await page.getByRole('button', { name: 'Generate', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('dialog')).toContainText('Generate a solution');
+  });
+
+  // ── Generate the draft and verify the fake marker is present ──────────────
+  await test.step('generate draft via fake AI', async () => {
+    const dialog = page.getByRole('dialog');
+    // Before generation there is no draft.
+    await expect(dialog).toContainText('No draft yet');
+
+    // Click the modal's "Generate" action (scoped to the dialog).
+    await dialog.getByRole('button', { name: 'Generate', exact: true }).click();
+
+    // The generated draft renders in the CodeBlock (aria-label="generated solution")
+    // and must contain the deterministic fake marker.
+    const draft = dialog.locator('pre[aria-label="generated solution"]');
+    await expect(draft).toBeVisible({ timeout: 15000 });
+    await expect(draft).toContainText(FAKE_AI_MARKER);
+  });
+
+  // ── Use the draft → it lands in the Solution editor tab ───────────────────
+  await test.step('use draft fills Solution tab', async () => {
+    await page.getByRole('dialog').getByRole('button', { name: 'Use as solution.py' }).click();
+
+    // Modal closes; onUse switches the active editor tab to "solution".
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+
+    // The Solution tab is now active. Read its Monaco content and assert the
+    // generated solution (with the fake marker) landed there.
+    await page.locator('[data-testid="editor-tab-solution"]').click();
+    await waitForMonacoReady(page);
+    const solution = await getMonacoValue(page);
+    expect(solution).toContain(FAKE_AI_MARKER);
+    expect(solution.trim().length).toBeGreaterThan(0);
+  });
 });

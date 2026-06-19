@@ -51,6 +51,9 @@ export RATE_LIMIT_DISABLED=true
 export CENTRIFUGO_URL="http://${HOST}:8000"
 export CENTRIFUGO_API_KEY=local-api-key
 export CENTRIFUGO_TOKEN_SECRET=local-dev-secret-key-not-for-production
+# Use the deterministic fake AI provider so AI-backed flows (generate-solution,
+# code analysis) can be exercised end-to-end without any real API key.
+export FAKE_AI=true
 export PORT="$API_PORT"
 go-backend/tmp/server >&2 &
 SERVER_PID=$!
