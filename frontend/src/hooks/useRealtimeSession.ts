@@ -10,7 +10,7 @@ import {
   clearFeatured as apiClearFeatured,
   joinSession as apiJoinSession,
 } from '@/lib/api/realtime';
-import { Session, Student } from '@/types/session';
+import { Student, mapSession, type RealtimeSession } from '@/types/session';
 import type { IOTestCase, RunSummary } from '@/types/api';
 import { parseRealtimeEvent, type RealtimeEvent } from '@/lib/api/realtime-events';
 import type { RealtimeStatus } from '@/lib/connectionStatus';
@@ -84,7 +84,7 @@ export function useRealtimeSession({
   userName: _userName,
 }: UseRealtimeSessionOptions) {
   // Local state
-  const [session, setSession] = useState<Partial<Session> | null>(null);
+  const [session, setSession] = useState<RealtimeSession | null>(null);
   const [joinCode, setJoinCode] = useState<string | null>(null);
   const [students, setStudents] = useState<Map<string, Student>>(new Map());
   const [featuredStudent, setFeaturedStudent] = useState<FeaturedStudent>({});
@@ -158,8 +158,9 @@ export function useRealtimeSession({
 
         const data = await getSessionState(session_id);
 
-        // Set session data (cast to Partial<Session> for hook compatibility)
-        setSession(data.session as unknown as Partial<Session>);
+        // Map the wire session into the rich client shape (Date timestamps,
+        // nested rich Problem). No casts — see mapSession in types/session.ts.
+        setSession(mapSession(data.session));
         setJoinCode(data.join_code);
 
         // Convert students array to Map
@@ -194,8 +195,9 @@ export function useRealtimeSession({
     try {
       const data = await getSessionState(session_id);
 
-      // Set session data (cast to Partial<Session> for hook compatibility)
-      setSession(data.session as unknown as Partial<Session>);
+      // Map the wire session into the rich client shape (Date timestamps,
+      // nested rich Problem). No casts — see mapSession in types/session.ts.
+      setSession(mapSession(data.session));
       setJoinCode(data.join_code);
 
       // Convert students array to Map
@@ -341,9 +343,16 @@ export function useRealtimeSession({
               console.warn('[useRealtimeSession] Dropping problem_updated event: state not yet initialized');
               return prev;
             }
+            // The event carries only `problem_id`. We can safely patch the id of
+            // an already-hydrated problem, but cannot synthesize a full rich
+            // Problem from an id alone — when none exists yet, leave it null and
+            // let the next state fetch/poll hydrate the full problem.
+            if (!prev.problem) {
+              return prev;
+            }
             return {
               ...prev,
-              problem: { ...prev.problem, id: problem_id } as Session['problem'],
+              problem: { ...prev.problem, id: problem_id },
             };
           });
           break;

@@ -7,7 +7,8 @@
  *
  * Field names use snake_case to match the Go backend JSON wire format.
  */
-import type { Session as ApiSession, Problem, IOTestCase, RunSummary } from './api';
+import type { Session as ApiSession, IOTestCase, RunSummary } from './api';
+import { mapApiProblem, type Problem } from './problem';
 
 export interface CallFrame {
   function_name: string;
@@ -63,7 +64,7 @@ export interface Student {
 export interface Session {
   id: string;
   namespace_id: string;
-  problem: import('./problem').Problem;
+  problem: Problem | null;
   students: Map<string, Student>;
   featured_student_id: string | null;
   featured_code: string | null;
@@ -79,34 +80,45 @@ export interface Session {
 }
 
 // ---------------------------------------------------------------------------
-// Mapper: wire (api.ts) -> client (partial — problem and students need
-// separate hydration since the wire Session carries them as unknown/array)
+// Mapper: wire (api.ts) -> client
 // ---------------------------------------------------------------------------
 
 /**
- * Convert an API wire-format Session to a client Session with Date timestamps.
- * Note: `problem` and `students` are left as-is (caller must hydrate separately).
+ * Wire-format session as returned by `GET /sessions/{id}/state`
+ * (`SessionState.session`). Alias of the api.ts `Session` so the mapper input
+ * is pinned to the actual wire contract.
  */
-export function mapApiSession(api: ApiSession): {
-  id: string;
-  namespace_id: string;
-  section_id: string;
-  section_name: string;
-  problem: Problem | null;
-  featured_student_id: string | null;
-  featured_code: string | null;
-  featured_test_cases: IOTestCase[] | null;
-  creator_id: string;
-  participants: string[];
-  status: 'active' | 'completed';
-  created_at: Date;
-  last_activity: Date;
-  ended_at: Date | null;
-} {
+export type WireSession = ApiSession;
+
+/**
+ * Rich client session as managed by the realtime hook. Identical to {@link Session}
+ * except for `students`, which the hook tracks as separate state (the wire session
+ * does not carry the students array — that lives on `SessionState.students`).
+ */
+export type RealtimeSession = Omit<Session, 'students'>;
+
+/**
+ * Convert a wire-format session (from `getSessionState().session`) into a rich
+ * client session: ISO-string timestamps become `Date` objects and the nested
+ * wire problem is mapped to the rich `Problem` (Date timestamps, normalized
+ * test_cases) via {@link mapApiProblem}. A blank session (`problem: null`) maps
+ * straight through as `null`.
+ */
+export function mapSession(wire: WireSession): RealtimeSession {
   return {
-    ...api,
-    created_at: new Date(api.created_at),
-    last_activity: new Date(api.last_activity),
-    ended_at: api.ended_at ? new Date(api.ended_at) : null,
+    id: wire.id,
+    namespace_id: wire.namespace_id,
+    section_id: wire.section_id,
+    section_name: wire.section_name,
+    problem: wire.problem ? mapApiProblem(wire.problem) : null,
+    featured_student_id: wire.featured_student_id,
+    featured_code: wire.featured_code,
+    featured_test_cases: wire.featured_test_cases,
+    creator_id: wire.creator_id,
+    participants: wire.participants,
+    status: wire.status,
+    created_at: new Date(wire.created_at),
+    last_activity: new Date(wire.last_activity),
+    ended_at: wire.ended_at ? new Date(wire.ended_at) : null,
   };
 }

@@ -128,12 +128,37 @@ describe('useRealtimeSession', () => {
   });
 
   describe('Initial state loading', () => {
-    it('should load initial session state on mount', async () => {
+    it('should load initial session state on mount, mapping wire -> rich session', async () => {
       const mockState = {
         session: {
           id: 'session-1',
           namespace_id: 'namespace-1',
-          problem: { title: 'Test Problem', description: 'Test' },
+          section_id: 'sec-1',
+          section_name: 'Section A',
+          problem: {
+            id: 'p-1',
+            namespace_id: 'namespace-1',
+            title: 'Test Problem',
+            description: 'Test',
+            starter_code: 'print("hi")',
+            test_cases: null,
+            author_id: 'u-1',
+            class_id: null,
+            tags: [],
+            solution: null,
+            language: 'python',
+            created_at: '2026-01-15T10:00:00.000Z',
+            updated_at: '2026-01-15T10:00:00.000Z',
+          },
+          featured_student_id: null,
+          featured_code: null,
+          featured_test_cases: null,
+          creator_id: 'u-1',
+          participants: ['u-1'],
+          status: 'active',
+          created_at: '2026-01-15T10:00:00.000Z',
+          last_activity: '2026-01-15T11:00:00.000Z',
+          ended_at: null,
         },
         students: [
           { user_id: 'student-1', name: 'Alice', code: '', joined_at: new Date().toISOString() },
@@ -157,7 +182,17 @@ describe('useRealtimeSession', () => {
       });
 
       expect(mockGetSessionState).toHaveBeenCalledWith('session-1');
-      expect(result.current.session).toEqual(mockState.session);
+      // Wire scalars carried through, timestamps parsed to Date, nested problem
+      // mapped to the rich Problem (Date timestamps, normalized test_cases).
+      expect(result.current.session?.id).toBe('session-1');
+      expect(result.current.session?.section_name).toBe('Section A');
+      expect(result.current.session?.created_at).toEqual(new Date('2026-01-15T10:00:00.000Z'));
+      expect(result.current.session?.last_activity).toEqual(new Date('2026-01-15T11:00:00.000Z'));
+      expect(result.current.session?.ended_at).toBeNull();
+      expect(result.current.session?.problem?.id).toBe('p-1');
+      expect(result.current.session?.problem?.title).toBe('Test Problem');
+      expect(result.current.session?.problem?.test_cases).toEqual([]);
+      expect(result.current.session?.problem?.created_at).toEqual(new Date('2026-01-15T10:00:00.000Z'));
       expect(result.current.students).toHaveLength(1);
       expect(result.current.students[0].user_id).toBe('student-1');
     });
@@ -840,7 +875,44 @@ describe('useRealtimeSession', () => {
       expect(result.current.session?.featured_code).toBeNull();
     });
 
-    it('should handle problem_updated event', async () => {
+    it('problem_updated patches the id of an already-hydrated problem', async () => {
+      // Override the block fixture with a session that has a hydrated problem.
+      mockGetSessionState.mockReset();
+      mockGetSessionState.mockResolvedValueOnce({
+        session: {
+          id: 'session-1',
+          namespace_id: 'ns-1',
+          section_id: 'sec-1',
+          section_name: 'Section A',
+          problem: {
+            id: 'p-old',
+            namespace_id: 'ns-1',
+            title: 'Old Problem',
+            description: 'desc',
+            starter_code: 'code',
+            test_cases: null,
+            author_id: 'u-1',
+            class_id: null,
+            tags: [],
+            solution: null,
+            language: 'python',
+            created_at: '2026-01-15T10:00:00.000Z',
+            updated_at: '2026-01-15T10:00:00.000Z',
+          },
+          featured_student_id: null,
+          featured_code: null,
+          featured_test_cases: null,
+          creator_id: 'u-1',
+          participants: ['u-1'],
+          status: 'active',
+          created_at: '2026-01-15T10:00:00.000Z',
+          last_activity: '2026-01-15T10:00:00.000Z',
+          ended_at: null,
+        },
+        students: [],
+        join_code: '',
+      });
+
       const { result } = renderHook(() =>
         useRealtimeSession({
           session_id: 'session-1',
@@ -852,13 +924,42 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(result.current.session?.problem).toBeUndefined();
+      expect(result.current.session?.problem?.id).toBe('p-old');
+
+      act(() => {
+        simulatePublication('problem_updated', { problem_id: 'p-new' });
+      });
+
+      // Only the id is patched; the rest of the rich problem is preserved.
+      expect(result.current.session?.problem?.id).toBe('p-new');
+      expect(result.current.session?.problem?.title).toBe('Old Problem');
+      expect(result.current.session?.problem?.created_at).toEqual(
+        new Date('2026-01-15T10:00:00.000Z')
+      );
+    });
+
+    it('problem_updated is a no-op when no problem has been hydrated yet', async () => {
+      // Block fixture has session { id: 'session-1' } with no problem -> mapped
+      // to problem: null. We cannot synthesize a full rich Problem from an id
+      // alone, so the event must leave problem null (next state fetch hydrates it).
+      const { result } = renderHook(() =>
+        useRealtimeSession({
+          session_id: 'session-1',
+          user_id: 'user-1',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.session?.problem).toBeNull();
 
       act(() => {
         simulatePublication('problem_updated', { problem_id: 'problem-1' });
       });
 
-      expect(result.current.session?.problem).toEqual({ id: 'problem-1' });
+      expect(result.current.session?.problem).toBeNull();
     });
 
     it('should expose isBroadcastConnected status', async () => {
@@ -1108,7 +1209,8 @@ describe('useRealtimeSession', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(result.current.session).toEqual({ id: 'session-2', status: 'active' });
+      expect(result.current.session?.id).toBe('session-2');
+      expect(result.current.session?.status).toBe('active');
     });
   });
 
