@@ -12,6 +12,7 @@ import { Table } from '@/components/ui/Table';
 import { StatusBadge, StatusBadgeStatus } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import type { SerializedInvitation } from '@/lib/api/invitations';
+import { formatShortDateTime } from '@/lib/format';
 
 /**
  * Invitation data structure - using SerializedInvitation from API
@@ -59,20 +60,6 @@ function getInvitationStatus(
   if (invitation.consumed_at) return 'consumed';
   if (new Date(invitation.expires_at) < new Date()) return 'expired';
   return 'pending';
-}
-
-/**
- * Format a date string for display
- */
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 /**
@@ -265,10 +252,10 @@ export function InvitationList({
                   </StatusBadge>
                 </Table.Cell>
                 <Table.Cell className="text-fg-muted text-sm">
-                  {formatDate(invitation.created_at)}
+                  {formatShortDateTime(invitation.created_at)}
                 </Table.Cell>
                 <Table.Cell className="text-fg-muted text-sm">
-                  {formatDate(invitation.expires_at)}
+                  {formatShortDateTime(invitation.expires_at)}
                 </Table.Cell>
                 <Table.Cell align="right">
                   {status === 'pending' && (

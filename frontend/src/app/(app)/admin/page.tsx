@@ -43,6 +43,7 @@ import {
 } from '@/lib/api/system';
 import type { UserRole, User } from '@/types/api';
 import type { SerializedInvitation } from '@/lib/api/invitations';
+import { formatShortDate } from '@/lib/format';
 
 function AdminPage() {
   const { user } = useAuth();
@@ -325,7 +326,7 @@ function AdminPage() {
                             </Badge>
                           </Table.Cell>
                           <Table.Cell className="text-gray-500">
-                            {new Date(u.created_at).toLocaleDateString()}
+                            {formatShortDate(u.created_at)}
                           </Table.Cell>
                           <Table.Cell align="right">
                             {u.id !== user?.id && (

@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { formatShortDateTime } from '@/lib/format';
 /** User as returned by admin user-list endpoints (camelCase wire format). */
 interface AdminUser {
   id: string;
@@ -41,17 +42,6 @@ export default function UserList({ users, currentUserId, onDelete, showActions =
     } finally {
       setDeletingId(null);
     }
-  };
-
-  const formatDate = (date: Date | string) => {
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return d.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const getRoleBadgeVariant = (role: string): 'info' | 'success' | 'default' => {
@@ -100,10 +90,10 @@ export default function UserList({ users, currentUserId, onDelete, showActions =
               </Badge>
             </Table.Cell>
             <Table.Cell className="text-sm text-fg-muted">
-              {formatDate(user.created_at)}
+              {formatShortDateTime(user.created_at)}
             </Table.Cell>
             <Table.Cell className="text-sm text-fg-muted">
-              {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}
+              {user.lastLoginAt ? formatShortDateTime(user.lastLoginAt) : 'Never'}
             </Table.Cell>
             {showActions && (
               <Table.Cell align="center">

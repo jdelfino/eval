@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Tabs } from '@/components/ui/Tabs';
 import { ConnectionDot } from '@/components/ui/ConnectionDot';
 import { createSession } from '@/lib/api/sessions';
-import { formatTimeAgo } from '@/lib/format';
+import { formatShortDateTime, formatTimeAgo } from '@/lib/format';
 import { toPlainText } from '@/lib/markdown';
 import type { SectionDetail } from '../page';
 
@@ -55,17 +55,6 @@ export default function InstructorSectionView({
         return next;
       });
     }
-  };
-
-  const formatDate = (dateString: string | Date) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
   };
 
   return (
@@ -183,7 +172,7 @@ export default function InstructorSectionView({
                             </svg>
                             {session.participants?.length || 0} student{session.participants?.length !== 1 ? 's' : ''}
                           </span>
-                          <span>Started {formatDate(session.created_at)}</span>
+                          <span>Started {formatShortDateTime(session.created_at)}</span>
                         </div>
                       </div>
                     </div>
@@ -329,7 +318,7 @@ export default function InstructorSectionView({
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              {formatDate(session.created_at)}
+                              {formatShortDateTime(session.created_at)}
                             </span>
                             <span
                               className="px-2 py-1 rounded text-xs font-medium bg-bg-sunken text-fg-muted"

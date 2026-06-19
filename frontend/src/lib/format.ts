@@ -3,11 +3,13 @@
  */
 
 /**
- * Format an ISO date string as a short human-readable form,
- * e.g. "Jan 3, 2025".
+ * Format a date as a short human-readable form, e.g. "Jan 3, 2025".
+ *
+ * Accepts either an ISO date string or a `Date` object.
  */
-export function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+export function formatShortDate(date: string | Date): string {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -15,11 +17,14 @@ export function formatShortDate(iso: string): string {
 }
 
 /**
- * Format an ISO date string as a short human-readable date+time,
+ * Format a date as a short human-readable date+time,
  * e.g. "Jan 3, 2025, 2:05 PM".
+ *
+ * Accepts either an ISO date string or a `Date` object.
  */
-export function formatShortDateTime(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
+export function formatShortDateTime(date: string | Date): string {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

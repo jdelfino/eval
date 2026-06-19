@@ -42,6 +42,7 @@ import {
   type InvitationErrorCode,
 } from '@/lib/api/registration-errors';
 import { postInvitePathForRole } from '@/lib/auth-redirect';
+import { formatShortDate } from '@/lib/format';
 
 // Page state types
 type PageState =
@@ -96,16 +97,12 @@ function formatRole(role: string): string {
   return role;
 }
 
-// Format a date string (ISO 8601) to a human-readable format like "Jun 17, 2026"
+// Format a date string (ISO 8601) to a human-readable format like "Jun 17, 2026".
+// Falls back to the raw input for unparseable values.
 function formatDate(isoDate: string): string {
   try {
-    const date = new Date(isoDate);
-    if (isNaN(date.getTime())) return isoDate;
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    if (isNaN(new Date(isoDate).getTime())) return isoDate;
+    return formatShortDate(isoDate);
   } catch {
     return isoDate;
   }
