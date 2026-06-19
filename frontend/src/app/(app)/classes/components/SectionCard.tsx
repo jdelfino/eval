@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Section } from '@/types/api';
+import { formatShortDate } from '@/lib/format';
 import { formatJoinCodeForDisplay } from '@/lib/join-code';
 
 interface Instructor {
@@ -209,7 +210,7 @@ export default function SectionCard({
 
       {/* Statistics */}
       <div className="border-t pt-4 text-sm text-gray-600">
-        <p>Created {new Date(section.created_at).toLocaleDateString()}</p>
+        <p>Created {formatShortDate(section.created_at)}</p>
       </div>
 
       <ConfirmDialog

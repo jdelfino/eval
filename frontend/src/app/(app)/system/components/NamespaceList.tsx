@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Namespace } from '@/types/api';
 import type { NamespaceWithStats } from '@/lib/api/namespaces';
+import { formatShortDate } from '@/lib/format';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -155,7 +156,7 @@ export default function NamespaceList({ namespaces, onUpdate, onDelete, loading 
               <strong className="text-fg">Users:</strong> {namespace.userCount}
             </div>
             <div>
-              <strong className="text-fg">Created:</strong> {new Date(namespace.created_at).toLocaleDateString()}
+              <strong className="text-fg">Created:</strong> {formatShortDate(namespace.created_at)}
             </div>
           </div>
 

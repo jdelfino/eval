@@ -21,6 +21,12 @@ describe('formatShortDate', () => {
     const result = formatShortDate('2024-12-25T12:00:00Z');
     expect(result).toBe('Dec 25, 2024');
   });
+
+  it('accepts a Date object and formats it identically to the ISO string', () => {
+    const iso = '2025-01-03T12:00:00Z';
+    expect(formatShortDate(new Date(iso))).toBe(formatShortDate(iso));
+    expect(formatShortDate(new Date(iso))).toBe('Jan 3, 2025');
+  });
 });
 
 describe('formatShortDateTime', () => {
@@ -36,6 +42,11 @@ describe('formatShortDateTime', () => {
     const result = formatShortDateTime('2026-06-10T14:30:00Z');
     expect(result).toMatch(/Jun 10, 2026/);
     expect(result).toMatch(/\d+:\d{2}/);
+  });
+
+  it('accepts a Date object and formats it identically to the ISO string', () => {
+    const iso = '2025-01-03T20:05:00Z';
+    expect(formatShortDateTime(new Date(iso))).toBe(formatShortDateTime(iso));
   });
 });
 
