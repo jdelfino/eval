@@ -18,12 +18,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import WorkspaceShell from '@/components/workspace/WorkspaceShell';
 import { SolutionViewerModal } from '@/components/SolutionViewerModal';
-import { toTestRailItems, toDrawerOutput } from '@/lib/testRail';
+import { toTestRailItems } from '@/lib/testRail';
 import { Problem } from '@/types/problem';
-import type { Problem as ApiProblem, IOTestCase, IOTestCaseIO, IOTestCasePytest, CaseResult, TestResponse } from '@/types/api';
-import { executeCode, ioTestCasesToCaseDefs } from '@/lib/api/execute';
-import type { DrawerMode, DrawerEdit, DrawerEditIO, DrawerEditPytest } from '@/components/workspace/Drawer';
-import type { EditorTab } from '@/components/workspace/EditorPane';
+import type { Problem as ApiProblem, IOTestCase, IOTestCaseIO, IOTestCasePytest } from '@/types/api';
+import { useAuthorEditor } from '@/hooks/useAuthorEditor';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (problem: ApiProblem) => void;
@@ -51,11 +49,8 @@ export default function SessionProblemEditor({
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
   const language = initialProblem?.language ?? 'python';
 
-  // Execution state (for WorkspaceShell rail/drawer)
-  const [isRunning, setIsRunning] = useState(false);
-  const [executionResult, setExecutionResult] = useState<TestResponse | null>(null);
-  const [activeTestId, setActiveTestId] = useState<string | undefined>(undefined);
-  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+  // Execution error — session editor uses a dedicated banner (not a shared one),
+  // and clears it before each run (wired via the hook's onRunStart/onRunError).
   const [executionError, setExecutionError] = useState<string | null>(null);
 
   // Test cases — start from initialTestCases or initialProblem.test_cases
@@ -63,11 +58,6 @@ export default function SessionProblemEditor({
     if (initialTestCases.length > 0) return initialTestCases;
     return (initialProblem?.test_cases as IOTestCase[] | undefined) ?? [];
   });
-
-  // Edit-test drawer state
-  const [editingTestIdx, setEditingTestIdx] = useState<number | null>(null);
-  const [pendingEdit, setPendingEdit] = useState<DrawerEdit | null>(null);
-  const [lastCreatedKind, setLastCreatedKind] = useState<'io' | 'pytest' | null>(null);
 
   // Sync state when initial values change (e.g., when problem is loaded).
   useEffect(() => {
@@ -110,126 +100,33 @@ export default function SessionProblemEditor({
     onUpdateProblem(problem);
   };
 
-  // ─── WorkspaceShell handlers ────────────────────────────────────────────────
-
-  const handleSelectTab = useCallback((id: string) => {
-    if (id === 'starter' || id === 'solution' || id === 'statement') {
-      setActiveTab(id as ActiveTab);
-    }
-  }, []);
-
-  const handleChangeCode = useCallback((id: string, code: string) => {
-    if (id === 'starter') {
-      setStarterCode(code);
-    } else if (id === 'solution') {
-      setSolution(code);
-    } else if (id === 'statement') {
-      setDescription(code);
-    }
-  }, []);
-
-  const handleRunAll = useCallback(async () => {
-    const codeToRun = activeTab === 'solution' ? solution : starter_code;
-    setIsRunning(true);
-    setExecutionResult(null);
-    setExecutionError(null);
-    try {
-      const result = await executeCode(codeToRun, language, {
-        cases: ioTestCasesToCaseDefs(testCases),
-      });
-      setExecutionResult(result);
-    } catch (err: unknown) {
-      setExecutionError(err instanceof Error ? err.message : 'Failed to run code');
-    } finally {
-      setIsRunning(false);
-    }
-  }, [activeTab, starter_code, solution, language, testCases]);
-
-  /**
-   * Pure run helper that takes an explicit testCases snapshot.
-   * Both handleRunTest (via current state) and saveAndRun (via newTestCases)
-   * call this to avoid the stale-closure bug (eval-5ez).
-   */
-  const runSingleTest = useCallback(async (testId: string, casesSnapshot: IOTestCase[]) => {
-    const codeToRun = activeTab === 'solution' ? solution : starter_code;
-    const items = toTestRailItems(casesSnapshot);
-    const idx = items.findIndex((item) => item.id === testId);
-    if (idx === -1) return;
-    const singleCase = casesSnapshot[idx];
-    if (!singleCase) return;
-
-    setIsRunning(true);
-    setExecutionResult(null);
-    setExecutionError(null);
-    try {
-      const result = await executeCode(codeToRun, language, {
-        cases: ioTestCasesToCaseDefs([singleCase]),
-      });
-      // Sparse results so the result lands on row idx
-      const sparseResults = Array.from({ length: idx + 1 }) as CaseResult[];
-      sparseResults[idx] = result.results[0];
-      setExecutionResult({ ...result, results: sparseResults });
-    } catch (err: unknown) {
-      setExecutionError(err instanceof Error ? err.message : 'Failed to run code');
-    } finally {
-      setIsRunning(false);
-    }
-  }, [activeTab, starter_code, solution, language]);
-
-  const handleRunTest = useCallback(async (testId: string) => {
-    return runSingleTest(testId, testCases);
-  }, [runSingleTest, testCases]);
-
-  const handleDebugTest = useCallback((_testId: string) => {
-    // Debug deferred to G3
-  }, []);
-
-  const handleSelectTest = useCallback((testId: string) => {
-    setActiveTestId(testId);
-  }, []);
-
-  // ─── Edit-test drawer handlers ──────────────────────────────────────────────
-
-  const openEditDrawer = useCallback((testId: string) => {
-    const items = toTestRailItems(testCases);
-    const idx = items.findIndex((item) => item.id === testId);
-    if (idx === -1) return;
-    const tc = testCases[idx];
-    if (!tc) return;
-
-    setEditingTestIdx(idx);
-
-    if (tc.kind === 'io') {
-      const m = tc.match_type;
-      const narrowedMatchType: 'exact' | 'contains' | 'regex' =
-        m === 'contains' || m === 'regex' ? m : 'exact';
-      const edit: DrawerEditIO = {
-        kind: 'io',
-        name: tc.name ?? '',
-        input: tc.input ?? '',
-        expected_output: tc.expected_output ?? '',
-        match_type: narrowedMatchType,
-        random_seed: tc.random_seed,
-      };
-      setPendingEdit(edit);
-    } else {
-      const edit: DrawerEditPytest = {
-        kind: 'pytest',
-        name: tc.name ?? '',
-        target_path: tc.target_path,
-        test_code: tc.test_code,
-      };
-      setPendingEdit(edit);
-    }
-  }, [testCases]);
-
-  const cancelEdit = useCallback(() => {
-    setEditingTestIdx(null);
-    setPendingEdit(null);
-  }, []);
+  // ─── Shared author-editor logic (eval-9z9) ──────────────────────────────────
+  // Run errors funnel into the dedicated `executionError` banner, and each run
+  // clears that banner first (onRunStart). The host-specific save handler
+  // (rebuild ApiProblem + onUpdateProblem) is wired in via onSaveAndRun.
+  const editor = useAuthorEditor({
+    testCases,
+    setTestCases,
+    language,
+    activeTab,
+    setActiveTab,
+    starter_code,
+    setStarterCode,
+    solution,
+    setSolution,
+    description,
+    setDescription,
+    statementPreview,
+    setStatementPreview,
+    onSaveAndRun: () => saveAndRun(),
+    onRunError: setExecutionError,
+    onRunStart: () => setExecutionError(null),
+  });
 
   const saveAndRun = useCallback(async () => {
-    if (editingTestIdx === null || pendingEdit === null) return;
+    if (editor.editingTestIdx === null || editor.pendingEdit === null) return;
+    const editingTestIdx = editor.editingTestIdx;
+    const pendingEdit = editor.pendingEdit;
 
     let newTestCase: IOTestCase;
     if (pendingEdit.kind === 'io') {
@@ -288,174 +185,16 @@ export default function SessionProblemEditor({
     };
 
     const savedIdx = editingTestIdx;
-    setEditingTestIdx(null);
-    setPendingEdit(null);
+    editor.clearEdit();
 
     onUpdateProblem(updatedProblem);
 
     // Run the updated test using the fresh newTestCases snapshot (eval-5ez fix)
     const items = toTestRailItems(newTestCases);
     if (items[savedIdx]) {
-      runSingleTest(items[savedIdx].id, newTestCases);
+      editor.runSingleTest(items[savedIdx].id, newTestCases);
     }
-  }, [editingTestIdx, pendingEdit, testCases, initialProblem, title, description, starter_code, solution, language, onUpdateProblem, runSingleTest]);
-
-  const addNewTest = useCallback((kind: 'io' | 'pytest') => {
-    const order = testCases.length;
-    let newTestCase: IOTestCase;
-    let newEdit: DrawerEdit;
-
-    if (kind === 'io') {
-      const tc: IOTestCaseIO = {
-        kind: 'io',
-        name: '',
-        input: '',
-        expected_output: '',
-        match_type: 'exact',
-        order,
-      };
-      newTestCase = tc;
-      newEdit = {
-        kind: 'io',
-        name: '',
-        input: '',
-        expected_output: '',
-        match_type: 'exact',
-      };
-    } else {
-      const tc: IOTestCasePytest = {
-        kind: 'pytest',
-        name: '',
-        target_path: 'tests/test.py::test_',
-        test_code: 'def test_():\n    assert ',
-      };
-      newTestCase = tc;
-      newEdit = {
-        kind: 'pytest',
-        name: '',
-        target_path: 'tests/test.py::test_',
-        test_code: 'def test_():\n    assert ',
-      };
-    }
-
-    const newTestCases = [...testCases, newTestCase];
-    setTestCases(newTestCases);
-    setEditingTestIdx(order);
-    setPendingEdit(newEdit);
-    setLastCreatedKind(kind);
-  }, [testCases]);
-
-  // ─── Derived values ─────────────────────────────────────────────────────────
-
-  const tests = toTestRailItems(testCases, executionResult?.results);
-
-  const editorTabs: EditorTab[] = [
-    {
-      id: 'starter',
-      label: 'Starter Code',
-      kind: 'code',
-      language: language as 'python' | 'java' | 'javascript',
-      code: starter_code,
-      readOnly: false,
-    },
-    {
-      id: 'solution',
-      label: 'Solution',
-      kind: 'code',
-      language: language as 'python' | 'java' | 'javascript',
-      code: solution,
-      readOnly: false,
-    },
-    {
-      id: 'statement',
-      label: 'statement.md',
-      kind: 'markdown',
-      body: description,
-      preview: statementPreview,
-      dark: true,
-    },
-  ];
-
-  // MdToggle — shown only when statement tab is active
-  const MdToggle = activeTab === 'statement' ? (
-    <div style={{ display: 'flex', gap: 2 }}>
-      <button
-        type="button"
-        onClick={() => setStatementPreview(false)}
-        style={{
-          padding: '2px 8px',
-          fontSize: 11,
-          fontFamily: 'var(--font-sans)',
-          background: !statementPreview ? 'var(--accent)' : 'transparent',
-          color: !statementPreview ? 'var(--accent-fg)' : 'var(--fg-inverse-muted)',
-          border: '1px solid var(--border-inverse)',
-          borderRadius: '3px 0 0 3px',
-          cursor: 'pointer',
-        }}
-      >
-        Edit
-      </button>
-      <button
-        type="button"
-        onClick={() => setStatementPreview(true)}
-        style={{
-          padding: '2px 8px',
-          fontSize: 11,
-          fontFamily: 'var(--font-sans)',
-          background: statementPreview ? 'var(--accent)' : 'transparent',
-          color: statementPreview ? 'var(--accent-fg)' : 'var(--fg-inverse-muted)',
-          border: '1px solid var(--border-inverse)',
-          borderLeft: 'none',
-          borderRadius: '0 3px 3px 0',
-          cursor: 'pointer',
-        }}
-      >
-        Preview
-      </button>
-    </div>
-  ) : null;
-
-  // Derive drawer mode
-  const drawerMode: DrawerMode =
-    editingTestIdx !== null ? 'edit-test' : executionResult ? 'output' : 'idle';
-
-  const drawerOutput = toDrawerOutput(executionResult);
-
-  // Drawer close actions (Cancel / Save & run)
-  const drawerCloseAction = editingTestIdx !== null ? (
-    <>
-      <button
-        type="button"
-        onClick={cancelEdit}
-        style={{
-          padding: '2px 10px',
-          fontSize: 11.5,
-          background: 'var(--bg-inverse-raised)',
-          border: '1px solid var(--border-inverse)',
-          borderRadius: 3,
-          color: 'var(--fg-inverse)',
-          cursor: 'pointer',
-        }}
-      >
-        Cancel
-      </button>
-      <button
-        type="button"
-        onClick={saveAndRun}
-        style={{
-          padding: '2px 10px',
-          fontSize: 11.5,
-          background: 'var(--accent)',
-          border: 'none',
-          borderRadius: 3,
-          color: 'var(--accent-fg)',
-          cursor: 'pointer',
-        }}
-      >
-        Save & run
-      </button>
-    </>
-  ) : undefined;
+  }, [editor, testCases, initialProblem, title, description, starter_code, solution, language, onUpdateProblem]);
 
   return (
     <div style={{ height: '600px', display: 'flex', flexDirection: 'column' }}>
@@ -553,32 +292,32 @@ export default function SessionProblemEditor({
         ribbonOpen={ribbonOpen}
         onToggleRibbon={() => setRibbonOpen((o) => !o)}
         // Editor
-        editorTabs={editorTabs}
+        editorTabs={editor.editorTabs}
         activeTabId={activeTab}
-        onSelectTab={handleSelectTab}
-        onChangeCode={handleChangeCode}
-        editorRightControls={MdToggle}
+        onSelectTab={editor.handleSelectTab}
+        onChangeCode={editor.handleChangeCode}
+        editorRightControls={editor.MdToggle}
         // Rail
-        tests={tests}
-        activeTestId={activeTestId}
-        onSelectTest={handleSelectTest}
-        onRunAll={handleRunAll}
-        onRunTest={handleRunTest}
-        onDebugTest={handleDebugTest}
-        onEditTest={openEditDrawer}
-        isRunningAll={isRunning}
+        tests={editor.tests}
+        activeTestId={editor.activeTestId}
+        onSelectTest={editor.handleSelectTest}
+        onRunAll={editor.handleRunAll}
+        onRunTest={editor.handleRunTest}
+        onDebugTest={editor.handleDebugTest}
+        onEditTest={editor.openEditDrawer}
+        isRunningAll={editor.isRunning}
         railMode="edit"
         railShowAdd={true}
-        onAddTest={addNewTest}
-        lastCreatedKind={lastCreatedKind ?? undefined}
+        onAddTest={editor.addNewTest}
+        lastCreatedKind={editor.lastCreatedKind ?? undefined}
         // Drawer
-        drawerMode={drawerMode}
-        drawerCollapsed={drawerCollapsed}
-        onToggleDrawer={() => setDrawerCollapsed((c) => !c)}
-        drawerOutput={drawerOutput}
-        drawerEdit={pendingEdit ?? undefined}
-        onDrawerEditChange={setPendingEdit}
-        drawerCloseAction={drawerCloseAction}
+        drawerMode={editor.drawerMode}
+        drawerCollapsed={editor.drawerCollapsed}
+        onToggleDrawer={() => editor.setDrawerCollapsed((c) => !c)}
+        drawerOutput={editor.drawerOutput}
+        drawerEdit={editor.pendingEdit ?? undefined}
+        onDrawerEditChange={editor.setPendingEdit}
+        drawerCloseAction={editor.drawerCloseAction}
       />
 
       {/* Solution viewer modal (consolidated — G7-T5).
