@@ -117,7 +117,7 @@ export function Menu({ anchor, open, onOpenChange, align = 'left', ...rest }: Me
         {clonedAnchor}
         {open && (
           <div
-            ref={popoverRef as React.RefObject<HTMLDivElement>}
+            ref={(el) => { popoverRef.current = el; }}
             role="menu"
             style={popoverStyle}
           >
@@ -135,7 +135,7 @@ export function Menu({ anchor, open, onOpenChange, align = 'left', ...rest }: Me
       {clonedAnchor}
       {open && (
         <ul
-          ref={popoverRef as React.RefObject<HTMLUListElement>}
+          ref={(el) => { popoverRef.current = el; }}
           role="menu"
           style={popoverStyle}
         >
