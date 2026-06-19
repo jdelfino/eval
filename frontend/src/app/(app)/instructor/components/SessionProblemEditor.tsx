@@ -22,6 +22,7 @@ import { toTestRailItems } from '@/lib/testRail';
 import { Problem } from '@/types/problem';
 import type { Problem as ApiProblem, IOTestCase, IOTestCaseIO, IOTestCasePytest } from '@/types/api';
 import { useAuthorEditor } from '@/hooks/useAuthorEditor';
+import { isCodeLanguage } from '@/components/workspace/EditorPane';
 
 interface SessionProblemEditorProps {
   onUpdateProblem: (problem: ApiProblem) => void;
@@ -47,7 +48,8 @@ export default function SessionProblemEditor({
   const [solution, setSolution] = useState<string>(initialSolution);
   const [activeTab, setActiveTab] = useState<ActiveTab>('starter');
   const [showSolutionViewer, setShowSolutionViewer] = useState(false);
-  const language = initialProblem?.language ?? 'python';
+  const rawLanguage = initialProblem?.language;
+  const language = isCodeLanguage(rawLanguage) ? rawLanguage : 'python';
 
   // Execution error — session editor uses a dedicated banner (not a shared one),
   // and clears it before each run (wired via the hook's onRunStart/onRunError).

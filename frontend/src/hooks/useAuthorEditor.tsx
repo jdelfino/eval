@@ -28,9 +28,8 @@
  *      and exposes the primitives (editingTestIdx, pendingEdit, testCases,
  *      runSingleTest, clearEdit) the host needs to implement it.
  *
- * The `language as CodeLanguage` narrowing in editorTabs is relocated verbatim
- * from both hosts — it is pre-existing runtime-passthrough behavior (the host's
- * raw language string flows unchanged to Monaco), not a new escape hatch.
+ * `language` is typed as CodeLanguage (the hosts hold 'python' | 'java', a
+ * subset), so it flows into editorTabs with no cast.
  */
 
 import React, { useState, useCallback } from 'react';
@@ -49,7 +48,7 @@ export interface UseAuthorEditorOptions {
   setTestCases: React.Dispatch<React.SetStateAction<IOTestCase[]>>;
 
   /** Execution language. Flows to executeCode and to the editor tabs. */
-  language: string;
+  language: CodeLanguage;
 
   /** Active editor tab — selects which code is run (solution vs starter). */
   activeTab: AuthorEditorTab;
@@ -345,7 +344,7 @@ export function useAuthorEditor(options: UseAuthorEditorOptions): UseAuthorEdito
       id: 'starter',
       label: 'Starter Code',
       kind: 'code',
-      language: language as CodeLanguage,
+      language,
       code: starter_code,
       readOnly: false,
     },
@@ -353,7 +352,7 @@ export function useAuthorEditor(options: UseAuthorEditorOptions): UseAuthorEdito
       id: 'solution',
       label: 'Solution',
       kind: 'code',
-      language: language as CodeLanguage,
+      language,
       code: solution,
       readOnly: false,
     },
