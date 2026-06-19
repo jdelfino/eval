@@ -5,6 +5,15 @@ import Editor from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
 import MarkdownContent from '@/components/MarkdownContent';
 
+// The e2e Monaco fixtures (frontend/e2e/fixtures/monaco.ts) poll this array for
+// programmatic access to mounted editors. Declared as a typed first-class Window
+// property so we read/write window.__TEST_EDITORS directly — no escape-hatch casts.
+declare global {
+  interface Window {
+    __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[];
+  }
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type EditorTabKind = 'code' | 'markdown';
@@ -315,19 +324,17 @@ function MarkdownEditBody({ tab, onChangeCode, fontSize }: MarkdownEditBodyProps
   // Unregister from window.__TEST_EDITORS on unmount — same pattern as CodeBody.
   useEffect(() => {
     return () => {
-      const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
-      if (w.__TEST_EDITORS && editorRef.current) {
-        const idx = w.__TEST_EDITORS.indexOf(editorRef.current);
-        if (idx >= 0) w.__TEST_EDITORS.splice(idx, 1);
+      if (window.__TEST_EDITORS && editorRef.current) {
+        const idx = window.__TEST_EDITORS.indexOf(editorRef.current);
+        if (idx >= 0) window.__TEST_EDITORS.splice(idx, 1);
       }
     };
   }, []);
 
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
-    const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
-    if (!w.__TEST_EDITORS) w.__TEST_EDITORS = [];
-    w.__TEST_EDITORS.push(editor);
+    window.__TEST_EDITORS ??= [];
+    window.__TEST_EDITORS.push(editor);
   };
 
   const handleChange = (value: string | undefined) => {
@@ -402,19 +409,17 @@ function CodeBody({ tab, highlight, fontSize, onChangeCode }: CodeBodyProps) {
   // poll this array for programmatic access.
   useEffect(() => {
     return () => {
-      const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
-      if (w.__TEST_EDITORS && editorRef.current) {
-        const idx = w.__TEST_EDITORS.indexOf(editorRef.current);
-        if (idx >= 0) w.__TEST_EDITORS.splice(idx, 1);
+      if (window.__TEST_EDITORS && editorRef.current) {
+        const idx = window.__TEST_EDITORS.indexOf(editorRef.current);
+        if (idx >= 0) window.__TEST_EDITORS.splice(idx, 1);
       }
     };
   }, []);
 
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor) => {
     editorRef.current = editor;
-    const w = window as unknown as { __TEST_EDITORS?: Monaco.editor.IStandaloneCodeEditor[] };
-    if (!w.__TEST_EDITORS) w.__TEST_EDITORS = [];
-    w.__TEST_EDITORS.push(editor);
+    window.__TEST_EDITORS ??= [];
+    window.__TEST_EDITORS.push(editor);
   };
 
   const handleChange = (value: string | undefined) => {
