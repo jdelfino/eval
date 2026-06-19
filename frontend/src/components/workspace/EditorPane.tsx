@@ -19,6 +19,11 @@ declare global {
 export type EditorTabKind = 'code' | 'markdown';
 export type CodeLanguage = 'python' | 'javascript' | 'java';
 
+/** Type guard narrowing a wire `string` language to the supported CodeLanguage union. */
+export function isCodeLanguage(value: unknown): value is CodeLanguage {
+  return value === 'python' || value === 'javascript' || value === 'java';
+}
+
 export type EditorTab =
   | {
       id: string;
