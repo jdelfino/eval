@@ -14,7 +14,7 @@ export interface ClassInfo {
   description: string | null;
 }
 
-/** ClassInfo extended with section count, used by ClassList. */
+/** ClassInfo extended with section count. */
 export interface ClassWithSections extends ClassInfo {
   section_count: number;
 }

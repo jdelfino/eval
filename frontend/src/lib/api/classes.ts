@@ -7,7 +7,7 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api-client';
-import type { Class, Section, User } from '@/types/api';
+import type { Class, Section } from '@/types/api';
 
 /**
  * Response structure for getClass endpoint.
@@ -16,7 +16,6 @@ export interface ClassDetailsResponse {
   class: Class;
   sections: Section[];
   instructorNames: Record<string, string>;
-  sectionInstructors: Record<string, string[]>;
 }
 
 /**
@@ -99,22 +98,4 @@ export async function updateSection(sectionId: string, updates: Partial<Section>
  */
 export async function regenerateJoinCode(sectionId: string): Promise<Section> {
   return apiPost<Section>(`/sections/${sectionId}/regenerate-code`);
-}
-
-/**
- * Add a co-instructor to a section by email.
- * @param sectionId - The section ID
- * @param email - The email of the instructor to add
- */
-export async function addCoInstructor(sectionId: string, email: string): Promise<void> {
-  await apiPost(`/sections/${sectionId}/instructors`, { email });
-}
-
-/**
- * Remove a co-instructor from a section.
- * @param sectionId - The section ID
- * @param userId - The user ID of the instructor to remove
- */
-export async function removeCoInstructor(sectionId: string, userId: string): Promise<void> {
-  await apiDelete(`/sections/${sectionId}/instructors/${userId}`);
 }

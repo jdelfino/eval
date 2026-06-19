@@ -31,8 +31,6 @@ jest.mock('@/lib/api/classes', () => ({
   createSection: jest.fn(),
   updateSection: jest.fn(),
   regenerateJoinCode: jest.fn(),
-  addCoInstructor: jest.fn(),
-  removeCoInstructor: jest.fn(),
 }));
 
 import { renderHook, act } from '@testing-library/react';

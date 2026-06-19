@@ -117,9 +117,6 @@ type ClassRepository interface {
 	// ListClassInstructorNames returns a map of user_id -> display name (or email)
 	// for all instructors across sections of a class.
 	ListClassInstructorNames(ctx context.Context, classID uuid.UUID) (map[string]string, error)
-	// ListClassSectionInstructors returns a map of section_id -> []user_id
-	// for all instructor memberships across sections of a class.
-	ListClassSectionInstructors(ctx context.Context, classID uuid.UUID) (map[string][]string, error)
 }
 
 // IOTestCase is the discriminated union interface for test cases.

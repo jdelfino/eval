@@ -149,7 +149,6 @@ function mockSectionData(sessions: object[] = [], problems: object[] = []) {
     },
     sections: [],
     instructorNames: {},
-    sectionInstructors: {},
   });
 }
 

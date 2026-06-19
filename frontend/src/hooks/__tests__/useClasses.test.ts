@@ -12,8 +12,6 @@ const mockDeleteClass = jest.fn();
 const mockCreateSection = jest.fn();
 const mockUpdateSection = jest.fn();
 const mockRegenerateJoinCode = jest.fn();
-const mockAddCoInstructor = jest.fn();
-const mockRemoveCoInstructor = jest.fn();
 
 jest.mock('@/lib/api/classes', () => ({
   listClasses: (...args: unknown[]) => mockListClasses(...args),
@@ -23,8 +21,6 @@ jest.mock('@/lib/api/classes', () => ({
   createSection: (...args: unknown[]) => mockCreateSection(...args),
   updateSection: (...args: unknown[]) => mockUpdateSection(...args),
   regenerateJoinCode: (...args: unknown[]) => mockRegenerateJoinCode(...args),
-  addCoInstructor: (...args: unknown[]) => mockAddCoInstructor(...args),
-  removeCoInstructor: (...args: unknown[]) => mockRemoveCoInstructor(...args),
 }));
 
 import { useClasses } from '../useClasses';
@@ -150,23 +146,5 @@ describe('useClasses', () => {
 
     expect(section).toEqual(updatedSection);
     expect(mockRegenerateJoinCode).toHaveBeenCalledWith('s1');
-  });
-
-  it('addCoInstructor posts email', async () => {
-    mockAddCoInstructor.mockResolvedValue(undefined);
-    const { result } = renderHook(() => useClasses());
-
-    await act(async () => { await result.current.addCoInstructor('s1', 'co@test.com'); });
-
-    expect(mockAddCoInstructor).toHaveBeenCalledWith('s1', 'co@test.com');
-  });
-
-  it('removeCoInstructor deletes instructor', async () => {
-    mockRemoveCoInstructor.mockResolvedValue(undefined);
-    const { result } = renderHook(() => useClasses());
-
-    await act(async () => { await result.current.removeCoInstructor('s1', 'u2'); });
-
-    expect(mockRemoveCoInstructor).toHaveBeenCalledWith('s1', 'u2');
   });
 });

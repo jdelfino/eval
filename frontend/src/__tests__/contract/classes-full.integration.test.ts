@@ -10,8 +10,6 @@
  *   5. createSection(classId, options)
  *   6. updateSection(sectionId, updates)
  *   7. regenerateJoinCode(sectionId)
- *   8. addCoInstructor(sectionId, email)
- *   9. removeCoInstructor(sectionId, userId)
  */
 import { configureTestAuth, INSTRUCTOR_TOKEN, resetAuthProvider } from './helpers';
 import { state } from './shared-state';
@@ -23,8 +21,6 @@ import {
   createSection,
   updateSection,
   regenerateJoinCode,
-  addCoInstructor,
-  removeCoInstructor,
 } from '@/lib/api/classes';
 
 /** Validate the shape of a Class object. */
@@ -208,52 +204,6 @@ describe('Classes API — full coverage', () => {
       // join_code should be a non-empty string
       expect(typeof section.join_code).toBe('string');
       expect(section.join_code.length).toBeGreaterThan(0);
-    });
-  });
-
-  // ──────────────────────────────────────────────
-  // 8. addCoInstructor
-  // ──────────────────────────────────────────────
-  describe('addCoInstructor(sectionId, email)', () => {
-    it('calls addCoInstructor without throwing (void return)', async () => {
-      expect(createdSectionId).toBeTruthy();
-
-      try {
-        // Use a plausible email; the backend may reject if user does not exist (404/422).
-        // The contract test validates the call shape, not business logic.
-        await addCoInstructor(createdSectionId!, 'co-instructor-contract@test.local');
-        // If it succeeds, the return is void — nothing further to validate.
-      } catch (err: unknown) {
-        // 404 or 422 is acceptable — user may not exist in the test DB.
-        // Any other status is unexpected.
-        const status = (err as { status?: number }).status;
-        if (status === 404 || status === 422) {
-          // Expected: user not found or validation error. Contract shape is void anyway.
-          return;
-        }
-        throw err;
-      }
-    });
-  });
-
-  // ──────────────────────────────────────────────
-  // 9. removeCoInstructor
-  // ──────────────────────────────────────────────
-  describe('removeCoInstructor(sectionId, userId)', () => {
-    it('calls removeCoInstructor without throwing (void return)', async () => {
-      expect(createdSectionId).toBeTruthy();
-
-      try {
-        // Use a dummy userId; the backend may reject with 404 if not found.
-        await removeCoInstructor(createdSectionId!, '00000000-0000-0000-0000-000000000000');
-      } catch (err: unknown) {
-        const status = (err as { status?: number }).status;
-        if (status === 404 || status === 422) {
-          // Expected: user not an instructor on this section. Contract shape is void anyway.
-          return;
-        }
-        throw err;
-      }
     });
   });
 
