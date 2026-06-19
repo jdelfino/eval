@@ -377,7 +377,7 @@ interface CodeBodyProps {
 
 function CodeBody({ tab, highlight, fontSize, onChangeCode }: CodeBodyProps) {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
-  const decorationsRef = useRef<string[]>([]);
+  const decorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
 
   // Apply debugger-line-highlight decoration whenever highlight changes
   useEffect(() => {
@@ -386,12 +386,11 @@ function CodeBody({ tab, highlight, fontSize, onChangeCode }: CodeBodyProps) {
 
     if (!highlight) {
       // Clear existing decorations
-      const cleared = editor.deltaDecorations(decorationsRef.current, []);
-      decorationsRef.current = cleared;
+      decorationsRef.current?.clear();
       return;
     }
 
-    const newDecorations = editor.deltaDecorations(decorationsRef.current, [
+    const newDecorations: Monaco.editor.IModelDeltaDecoration[] = [
       {
         range: {
           startLineNumber: highlight,
@@ -405,8 +404,12 @@ function CodeBody({ tab, highlight, fontSize, onChangeCode }: CodeBodyProps) {
           glyphMarginClassName: 'debugger-line-glyph',
         },
       },
-    ]);
-    decorationsRef.current = newDecorations;
+    ];
+    if (decorationsRef.current) {
+      decorationsRef.current.set(newDecorations);
+    } else {
+      decorationsRef.current = editor.createDecorationsCollection(newDecorations);
+    }
   }, [highlight]);
 
   // Unregister from window.__TEST_EDITORS on unmount. Registration happens in
