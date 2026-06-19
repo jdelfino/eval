@@ -298,7 +298,7 @@ func (s *Store) ListStudentSessionStats(ctx context.Context, sectionID, studentU
 	query := `SELECT
 		sess.id AS session_id,
 		sess.created_at AS session_created_at,
-		(sess.problem->>'id')::uuid AS problem_id,
+		NULLIF(sess.problem->>'id', '')::uuid AS problem_id,
 		sess.problem->>'title' AS problem_title,
 		COUNT(r.id) AS revision_count
 		FROM revisions r
