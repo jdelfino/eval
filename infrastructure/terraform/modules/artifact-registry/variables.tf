@@ -93,3 +93,9 @@ variable "cleanup_keep_tag_prefixes" {
   type        = list(string)
   default     = []
 }
+
+variable "admin_members" {
+  description = "IAM members granted repoAdmin (create + delete tags/versions) on THIS repo only. Used so the deploy pipeline can prune stale live-<sha> pins. Empty = none."
+  type        = list(string)
+  default     = []
+}

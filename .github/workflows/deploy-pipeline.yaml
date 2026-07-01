@@ -646,25 +646,39 @@ jobs:
           GCP_PROJECT_ID: eval-prod-485520
           FIREBASE_API_KEY: ${{ env.FIREBASE_API_KEY }}
           SMOKE_TEST_PASSWORD: ${{ env.SMOKE_TEST_PASSWORD }}
-      # Pin the now-verified live images with an add-only live-<sha> tag so the
-      # Artifact Registry "keep-deployed" cleanup policy never GCs an image that
-      # is serving traffic (see eval-qlz). Runs last so we only pin images that
-      # passed the smoke test. Best-effort: a transient tagging failure must NOT
-      # red-fail an already-healthy prod deploy — keep_count/age still protect
-      # the image until the next successful pin.
-      - name: Pin deployed images (protect from GC)
+      # Pin the now-verified live images with a live-<sha> tag so the Artifact
+      # Registry "keep-deployed" policy never GCs an image that is serving
+      # traffic (see eval-qlz), then prune old pins so retention stays bounded:
+      # only the KEEP_LIVE most recent live- tags per image survive (current +
+      # previous, for rollback). Older builds lose their pin and fall back to
+      # the normal keep_count/age retirement rules. Runs after the smoke test so
+      # only verified images are pinned. Best-effort throughout: a tagging or
+      # pruning hiccup must NOT red-fail an already-healthy prod deploy.
+      - name: Pin and prune deployed images
         if: inputs.redeploy != true
+        env:
+          KEEP_LIVE: "4" # current + 3 previous
         run: |
           SHA="${{ github.sha }}"
           for img in go-api executor frontend; do
-            EXISTS=$(gcloud artifacts docker tags list "$REGISTRY/$img" \
-              --filter="tag:live-$SHA" --format="value(tag)" 2>/dev/null || true)
-            if [ -n "$EXISTS" ]; then
-              echo "live-$SHA already present on $img, skipping"
-              continue
+            repo="$REGISTRY/$img"
+            # 1) Pin the current image (add-only, idempotent).
+            if [ -z "$(gcloud artifacts docker tags list "$repo" \
+                --filter="tag:live-$SHA" --format='value(tag)' 2>/dev/null)" ]; then
+              gcloud artifacts docker tags add "$repo:$SHA" "$repo:live-$SHA" \
+                || echo "::warning::failed to pin live-$SHA on $img"
             fi
-            gcloud artifacts docker tags add "$REGISTRY/$img:$SHA" "$REGISTRY/$img:live-$SHA" \
-              || echo "::warning::failed to pin live-$SHA on $img (image still protected by keep-count/age until next deploy)"
+            # 2) Prune all but the $KEEP_LIVE most recent live- pins. Order live-
+            #    tags by their version's create time (newest first) and drop the
+            #    tail. Untagging only removes the pin; the version is then GC'd by
+            #    the normal retirement rules once it ages out.
+            OLD=$(gcloud artifacts docker images list "$repo" \
+                    --include-tags --sort-by=~CREATE_TIME --format='value(tags)' 2>/dev/null \
+                  | tr ',;' '\n\n' | grep '^live-' | tail -n +"$((KEEP_LIVE + 1))")
+            for t in $OLD; do
+              gcloud artifacts docker tags delete "$repo:$t" --quiet \
+                || echo "::warning::failed to prune $t on $img"
+            done
           done
 
   notify-failure:
