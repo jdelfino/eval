@@ -23,6 +23,18 @@ resource "google_artifact_registry_repository" "this" {
     }
   }
 
+  dynamic "cleanup_policies" {
+    for_each = length(var.cleanup_keep_tag_prefixes) > 0 ? [1] : []
+    content {
+      id     = "keep-deployed"
+      action = "KEEP"
+      condition {
+        tag_state    = "TAGGED"
+        tag_prefixes = var.cleanup_keep_tag_prefixes
+      }
+    }
+  }
+
   cleanup_policies {
     id     = "delete-untagged"
     action = "DELETE"

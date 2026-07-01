@@ -180,6 +180,10 @@ module "artifact_registry" {
   project_name = var.project_name
   project_id   = var.project_id
   region       = var.region
+
+  cleanup_keep_tag_prefixes = ["live-"]
+  cleanup_keep_count        = 20
+  cleanup_tagged_max_age    = "7776000s" # 90 days (was 7d) — defense in depth
 }
 
 module "workload_identity_federation" {

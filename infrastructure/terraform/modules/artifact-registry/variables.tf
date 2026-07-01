@@ -87,3 +87,9 @@ variable "cleanup_tagged_max_age" {
   type        = string
   default     = "604800s"
 }
+
+variable "cleanup_keep_tag_prefixes" {
+  description = "Tag prefixes whose images are ALWAYS kept (never GC'd). Protects currently-deployed prod images tagged e.g. live-<sha>. Empty = policy disabled."
+  type        = list(string)
+  default     = []
+}

@@ -587,6 +587,19 @@ jobs:
           kubectl rollout status deployment/executor --timeout=180s
           kubectl rollout status deployment/frontend --timeout=180s
           kubectl rollout status deployment/centrifugo --timeout=180s
+      - name: Pin deployed images (protect from GC)
+        if: inputs.redeploy != true
+        run: |
+          SHA="${{ github.sha }}"
+          for img in go-api executor frontend; do
+            EXISTS=$(gcloud artifacts docker tags list "$REGISTRY/$img" \
+              --filter="tag:live-$SHA" --format="value(tag)" 2>/dev/null || true)
+            if [ -z "$EXISTS" ]; then
+              gcloud artifacts docker tags add "$REGISTRY/$img:$SHA" "$REGISTRY/$img:live-$SHA"
+            else
+              echo "live-$SHA already present on $img, skipping"
+            fi
+          done
       - name: Dump cluster diagnostics
         if: failure()
         run: |
