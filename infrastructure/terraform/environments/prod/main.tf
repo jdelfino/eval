@@ -180,6 +180,16 @@ module "artifact_registry" {
   project_name = var.project_name
   project_id   = var.project_id
   region       = var.region
+
+  # Deployed images are tagged live-<sha> and protected from GC by the
+  # keep-deployed policy; the deploy pipeline prunes all but the most recent
+  # few live- pins each deploy, so retention stays bounded. Non-live builds
+  # follow the module's default retirement rules (keep_count / tagged_max_age).
+  cleanup_keep_tag_prefixes = ["live-"]
+
+  # Repo-scoped: lets the GitHub Actions deploy SA delete stale live-<sha>
+  # pins (create/read already come from the project-level artifactregistry.writer).
+  admin_members = ["serviceAccount:${module.workload_identity_federation.service_account_email}"]
 }
 
 module "workload_identity_federation" {

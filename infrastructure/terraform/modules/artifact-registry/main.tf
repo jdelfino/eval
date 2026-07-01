@@ -23,6 +23,18 @@ resource "google_artifact_registry_repository" "this" {
     }
   }
 
+  dynamic "cleanup_policies" {
+    for_each = length(var.cleanup_keep_tag_prefixes) > 0 ? [1] : []
+    content {
+      id     = "keep-deployed"
+      action = "KEEP"
+      condition {
+        tag_state    = "TAGGED"
+        tag_prefixes = var.cleanup_keep_tag_prefixes
+      }
+    }
+  }
+
   cleanup_policies {
     id     = "delete-untagged"
     action = "DELETE"
@@ -45,4 +57,18 @@ resource "google_artifact_registry_repository" "this" {
     environment = var.environment
     managed_by  = "terraform"
   }
+}
+
+# Repo-scoped admin grant. repoAdmin includes artifactregistry.tags.delete,
+# which the project-level artifactregistry.writer role lacks. Scoped to this
+# single repository so the deploy SA can prune stale live-<sha> pins without
+# gaining delete rights across the whole project.
+resource "google_artifact_registry_repository_iam_member" "admins" {
+  for_each = toset(var.admin_members)
+
+  project    = var.project_id
+  location   = var.region
+  repository = google_artifact_registry_repository.this.name
+  role       = "roles/artifactregistry.repoAdmin"
+  member     = each.value
 }

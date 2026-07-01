@@ -87,3 +87,15 @@ variable "cleanup_tagged_max_age" {
   type        = string
   default     = "604800s"
 }
+
+variable "cleanup_keep_tag_prefixes" {
+  description = "Tag prefixes whose images are ALWAYS kept (never GC'd). Protects currently-deployed prod images tagged e.g. live-<sha>. Empty = policy disabled."
+  type        = list(string)
+  default     = []
+}
+
+variable "admin_members" {
+  description = "IAM members granted repoAdmin (create + delete tags/versions) on THIS repo only. Used so the deploy pipeline can prune stale live-<sha> pins. Empty = none."
+  type        = list(string)
+  default     = []
+}
