@@ -587,19 +587,6 @@ jobs:
           kubectl rollout status deployment/executor --timeout=180s
           kubectl rollout status deployment/frontend --timeout=180s
           kubectl rollout status deployment/centrifugo --timeout=180s
-      - name: Pin deployed images (protect from GC)
-        if: inputs.redeploy != true
-        run: |
-          SHA="${{ github.sha }}"
-          for img in go-api executor frontend; do
-            EXISTS=$(gcloud artifacts docker tags list "$REGISTRY/$img" \
-              --filter="tag:live-$SHA" --format="value(tag)" 2>/dev/null || true)
-            if [ -z "$EXISTS" ]; then
-              gcloud artifacts docker tags add "$REGISTRY/$img:$SHA" "$REGISTRY/$img:live-$SHA"
-            else
-              echo "live-$SHA already present on $img, skipping"
-            fi
-          done
       - name: Dump cluster diagnostics
         if: failure()
         run: |
@@ -659,6 +646,26 @@ jobs:
           GCP_PROJECT_ID: eval-prod-485520
           FIREBASE_API_KEY: ${{ env.FIREBASE_API_KEY }}
           SMOKE_TEST_PASSWORD: ${{ env.SMOKE_TEST_PASSWORD }}
+      # Pin the now-verified live images with an add-only live-<sha> tag so the
+      # Artifact Registry "keep-deployed" cleanup policy never GCs an image that
+      # is serving traffic (see eval-qlz). Runs last so we only pin images that
+      # passed the smoke test. Best-effort: a transient tagging failure must NOT
+      # red-fail an already-healthy prod deploy — keep_count/age still protect
+      # the image until the next successful pin.
+      - name: Pin deployed images (protect from GC)
+        if: inputs.redeploy != true
+        run: |
+          SHA="${{ github.sha }}"
+          for img in go-api executor frontend; do
+            EXISTS=$(gcloud artifacts docker tags list "$REGISTRY/$img" \
+              --filter="tag:live-$SHA" --format="value(tag)" 2>/dev/null || true)
+            if [ -n "$EXISTS" ]; then
+              echo "live-$SHA already present on $img, skipping"
+              continue
+            fi
+            gcloud artifacts docker tags add "$REGISTRY/$img:$SHA" "$REGISTRY/$img:live-$SHA" \
+              || echo "::warning::failed to pin live-$SHA on $img (image still protected by keep-count/age until next deploy)"
+          done
 
   notify-failure:
     needs: [build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci, deploy-prod]
