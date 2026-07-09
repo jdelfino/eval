@@ -75,7 +75,7 @@ Read the task description: bd show <task-id> --json
 
 #### c. Handle Result
 
-The implementer's final output is a structured summary (Phase 5). Only read that summary — ignore intermediate tool output from the subagent. The Agent tool's result metadata exposes `worktree_path` and `branch` for integration.
+The implementer's final output is a structured summary (Phase 4). Only read that summary — ignore intermediate tool output from the subagent. The Agent tool's result metadata exposes `worktree_path` and `branch` for integration.
 
 **On implementer FAILURE or STALL** (timeout, crash, incomplete summary): don't silently drop the work. Choose one — retry with continuation, finish the task inline, or ask the user how to proceed.
 
@@ -146,7 +146,8 @@ SKILL: Read and follow .claude/skills/reviewer-correctness/SKILL.md
 
 WORKTREE: <coordinator's worktree path>
 BASE: origin/main
-SUMMARY: <what this PR implements>
+DIFF RANGE: origin/main...HEAD
+BEADS: <bd-id(s)>
 ```
 
 **Test Quality Reviewer:**
@@ -156,7 +157,8 @@ SKILL: Read and follow .claude/skills/reviewer-tests/SKILL.md
 
 WORKTREE: <coordinator's worktree path>
 BASE: origin/main
-SUMMARY: <what this PR implements>
+DIFF RANGE: origin/main...HEAD
+BEADS: <bd-id(s)>
 ```
 
 **Architecture Reviewer:**
@@ -166,9 +168,12 @@ SKILL: Read and follow .claude/skills/reviewer-architecture/SKILL.md
 
 WORKTREE: <coordinator's worktree path>
 BASE: origin/main
-SUMMARY: <what this PR implements>
-REFERENCE DIRS: <key directories in the existing codebase to compare against>
+DIFF RANGE: origin/main...HEAD
+BEADS: <bd-id(s)>
+REFERENCE DIRS: <existing dirs to compare against — paths only, not "areas of concern">
 ```
+
+**Pass mechanical context only — route, don't narrate.** The reviewer reads the diff (`DIFF RANGE`) and the task intent (`bd show <BEADS>`, written pre-review so neutral) itself. Do **not** hand-author a summary of "what this PR implements" — composed right after your own analysis, it seeds the reviewers with your priors. If an orientation line is truly needed, pull it from a pre-existing neutral source (bd description, PR title), never your working memory.
 
 **Handle review results:**
 
