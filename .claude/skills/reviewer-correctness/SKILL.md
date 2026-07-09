@@ -19,7 +19,9 @@ You review the full branch diff for correctness issues. You read every changed l
 
 - Worktree path
 - Base branch (e.g., `origin/main`)
-- Summary of what the PR implements
+- Beads issue ID(s) for the work — run `bd show <id>` to read the task intent yourself
+
+**You own the question-space.** The diff is your source of truth: read every changed line, decide for yourself what could be wrong, and run a full independent pass. The bugs that matter most are the ones nobody flagged.
 
 ## Review Process
 

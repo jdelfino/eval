@@ -19,7 +19,9 @@ You evaluate whether the tests in a PR are meaningful. High coverage with bad te
 
 - Worktree path
 - Base branch (e.g., `origin/main`)
-- Summary of what the PR implements
+- Beads issue ID(s) for the work — run `bd show <id>` to read the task intent and planned test cases yourself
+
+**You own the question-space.** The diff and the task's planned test cases are your source of truth: enumerate the new and changed behaviors yourself, ask of each whether a regression would fail a test, and run a full independent pass. The coverage gaps that matter most are the ones nobody flagged.
 
 ## Review Process
 
@@ -63,7 +65,7 @@ Then check:
 - Do tests verify actual behavior, or just that code doesn't crash? Would a regression be caught?
 - Are assertions checking the right things? (e.g., response body, not just status code)
 - Could a completely wrong implementation still pass? (sign of over-mocking or weak assertions)
-- Flag low-value tests: tautologies (`ctx != nil`), `err == nil` without checking the result, no assertions, exhaustive unit tests for constructors/getters/wiring
+- Flag low-value tests: tautologies (`ctx != nil`), `err == nil` without checking the result, no assertions, exhaustive unit tests for constructors/getters/wiring, tests that merely assert deleted code is gone (the build and the diff already verify removal)
 
 #### Integration Test Coverage
 - Are database interactions tested against a real database (Docker Postgres with migrations)?

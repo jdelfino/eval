@@ -1,13 +1,13 @@
 ---
 name: implementer
-description: Pure development workflow with test-first development and coverage review. Used by coordinator as a subagent. Never manages beads issues or commits.
+description: Pure development workflow with required test coverage and a coverage audit. Used by coordinator as a subagent. Commits work but never manages beads issues.
 ---
 
 # Implementer
 
-Follow these phases **in strict order**. Do not skip phases. Do not proceed until the current phase's gate is satisfied.
+Work through these phases in order. Don't skip a phase's gate.
 
-This skill covers development only — no issue tracking, no commits, no pushes. The coordinator handles those.
+This skill covers development and commits your work — no issue tracking, no pushes. The coordinator handles those.
 
 ## Principles
 
@@ -17,31 +17,25 @@ This skill covers development only — no issue tracking, no commits, no pushes.
 - No type casts that bypass the type system.
 - No optional chaining on required properties.
 - **Test cases from the issue are your spec.** The planner defines concrete test cases on each task. Implement those first, then add high-value coverage for gaps. Focus on tests that catch real bugs — avoid exhaustive, duplicative unit tests that test constructors, wiring, or things the compiler already guarantees.
-- **Delegate quality gates to test-runner sub-agents.** Do NOT run `make test-*`, `make lint-*`, or `make typecheck-*` directly — their output consumes your context window. Use the Task tool to spawn a test-runner (see Phase 3). Only run tests directly if you are actively debugging a specific failure.
-- **Lint and typecheck are enforced by lefthook git hooks at commit time.** Do not run lint or typecheck commands manually — focus on tests in Phase 3.
+- **Delegate quality gates to test-runner sub-agents.** Do NOT run `make test-*`, `make lint-*`, or `make typecheck-*` directly — their output consumes your context window. Use the Task tool to spawn a test-runner (see Phase 2). Only run tests directly if you are actively debugging a specific failure.
+- **Lint and typecheck are enforced by lefthook git hooks at commit time.** Do not run lint or typecheck commands manually — focus on tests in Phase 2.
 - **If a hook blocks a tool call, stop.** Never work around it with scripts, `sed`, or other indirect tricks. Report the block in your summary and let the coordinator decide how to proceed.
 
-## Phase 1: Write Failing Tests
+## Phase 1: Implement & Test
 
-Implement the **test cases defined in the task issue** before touching production code. These are your acceptance criteria — they define what "done" looks like.
+Make the production change and add the test coverage the task specifies — in whatever order is most efficient (write tests first if it helps you design, or implement first and cover after). Keep changes minimal and focused on the task.
 
-1. Read the task description (`bd show <task-id> --json`) and identify the test cases
-2. Read the relevant production code to understand current behavior
-3. Implement each specified test case
-4. Add additional high-value tests for gaps you identify (error paths, edge cases) — but focus on quality over quantity. A few well-targeted tests beat many shallow ones.
-5. Verify your new tests fail by delegating to a test-runner sub-agent (see Phase 3)
+1. Read the task description (`bd show <task-id> --json`) and identify the required test cases.
+2. Read the relevant production code to understand current behavior.
+3. Make the change and implement each specified test case. Add targeted tests for gaps you identify (error paths, edge cases) — quality over quantity; a few well-aimed tests beat many shallow ones.
 
 **Test documentation:** Planned and critical tests (integration, e2e, non-obvious unit tests) must include a docstring answering: what contract is verified, why it matters, what breaks if violated. Go table-driven tests with descriptive names are often self-documenting — use judgment.
 
 **Skipping tests:** Only for genuinely test-free changes (pure config, copy, env vars). Migrations, refactors, and wiring still need tests.
 
-**Gate:** Your new tests **fail** (or, for pure deletions/removals, you can write tests asserting the old behavior is gone — these will pass after implementation). If your new tests already pass, they are not testing anything new. Rewrite them.
+**Gate:** Every test case the task specifies is implemented, and your new tests meaningfully exercise the change — a test that would pass even without your production change isn't testing it.
 
-## Phase 2: Implement
-
-Make the production code changes. Keep changes minimal and focused on the task.
-
-## Phase 3: Verify
+## Phase 2: Verify
 
 **Delegate quality gate runs to a test-runner sub-agent** to preserve your context window. Do NOT run these commands directly with the Bash tool — test output is verbose and wastes context you need for later phases. Use the Task tool with `subagent_type: "Bash"` and `model: "haiku"`:
 
@@ -58,13 +52,15 @@ COMMANDS:
 
 **Gate:** Sub-agent reports PASS. If FAIL, read the error summary, fix the issue, and re-delegate. Only run quality gates directly in your own context if you need to debug a failure interactively.
 
-## Phase 4: Test Coverage Audit
+After Phase 2 (Verify) passes, stage and commit all your changes on the current branch.
+
+## Phase 3: Test Coverage Audit
 
 Verify all planned test cases are implemented. Then check for meaningful gaps: changed behavior with no test that would catch a regression. Focus on real failure modes, not exhaustive coverage. If gaps exist, write targeted tests and re-run via test-runner.
 
 **Gate:** All planned test cases implemented. No meaningful coverage gaps, or gaps documented with reasoning.
 
-## Phase 5: Summary
+## Phase 4: Summary
 
 **This must be the very last thing you output.** The coordinator reads your result — keep it concise to avoid polluting its context.
 

@@ -21,7 +21,7 @@ You are a planner agent. Your job is to collaboratively design implementation pl
 
 Before proposing anything, understand the landscape:
 
-1. Read the epic/description to understand the goal
+1. Read the epic/description to understand the goal — including the **user-facing goal**: who the change is for (an end-user, another developer, whoever consumes it) and the observable outcome they need. **If this isn't clear, interrogate the user before going further** — it's critical context that shapes scope, tradeoffs, and the plan itself; don't infer it silently.
 2. Explore the codebase:
    - Existing patterns and conventions
    - Shared types and packages
@@ -100,7 +100,7 @@ A future implementer session must understand the task completely from its descri
 
 Each subtask includes a **Test Cases** section with concrete, named scenarios specifying type (integration/e2e/unit), setup, assertions, and what bug it catches. Be prescriptive — pseudo-code or detailed steps, not vague one-liners. The user reviews and approves test cases as part of plan approval.
 
-**Prefer integration tests** — they exercise real dependencies and catch real bugs. Only specify e2e when frontend behavior is being validated. Unit tests are rarely appropriate as acceptance tests; they're better suited for additional coverage the implementer adds.
+**Prefer integration tests** — they exercise real dependencies and catch real bugs. Only specify e2e when frontend behavior is being validated. Unit tests are rarely appropriate as acceptance tests; they're better suited for additional coverage the implementer adds — but not tests that merely assert deleted code is gone.
 
 **Examples:**
 
