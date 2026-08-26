@@ -34,6 +34,7 @@ jobs:
       k8s: ${{ inputs.run-all == true || steps.filter.outputs.k8s }}
       migrations: ${{ inputs.run-all == true || steps.filter.outputs.migrations }}
       contract-data: ${{ inputs.run-all == true || steps.filter.outputs.contract-data }}
+      ops-scripts: ${{ inputs.run-all == true || steps.filter.outputs.ops-scripts }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -58,6 +59,32 @@ jobs:
             contract-data:
               - 'scripts/seed.sql'
               - 'scripts/contract-test-seed.sql'
+            ops-scripts:
+              - 'scripts/db-archive.sh'
+              - 'scripts/test-db-archive.sh'
+              - 'scripts/test-hibernation-guard.sh'
+              - 'scripts/validate-deploy-pipeline.py'
+              - '.github/workflows/deploy-pipeline.yaml'
+              - 'infrastructure/terraform/environments/prod/terraform.tfvars'
+
+  # ── Operations script tests ───────────────────────────────────────────────────
+  # db-archive.sh guards irreplaceable prod data and the hibernation guard
+  # decides whether deploys run at all, so both suites gate PRs rather than
+  # relying on someone running `make` by hand. Everything is mocked — no cloud
+  # credentials, no Docker, no network.
+
+  ops-script-tests:
+    needs: changes
+    if: needs.changes.outputs.ops-scripts == 'true' && inputs.cross-boundary-only != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: db-archive.sh tests
+        run: bash scripts/test-db-archive.sh
+      - name: Hibernation guard tests
+        run: bash scripts/test-hibernation-guard.sh
+      - name: Deploy pipeline structure
+        run: python3 scripts/validate-deploy-pipeline.py
 
   # ── Frontend jobs ─────────────────────────────────────────────────────────────
 

@@ -261,9 +261,14 @@ check_dump_roles() {
   fi
 
   # Grantees from GRANT/REVOKE, plus OWNER TO targets — all are role
-  # references that must resolve on restore.
+  # references that must resolve on restore. The ALTER branch spells out
+  # OWNER rather than accepting any "ALTER ... TO ...": the object name is
+  # schema-qualified (`ALTER TABLE public.users OWNER TO app`), so the
+  # pattern has to admit dots and quotes, and a looser one would also swallow
+  # `ALTER DATABASE ... SET parameter TO value` and report the value as a
+  # missing role.
   local referenced
-  referenced="$(grep -oiE '^(GRANT|REVOKE|ALTER [A-Z ]+ OWNER)[[:space:]].*[[:space:]](TO|FROM)[[:space:]]+[^;]+' "$plain_sql" \
+  referenced="$(grep -oiE '^(GRANT|REVOKE)[[:space:]][^;]*[[:space:]](TO|FROM)[[:space:]]+[^;]+|^ALTER[[:space:]][^;]*[[:space:]]OWNER[[:space:]]+TO[[:space:]]+[^;]+' "$plain_sql" \
     | sed -E 's/.*[[:space:]](TO|FROM)[[:space:]]+//I; s/[[:space:]]+WITH[[:space:]]+GRANT[[:space:]]+OPTION.*//I' \
     | tr ',' '\n' \
     | sed -E 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//' \

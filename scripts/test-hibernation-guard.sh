@@ -114,6 +114,56 @@ hibernate = false')"
 assert_not_matches "Commented mention of 'hibernate = true' + real 'hibernate = false' does not match" "$MIXED"
 
 # ────────────────────────────────────────────────────────────────────────────
+# 3. validate-deploy-pipeline.py rejects a duplicate job-level `if:` key.
+#
+#    The guard is applied by ANDing a condition into each job's existing
+#    `if:`. Adding a second `if:` key instead is the natural mistake, and
+#    PyYAML's safe_load does not raise on duplicate mapping keys — it keeps
+#    the last value silently, so the guard would vanish with everything
+#    still appearing to parse. validate-deploy-pipeline.py installs a loader
+#    that rejects duplicates; nothing exercised it, because the real
+#    workflow has no duplicates to catch.
+# ────────────────────────────────────────────────────────────────────────────
+
+VALIDATOR="$REPO_ROOT/scripts/validate-deploy-pipeline.py"
+DUP_FIXTURE="$(mktemp -d)/dup-pipeline.yaml"
+trap 'rm -rf "$(dirname "$DUP_FIXTURE")"' EXIT
+
+python3 - "$WORKFLOW_FILE" "$DUP_FIXTURE" <<'PY'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+s = open(src).read()
+# Give build-push-go-api a second `if:` key, leaving its original intact.
+s = s.replace("  build-push-go-api:\n", "  build-push-go-api:\n    if: always()\n", 1)
+open(dst, "w").write(s)
+PY
+
+dup_exit=0
+dup_output=$(python3 "$VALIDATOR" "$DUP_FIXTURE" 2>&1) || dup_exit=$?
+
+if [ "$dup_exit" -ne 0 ] && echo "$dup_output" | grep -qi 'duplicate key'; then
+  echo "PASS: validator rejects a duplicate job-level 'if:' key"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: validator accepted a duplicate 'if:' key (exit $dup_exit)"
+  echo "  Output: $dup_output"
+  FAIL=$((FAIL + 1))
+fi
+
+# The unmodified workflow must still pass, or the check above proves nothing.
+clean_exit=0
+clean_output=$(python3 "$VALIDATOR" "$WORKFLOW_FILE" 2>&1) || clean_exit=$?
+
+if [ "$clean_exit" -eq 0 ]; then
+  echo "PASS: validator accepts the real deploy-pipeline.yaml"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: validator rejected the real workflow (exit $clean_exit)"
+  echo "  Output: $clean_output"
+  FAIL=$((FAIL + 1))
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
 # Results
 # ────────────────────────────────────────────────────────────────────────────
 

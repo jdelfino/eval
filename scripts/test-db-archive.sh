@@ -401,6 +401,40 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# 6e. Restored-side query failure -> fails closed. The prod-side equivalent
+#     is 6d; both branches must fail closed, and only testing one leaves the
+#     other free to be dropped or mis-copied.
+MOCK_RESTOREDFAIL="$(make_row_count_mocks "$MATCHING_COUNTS" 'echo "psql: FATAL: database does not exist" >&2
+exit 2')"
+
+restoredfail_exit=0
+restoredfail_output=$(run_compare_row_counts "$MOCK_RESTOREDFAIL" 2>&1) || restoredfail_exit=$?
+
+if [ "$restoredfail_exit" -ne 0 ]; then
+  echo "PASS: compare_row_counts fails closed when the restored-side query fails"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: compare_row_counts exited 0 despite a failed restored-side query"
+  echo "  Output: $restoredfail_output"
+  FAIL=$((FAIL + 1))
+fi
+
+# 6f. Verify mode refuses to start without PGPASSWORD — without it the prod
+#     side cannot be queried at all, and a verify that cannot compare must
+#     not look like a pass.
+nopass_exit=0
+nopass_output=$(env -i PATH="${SYSTEM_PATH}" HOME="${HOME:-/root}" \
+  bash "$DB_ARCHIVE_SCRIPT" --verify 20260101T000000Z 2>&1) || nopass_exit=$?
+
+if [ "$nopass_exit" -ne 0 ] && echo "$nopass_output" | grep -qi 'PGPASSWORD'; then
+  echo "PASS: Verify mode refuses to run without PGPASSWORD"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Verify mode did not clearly refuse without PGPASSWORD (exit $nopass_exit)"
+  echo "  Output: $nopass_output"
+  FAIL=$((FAIL + 1))
+fi
+
 # ────────────────────────────────────────────────────────────────────────────
 # 7. Structure: reuses scripts/db-proxy.sh for prod DB access instead of
 #    implementing a second access path.
@@ -500,10 +534,50 @@ QUOTED_DUMP="$(make_dump_fixture 'GRANT SELECT ON TABLE public.users TO "reader"
 assert_exit "check_dump_roles strips quotes and WITH GRANT OPTION" 0 \
   run_check_dump_roles "$QUOTED_DUMP"
 
-# 8g. Verify mode actually calls the audit — a check nothing invokes is dead.
+# 8g. A dump can reference a role through ALTER ... OWNER TO as well as
+#     GRANT. Object names there are schema-qualified, which an earlier
+#     pattern could not match — so this passed a dump naming a role that
+#     would not exist on restore.
+OWNER_UNKNOWN_DUMP="$(make_dump_fixture 'CREATE TABLE public.users (id integer);
+ALTER TABLE public.users OWNER TO legacy_analyst;')"
+
+assert_exit "check_dump_roles rejects a schema-qualified OWNER TO an unknown role" 1 \
+  run_check_dump_roles "$OWNER_UNKNOWN_DUMP"
+
+assert_output_contains "Schema-qualified OWNER TO rejection names the role" "legacy_analyst" \
+  run_check_dump_roles "$OWNER_UNKNOWN_DUMP"
+
+OWNER_KNOWN_DUMP="$(make_dump_fixture 'CREATE TABLE public.users (id integer);
+ALTER TABLE public.users OWNER TO app;')"
+
+assert_exit "check_dump_roles accepts a schema-qualified OWNER TO a module role" 0 \
+  run_check_dump_roles "$OWNER_KNOWN_DUMP"
+
+# 8h. ALTER DATABASE ... SET <param> TO <value> is not a role reference. A
+#     pattern loose enough to catch OWNER TO must not report the parameter
+#     value as a missing role, or every real dump fails verification.
+SET_PARAM_DUMP="$(make_dump_fixture 'ALTER DATABASE eval SET search_path TO public;
+ALTER TABLE public.users OWNER TO app;')"
+
+assert_exit "check_dump_roles ignores ALTER DATABASE ... SET ... TO <value>" 0 \
+  run_check_dump_roles "$SET_PARAM_DUMP"
+
+# 8i. Verify mode actually calls the audit, before the restore — a check
+#     nothing invokes is dead code. Match the call site specifically; the
+#     function's own definition line satisfies a bare name grep.
 assert_contains \
-  "Verify flow runs the dump role audit before restoring" \
-  "check_dump_roles"
+  "Verify flow invokes the dump role audit" \
+  "if ! check_dump_roles"
+
+audit_line="$(grep -n 'if ! check_dump_roles' "$DB_ARCHIVE_SCRIPT" | head -1 | cut -d: -f1)"
+restore_line="$(grep -n 'if ! restore_into_container' "$DB_ARCHIVE_SCRIPT" | head -1 | cut -d: -f1)"
+if [ -n "$audit_line" ] && [ -n "$restore_line" ] && [ "$audit_line" -lt "$restore_line" ]; then
+  echo "PASS: Dump role audit runs before the restore"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL: Dump role audit does not precede the restore (audit=$audit_line restore=$restore_line)"
+  FAIL=$((FAIL + 1))
+fi
 
 # ────────────────────────────────────────────────────────────────────────────
 # Results
