@@ -86,13 +86,51 @@ Expect exactly one in-place update. The subsequent `hibernate = true` apply need
 
 Because the baseline stays `true`, there is nothing to remember to restore on wake-up — the next apply that recreates the instance protects it again automatically.
 
+## Hibernation runbook
+
+Do not skip straight to `hibernate = true` + `terraform apply`. Several of these steps require live nodes, and two of them exist to prevent resources that keep billing after everything else is gone.
+
+1. **Record the deployed image digests.** Only available while nodes are up, and needed if you later prune Artifact Registry:
+   ```bash
+   kubectl get deploy -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{"\t"}{.spec.template.spec.containers[*].image}{"\n"}{end}'
+   ```
+2. **Verify the database archive** — see "Before you hibernate" above. Nothing below is reversible with respect to the class data.
+3. **Delete the Ingress first, and wait for it to finish.**
+   ```bash
+   kubectl delete ingress app-ingress -n default
+   gcloud compute forwarding-rules list    # expect empty before continuing
+   ```
+   Deleting the Ingress while nodes still exist lets the GCE ingress controller reclaim its forwarding rules, target proxies, backend services, and NEGs. Tear the cluster down first and those are orphaned — they survive the hibernation and keep billing, which is the one failure mode that silently defeats the whole exercise.
+4. **Delete the in-cluster workloads, before the Terraform apply.**
+   ```bash
+   kubectl delete namespace staging
+   kubectl delete -k k8s/base
+   ```
+   Terraform's plan scales both node pools to 0 *and* destroys KEDA, the `kubernetes_*` resources, and both centrifugo modules in one graph, with no edge forcing the Kubernetes deletions to happen before the nodes go away — `depends_on = [module.gke]` orders creates, and scaling to zero is an in-place update, not a destroy. If the nodes vanish first, the KEDA uninstall and the `staging` namespace deletion can hang on webhooks and finalizers. (If a namespace does hang in `Terminating`, check `kubectl get namespace staging -o json | jq .spec.finalizers` before forcing anything.)
+
+   This is also what makes the wake-up ordering safe: the app Deployments are created by `kubectl apply -k` in the deploy pipeline, not by Terraform, so they are not recreated until you push. Removing them here means nothing auto-schedules the moment nodes return, which is what lets the database restore happen before go-api ever starts.
+5. **Clear Cloud SQL deletion protection** as its own apply — see "Clearing deletion protection" above.
+6. **Commit and push `hibernate = true` _before_ the destructive apply.** Any push to `main` in the window between the apply and the commit would run a full deploy against a nodeless cluster. A skipped deploy while the infrastructure is still up is harmless, so erring in this direction is free.
+7. **`terraform apply`.** Review the plan before confirming. It should destroy `module.cloudsql`, both centrifugo modules, `helm_release.keda`, the `kubernetes_*` resources, `google_sql_database.staging`, `google_storage_bucket_iam_member.db_archive_sql`, the uptime check and all 8 alert policies, all 4 NAT resources, the global ingress address, and both DNS A records — and set `node_count = 0` on both pools.
+
+   It must **not** touch `module.vpc`, `google_dns_managed_zone.this`, `module.secrets`, `module.identity_platform`, `module.artifact_registry`, `module.workload_identity_federation`, `google_identity_platform_tenant.staging`, `random_password.smoke_test`, or `google_storage_bucket.db_archive`.
+8. **Verify.**
+   ```bash
+   gcloud compute instances list          # empty
+   gcloud sql instances list              # empty
+   gcloud compute forwarding-rules list   # empty
+   gcloud compute addresses list          # empty except the PSA internal range
+   gcloud compute disks list              # empty
+   kubectl get nodes                      # "No resources found"
+   ```
+
 ## Wake-up runbook
 
 Order matters throughout, in two places especially.
 
 **Apply before you push, not after.** `deploy-pipeline.yaml` triggers `on: push: branches: [main]`, and the guard reads the pushed ref. So pushing `hibernate = false` *first* immediately starts a build-and-deploy run against a cluster that still has zero nodes — the exact failing run the guard exists to prevent, just approached from the other direction. Waking is the mirror image of hibernating: when going down you commit the flag *before* the destructive apply, because a skipped deploy while infra is still up is harmless; when coming back up you apply *before* the commit, for the same reason. The intermediate state (infra up, `main` still says `hibernate = true`) only causes skipped deploys.
 
-**Restore the database before the application starts** (steps 3-4) — otherwise go-api's migrations create the schema the dump is trying to restore.
+**Restore the database before the application starts** (steps 3-4) — otherwise go-api's migrations create the schema the dump is trying to restore. This is enforced by construction rather than by how fast you type: the app Deployments were deleted in the hibernation runbook (step 4) and are recreated only by `kubectl apply -k` in the deploy pipeline, so restoring the node pools in step 2 brings back nodes with nothing scheduled on them. If you ever wake a cluster whose Deployments were *not* torn down, scale go-api to 0 replicas before applying.
 
 1. **Set `hibernate = false`** in `infrastructure/terraform/environments/prod/terraform.tfvars`, and **add your current egress IP to `gke_master_authorized_networks`** in the same file (see "Cluster access" above — add, don't swap; stale entries are free). Do not commit yet.
    ```hcl

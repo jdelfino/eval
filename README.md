@@ -67,6 +67,7 @@ See [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md) for full setup including prerequisite
 - **[Future Features](docs/FUTURE_FEATURES.md)** — Planned capabilities (out-of-class assignments, AI-assisted grading, multi-language support)
 - **[Future Design](docs/FUTURE_DESIGN.md)** — Technical design for planned features
 - **[Economics](docs/ECONOMICS.md)** — Hosting costs and per-student cost projections
+- **[Hibernation](docs/HIBERNATION.md)** — Scaling prod down to ~$0.35/month between semesters, and waking it back up
 
 ## Status
 
