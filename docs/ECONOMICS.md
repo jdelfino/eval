@@ -7,19 +7,26 @@ This document covers hosting costs and per-student cost projections for the plat
 
 ---
 
-## Current Infrastructure Costs (~$77/month)
+## Current Infrastructure Costs (~$155/month)
 
-These are the actual monthly costs for a running GKE deployment, independent of student usage.
+These are measured monthly costs (billing export, last 30 days, net of credits) for the running GKE deployment, independent of student usage.
 
-| Component | GCP Service | Monthly Cost |
-|-----------|-------------|--------------|
-| Kubernetes | GKE | $0 control plane + ~$35 pods |
-| Database | Cloud SQL (db-g1-small) | ~$15 |
-| Authentication | Identity Platform | Free tier |
-| NAT Gateway | NAT VM (e2-micro) | ~$6 |
-| Load Balancer | Cloud Load Balancing | ~$20 |
-| State Storage | Cloud Storage (GCS) | < $1 |
-| **Total** | | **~$77** |
+| Component | GCP Service | Monthly |
+|-----------|-------------|---------|
+| GKE nodes (3 spot VMs) | Compute Engine | $75.14 |
+| Database | Cloud SQL db-g1-small + 20 GB | $29.44 |
+| Metrics ingestion | Cloud Monitoring (GMP samples) | $21.01 |
+| Load balancer | Cloud Load Balancing (forwarding rules) | $18.60 |
+| Node boot disks | 3x 30 GB pd-balanced | $9.06 |
+| NAT gateway | e2-micro, on-demand | $6.23 |
+| Inter-zone transfer | Compute Engine networking | $4.92 |
+| DNS + Artifact Registry | | $0.43 |
+| GKE control plane | $74.40 list, free-tier credit | $0 |
+| **Total** | | **~$155** |
+
+The largest non-obvious line items are Prometheus sample ingestion (Cloud Monitoring / GMP) and the load-balancer forwarding-rule minimum — neither scales with traffic, both bill at a near-fixed floor. The `staging` namespace runs a full duplicate stack (its own go-api, executor, frontend, and Centrifugo deployments) inside the same cluster, which is folded into the GKE nodes and database line items above rather than broken out separately.
+
+This infrastructure can be hibernated to near-zero cost between semesters — see [HIBERNATION.md](HIBERNATION.md).
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full infrastructure diagram and technology choices.
 

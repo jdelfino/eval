@@ -19,6 +19,29 @@ env:
   GO_VERSION: '1.24'
 
 jobs:
+  # ── Hibernation guard ──────────────────────────────────────────────────────
+  # Reads the same `hibernate` flag in prod tfvars that Terraform reads, so
+  # there is no second toggle that can drift from the applied infrastructure
+  # state. When hibernating, every build/deploy job below is skipped so a
+  # push to main doesn't produce a failing run against a torn-down cluster.
+  # `ci` and `notify-failure` are deliberately NOT gated — see their comments.
+
+  hibernation-check:
+    runs-on: ubuntu-latest
+    outputs:
+      hibernating: ${{ steps.check.outputs.hibernating }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if grep -qE '^[[:space:]]*hibernate[[:space:]]*=[[:space:]]*true' \
+               infrastructure/terraform/environments/prod/terraform.tfvars; then
+            echo "hibernating=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Infrastructure is hibernating — skipping deploy jobs."
+          else
+            echo "hibernating=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ── Inline build-push jobs ────────────────────────────────────────────────
   # Inlined (not via workflow_call) so deploy-staging can depend on them
   # independently of the test workflows. Images tagged with commit SHA.
@@ -26,7 +49,8 @@ jobs:
   # lifecycle policies.
 
   build-push-go-api:
-    if: inputs.redeploy != true
+    if: inputs.redeploy != true && needs.hibernation-check.outputs.hibernating != 'true'
+    needs: [hibernation-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,7 +67,8 @@ jobs:
           docker push $REGISTRY/go-api:${{ github.sha }}
 
   build-push-executor:
-    if: inputs.redeploy != true
+    if: inputs.redeploy != true && needs.hibernation-check.outputs.hibernating != 'true'
+    needs: [hibernation-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -104,7 +129,8 @@ jobs:
           docker push $REGISTRY/executor:latest
 
   build-push-frontend:
-    if: inputs.redeploy != true
+    if: inputs.redeploy != true && needs.hibernation-check.outputs.hibernating != 'true'
+    needs: [hibernation-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -141,8 +167,8 @@ jobs:
   # Runs Playwright E2E tests against the public staging URL.
 
   deploy-staging:
-    if: inputs.redeploy != true
-    needs: [build-push-go-api, build-push-executor, build-push-frontend]
+    if: inputs.redeploy != true && needs.hibernation-check.outputs.hibernating != 'true'
+    needs: [hibernation-check, build-push-go-api, build-push-executor, build-push-frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -512,9 +538,10 @@ jobs:
   # Redeploy: runs directly (build/CI/staging are skipped).
 
   deploy-prod:
-    needs: [build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci]
+    needs: [hibernation-check, build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci]
     if: >-
       always() &&
+      needs.hibernation-check.outputs.hibernating != 'true' &&
       (needs.build-push-go-api.result == 'success' || needs.build-push-go-api.result == 'skipped') &&
       (needs.build-push-executor.result == 'success' || needs.build-push-executor.result == 'skipped') &&
       (needs.build-push-frontend.result == 'success' || needs.build-push-frontend.result == 'skipped') &&

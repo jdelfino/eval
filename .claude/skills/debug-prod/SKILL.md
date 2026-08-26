@@ -136,6 +136,8 @@ cd infrastructure/terraform/environments/prod
 export PGPASSWORD=$(terraform output -raw cloudsql_database_password)
 ```
 
+This errors on a null value while the infrastructure is hibernating (no Cloud SQL instance exists) — see `docs/HIBERNATION.md`.
+
 Or from the Kubernetes secret:
 
 ```bash

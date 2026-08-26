@@ -202,6 +202,14 @@ test-seed-staging:
 test-db-archive:
 	bash scripts/test-db-archive.sh
 
+# ──────────────────────────────────────────────
+# Hibernation guard regex tests
+# ──────────────────────────────────────────────
+.PHONY: test-hibernation-guard
+
+test-hibernation-guard:
+	bash scripts/test-hibernation-guard.sh
+
 # Deploy pipeline validation
 # ──────────────────────────────────────────────
 .PHONY: validate-deploy-pipeline
