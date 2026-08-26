@@ -73,6 +73,19 @@ The Cloud SQL instance holds real class data that will never be reproduced. Do n
 
 Only proceed once `--verify` reports `VERIFY OK — all databases restored cleanly and row counts match prod exactly.` A row-count mismatch, a missing table, or any error means the archive is not proven — do not destroy the instance. See `scripts/db-archive.sh`'s header comment for the full export/verify contract.
 
+### Clearing deletion protection
+
+The Cloud SQL instance is deliberately left protected in the committed tfvars, so prod is never unprotected during normal operation. Hibernation has to clear that, and the cleared value must reach Terraform state in **its own apply** before anything is destroyed — a combined apply can order the destroy ahead of the protection flip and fail mid-run. Override it on that one apply rather than committing `false`:
+
+```bash
+cd infrastructure/terraform/environments/prod
+terraform apply -target=module.cloudsql -var cloudsql_deletion_protection=false
+```
+
+Expect exactly one in-place update. The subsequent `hibernate = true` apply needs no override: `module.cloudsql` is at `count = 0` by then, so its configuration is never evaluated and the destroy reads the cleared value from state.
+
+Because the baseline stays `true`, there is nothing to remember to restore on wake-up — the next apply that recreates the instance protects it again automatically.
+
 ## Wake-up runbook
 
 Order matters throughout, in two places especially.
@@ -81,11 +94,11 @@ Order matters throughout, in two places especially.
 
 **Restore the database before the application starts** (steps 3-4) — otherwise go-api's migrations create the schema the dump is trying to restore.
 
-1. **Set `hibernate = false` and restore deletion protection** in `infrastructure/terraform/environments/prod/terraform.tfvars`, and **add your current egress IP to `gke_master_authorized_networks`** in the same file (see "Cluster access" above — add, don't swap; stale entries are free). Do not commit yet.
+1. **Set `hibernate = false`** in `infrastructure/terraform/environments/prod/terraform.tfvars`, and **add your current egress IP to `gke_master_authorized_networks`** in the same file (see "Cluster access" above — add, don't swap; stale entries are free). Do not commit yet.
    ```hcl
-   hibernate                     = false
-   cloudsql_deletion_protection  = true
+   hibernate = false
    ```
+   `cloudsql_deletion_protection` needs no attention here — it stays `true` in the committed baseline, so the recreated instance comes back protected.
 2. **`terraform apply`.** Recreates the Cloud SQL instance (empty — no data yet), restores both node pools to their normal autoscaling range, recreates ConfigMaps/Secrets/KEDA/Centrifugo and the rest of the in-cluster resources Terraform manages, recreates the NAT module, re-issues the global ingress IP, recreates both DNS A records, and re-enables the uptime check and alert policies.
 3. **Restore the class data from the GCS archive. Treat this as required, not optional — and do it _before_ starting the application:**
    ```bash

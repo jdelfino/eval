@@ -76,11 +76,14 @@ database_name              = "eval"
 cloudsql_tier              = "db-g1-small"
 cloudsql_disk_size         = 20
 cloudsql_availability_type = "ZONAL" # Use REGIONAL for HA when needed
-# Deletion protection must be off so hibernation can destroy the instance.
-# The provider refuses to destroy a protected instance, so this must be
-# applied on its own before the destroy (see eval-7qg.4 runbook step 3).
-# Restore to true after waking the instance back up.
-cloudsql_deletion_protection = false
+# Stays true in the committed baseline so prod is never left unprotected in
+# the normal running state. Hibernation needs it cleared — the provider
+# refuses to destroy a protected instance, and the cleared value must reach
+# state in its own apply before the destroy — but that is a one-off override
+# on the pre-destroy apply, not a checked-in value:
+#   terraform apply -target=module.cloudsql -var cloudsql_deletion_protection=false
+# See docs/HIBERNATION.md ("Before you hibernate").
+cloudsql_deletion_protection = true
 
 # -----------------------------------------------------------------------------
 # Identity Platform Configuration
