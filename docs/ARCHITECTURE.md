@@ -47,19 +47,19 @@ GCP-hosted platform with Go backend, Next.js frontend, GKE orchestration, and ma
                            +----------------------------------------------------------+
 ```
 
-## Infrastructure Cost Estimate (~$77/month)
+## Infrastructure Cost (~$155/month)
 
-| Component | GCP Service | Monthly Cost |
-|-----------|-------------|--------------|
-| Kubernetes | GKE | $0 control plane + ~$35 pods |
-| Database | Cloud SQL (db-g1-small) | ~$15 |
-| Authentication | Identity Platform | Free tier |
-| NAT Gateway | NAT VM (e2-micro) | ~$6 |
-| Load Balancer | Cloud Load Balancing | ~$20 |
-| State Storage | Cloud Storage (GCS) | < $1 |
-| **Total** | | **~$77** |
+Measured monthly spend for the running deployment, largest items first: GKE spot
+nodes (~$75), Cloud SQL (~$29), Cloud Monitoring metric ingestion (~$21), and the
+load-balancer forwarding-rule minimum (~$19).
 
-For future per-student cost projections and comparison to alternatives, see [ECONOMICS.md](ECONOMICS.md).
+[ECONOMICS.md](ECONOMICS.md) holds the authoritative itemised breakdown — measured
+from the billing export rather than estimated — plus per-student projections and
+comparison to alternatives. It is the single source of truth for cost figures; this
+section is a summary and should not be extended into a second table.
+
+Between semesters the infrastructure can be hibernated to ~$0.35/month — see
+[HIBERNATION.md](HIBERNATION.md).
 
 ## Technology Choices
 
