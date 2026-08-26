@@ -194,6 +194,14 @@ test-check-playwright-fresh:
 test-seed-staging:
 	bash scripts/test-seed-staging.sh
 
+# ──────────────────────────────────────────────
+# DB archive script tests
+# ──────────────────────────────────────────────
+.PHONY: test-db-archive
+
+test-db-archive:
+	bash scripts/test-db-archive.sh
+
 # Deploy pipeline validation
 # ──────────────────────────────────────────────
 .PHONY: validate-deploy-pipeline

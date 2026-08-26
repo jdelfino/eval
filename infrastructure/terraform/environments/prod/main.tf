@@ -192,6 +192,35 @@ module "artifact_registry" {
   admin_members = ["serviceAccount:${module.workload_identity_federation.service_account_email}"]
 }
 
+# -----------------------------------------------------------------------------
+# Database archive
+# -----------------------------------------------------------------------------
+# Durable export target for scripts/db-archive.sh. Holds gzip'd `pg_dump`
+# archives of the `eval` and `eval_staging` databases so the Cloud SQL
+# instance can be destroyed during hibernation without losing the real class
+# data it holds. Must NOT be gated by `hibernate` — it has to outlive
+# hibernation. See eval-7qg for the full archive/restore epic.
+
+resource "google_storage_bucket" "db_archive" {
+  name                        = "${var.project_id}-db-archive"
+  project                     = var.project_id
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  force_destroy               = false
+
+  versioning {
+    enabled = true
+  }
+}
+
+# gcloud sql export writes as the Cloud SQL instance's service agent.
+resource "google_storage_bucket_iam_member" "db_archive_sql" {
+  bucket = google_storage_bucket.db_archive.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${module.cloudsql.instance_service_account_email}"
+}
+
 module "workload_identity_federation" {
   source = "../../modules/workload-identity-federation"
 
