@@ -34,6 +34,13 @@ jobs:
       - name: Validate
         run: terraform validate
 
+  # Module unit tests. Every run block is `command = plan` against empty
+  # state, so no GCP API call is ever made — but the google provider still
+  # refuses to *configure* without a credential, and would fail here with
+  # "Attempted to load application default credentials". A placeholder token
+  # satisfies provider configuration without granting access to anything.
+  # Do not replace this with real credentials: these tests must not be able
+  # to reach GCP.
   test-terraform-modules:
     runs-on: ubuntu-latest
     strategy:
@@ -43,6 +50,8 @@ jobs:
     defaults:
       run:
         working-directory: infrastructure/terraform/modules/${{ matrix.module }}
+    env:
+      GOOGLE_OAUTH_ACCESS_TOKEN: placeholder-plan-only-no-api-calls
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
