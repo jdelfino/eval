@@ -75,34 +75,37 @@ Only proceed once `--verify` reports `VERIFY OK — all databases restored clean
 
 ## Wake-up runbook
 
-Order matters throughout, in two places especially. Steps 1-3: the deploy guard below reads tfvars off the pushed `main` branch, not local state, so pushing before waking the infrastructure (or waking it without pushing) leaves the deploy pipeline permanently skipping. Steps 5-6: the database archive must be imported *before* go-api starts, or its migrations create the schema the dump is trying to restore.
+Order matters throughout, in two places especially.
 
-1. **Set `hibernate = false` and restore deletion protection** in `infrastructure/terraform/environments/prod/terraform.tfvars`:
+**Apply before you push, not after.** `deploy-pipeline.yaml` triggers `on: push: branches: [main]`, and the guard reads the pushed ref. So pushing `hibernate = false` *first* immediately starts a build-and-deploy run against a cluster that still has zero nodes — the exact failing run the guard exists to prevent, just approached from the other direction. Waking is the mirror image of hibernating: when going down you commit the flag *before* the destructive apply, because a skipped deploy while infra is still up is harmless; when coming back up you apply *before* the commit, for the same reason. The intermediate state (infra up, `main` still says `hibernate = true`) only causes skipped deploys.
+
+**Restore the database before the application starts** (steps 3-4) — otherwise go-api's migrations create the schema the dump is trying to restore.
+
+1. **Set `hibernate = false` and restore deletion protection** in `infrastructure/terraform/environments/prod/terraform.tfvars`, and **add your current egress IP to `gke_master_authorized_networks`** in the same file (see "Cluster access" above — add, don't swap; stale entries are free). Do not commit yet.
    ```hcl
    hibernate                     = false
    cloudsql_deletion_protection  = true
    ```
-2. **Add your current egress IP to `gke_master_authorized_networks`** in the same file (see "Cluster access" above). Add, don't swap — stale entries are free.
-3. **Commit and push both changes to `main` before running `terraform apply`.** The `hibernation-check` guard job in [`.github/workflows/deploy-pipeline.yaml`](../.github/workflows/deploy-pipeline.yaml) greps `terraform.tfvars` *on the pushed ref*. If `hibernate = true` is still what's on `main`, `deploy-prod` (and every build/staging job) keeps reporting `skipped` even after Terraform has recreated the infrastructure underneath it — the wake-up silently does nothing on the deploy side.
-4. **`terraform apply`.** Recreates the Cloud SQL instance (empty — no data yet), restores both node pools to their normal autoscaling range, recreates ConfigMaps/Secrets/KEDA/Centrifugo and the rest of the in-cluster resources Terraform manages, recreates the NAT module, re-issues the global ingress IP, recreates both DNS A records, and re-enables the uptime check and alert policies.
-5. **Restore the class data from the GCS archive. Treat this as required, not optional — and do it _before_ starting the application:**
+2. **`terraform apply`.** Recreates the Cloud SQL instance (empty — no data yet), restores both node pools to their normal autoscaling range, recreates ConfigMaps/Secrets/KEDA/Centrifugo and the rest of the in-cluster resources Terraform manages, recreates the NAT module, re-issues the global ingress IP, recreates both DNS A records, and re-enables the uptime check and alert policies.
+3. **Restore the class data from the GCS archive. Treat this as required, not optional — and do it _before_ starting the application:**
    ```bash
    gcloud sql import sql eval-prod-db "gs://eval-prod-485520-db-archive/<STAMP>/eval.sql.gz" \
      --database=eval --project=eval-prod-485520
    ```
    Use the `<STAMP>` that `scripts/db-archive.sh --verify STAMP` last confirmed restorable before hibernation (see "Before you hibernate" above).
 
-   **Identity Platform user accounts survive hibernation, but the `users` table does not** — Cloud SQL was destroyed during hibernation and step 4 recreated it empty. Skipping this step brings prod back with authenticated accounts that have no matching row in `users`, breaking every authenticated request.
+   **Identity Platform user accounts survive hibernation, but the `users` table does not** — Cloud SQL was destroyed during hibernation and step 2 recreated it empty. Skipping this step brings prod back with authenticated accounts that have no matching row in `users`, breaking every authenticated request.
 
    **Order matters here.** The dump is a full `pg_dump` — schema *and* data, including the `schema_migrations` bookkeeping table that `golang-migrate` uses. Import it into the empty database first. If you start go-api first, its migrations create the schema, and this import's `CREATE TABLE` statements then collide with the tables that already exist.
-6. **Trigger a redeploy:**
+4. **Commit and push the tfvars changes from step 1.** This re-enables the deploy pipeline — the `hibernation-check` guard job in [`.github/workflows/deploy-pipeline.yaml`](../.github/workflows/deploy-pipeline.yaml) greps `terraform.tfvars` on the pushed ref, so while `main` still says `hibernate = true` every build and deploy job reports `skipped`. The push itself triggers a full build-and-deploy run against the now-live cluster, which completes the wake-up.
+
+   If you would rather redeploy the existing images without a rebuild, push and then dispatch:
    ```bash
    gh workflow run deploy-pipeline.yaml -f redeploy=true
    ```
-   This deploys the current live image tags (no rebuild) onto the freshly recreated cluster.
-7. **Confirm go-api reconciled migrations on startup.** Migrations run automatically inside go-api via `db.RunMigrations` (`go-backend/cmd/server/main.go:62-66`) — there is no separate migration job. Because step 5 restored `schema_migrations` along with the data, go-api applies only migrations added to `migrations/` *since* the archive was taken; if there are none it logs `database schema is up to date`. Check the go-api pod logs and confirm one of those two outcomes — an error here means the archive predates a schema change that was never re-applied.
-8. **The Ingress picks up the new IP automatically.** The redeploy in step 5 recreates the Ingress, which is assigned the global IP Terraform issued in step 4. Terraform has already pointed both DNS A records at that IP (300s TTL) — no manual DNS step is needed.
-9. **Wait 15-60 minutes for the GKE ManagedCertificate to re-provision.** HTTPS will not work until it does — this is expected, not a failure:
+5. **Confirm go-api reconciled migrations on startup.** Migrations run automatically inside go-api via `db.RunMigrations` (`go-backend/cmd/server/main.go:62-66`) — there is no separate migration job. Because step 3 restored `schema_migrations` along with the data, go-api applies only migrations added to `migrations/` *since* the archive was taken; if there are none it logs `database schema is up to date`. Check the go-api pod logs and confirm one of those two outcomes — an error here means the archive predates a schema change that was never re-applied.
+6. **The Ingress picks up the new IP automatically.** The deploy in step 4 recreates the Ingress, which is assigned the global IP Terraform issued in step 2. Terraform has already pointed both DNS A records at that IP (300s TTL) — no manual DNS step is needed.
+7. **Wait 15-60 minutes for the GKE ManagedCertificate to re-provision.** HTTPS will not work until it does — this is expected, not a failure:
    ```bash
    kubectl describe managedcertificate -n default
    ```

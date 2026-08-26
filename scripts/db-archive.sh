@@ -242,18 +242,18 @@ start_db_tunnel() {
   return 1
 }
 
-# check_dump_roles <db> <local_gz> — the dump must neither carry credentials
+# check_dump_roles <db> <plain_sql> — the dump must neither carry credentials
 # nor depend on roles that will not exist when it is restored. On wake-up the
 # cloudsql module's random_password resources are regenerated and the old
 # instance is gone, so a dump that recreates roles would either fail the
-# restore or reintroduce stale credentials into a fresh instance. Streams the
-# dump twice rather than buffering it — these are multi-hundred-MB files.
-# Fails closed.
+# restore or reintroduce stale credentials into a fresh instance. Operates on
+# the already-decompressed dump (see verify_one_database) so a large archive
+# is inflated once rather than once per check. Fails closed.
 check_dump_roles() {
-  local db="$1" local_gz="$2"
+  local db="$1" plain_sql="$2"
 
   local role_stmts
-  role_stmts="$(gunzip -c "$local_gz" | grep -iE '^CREATE ROLE|^ALTER ROLE .* PASSWORD' || true)"
+  role_stmts="$(grep -iE '^CREATE ROLE|^ALTER ROLE .* PASSWORD' "$plain_sql" || true)"
   if [[ -n "$role_stmts" ]]; then
     echo "ERROR: ${db} dump contains role/credential statements — refusing to archive it:" >&2
     printf '%s\n' "$role_stmts" | sed 's/^/    /' >&2
@@ -263,8 +263,7 @@ check_dump_roles() {
   # Grantees from GRANT/REVOKE, plus OWNER TO targets — all are role
   # references that must resolve on restore.
   local referenced
-  referenced="$(gunzip -c "$local_gz" \
-    | grep -oiE '^(GRANT|REVOKE|ALTER [A-Z ]+ OWNER)[[:space:]].*[[:space:]](TO|FROM)[[:space:]]+[^;]+' \
+  referenced="$(grep -oiE '^(GRANT|REVOKE|ALTER [A-Z ]+ OWNER)[[:space:]].*[[:space:]](TO|FROM)[[:space:]]+[^;]+' "$plain_sql" \
     | sed -E 's/.*[[:space:]](TO|FROM)[[:space:]]+//I; s/[[:space:]]+WITH[[:space:]]+GRANT[[:space:]]+OPTION.*//I' \
     | tr ',' '\n' \
     | sed -E 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//' \
@@ -290,13 +289,13 @@ check_dump_roles() {
   log "    Dump role references OK for ${db} (no embedded credentials)."
 }
 
-# restore_into_container <db> <local_gz> — creates <db> in the verify
+# restore_into_container <db> <plain_sql> — creates <db> in the verify
 # container and restores the dump into it. Fails on non-zero psql exit AND
 # on any ERROR line logged despite a zero exit (psql runs with
 # ON_ERROR_STOP=1, but belt-and-suspenders here since a restore silently
 # dropping rows is exactly the failure mode this script exists to catch).
 restore_into_container() {
-  local db="$1" local_gz="$2"
+  local db="$1" plain_sql="$2"
   log "    Restoring ${db} into ${PGVERIFY_CONTAINER} ..."
 
   if ! docker exec "$PGVERIFY_CONTAINER" createdb -U postgres "$db" >/dev/null 2>&1; then
@@ -305,7 +304,7 @@ restore_into_container() {
   fi
 
   local restore_log
-  restore_log="$(gunzip -c "$local_gz" | docker exec -i "$PGVERIFY_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$db" 2>&1)"
+  restore_log="$(docker exec -i "$PGVERIFY_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d "$db" < "$plain_sql" 2>&1)"
   local status=$?
 
   if [[ "$status" -ne 0 ]]; then
@@ -392,16 +391,20 @@ verify_one_database() {
     return 1
   fi
 
-  if ! gunzip -t "$local_gz" 2>/dev/null; then
+  # Inflate once and reuse. A failed decompression here doubles as the gzip
+  # integrity check, and both the role audit and the restore below then read
+  # plain SQL — a large archive is otherwise inflated four separate times.
+  local plain_sql="${workdir}/${db}.sql"
+  if ! gunzip -c "$local_gz" > "$plain_sql" 2>/dev/null; then
     echo "ERROR: ${local_gz} failed gzip integrity check" >&2
     return 1
   fi
 
-  if ! check_dump_roles "$db" "$local_gz"; then
+  if ! check_dump_roles "$db" "$plain_sql"; then
     return 1
   fi
 
-  if ! restore_into_container "$db" "$local_gz"; then
+  if ! restore_into_container "$db" "$plain_sql"; then
     return 1
   fi
 

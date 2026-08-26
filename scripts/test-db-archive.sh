@@ -315,18 +315,23 @@ run_compare_row_counts() {
     "
 }
 
+# make_row_count_mocks <psql_body> <docker_body> -> mock dir
+# psql stands in for the prod side (through the tunnel), docker for the
+# restored copy. Each body is the shell after the shebang.
+make_row_count_mocks() {
+  local psql_body="$1" docker_body="$2"
+  local dir
+  dir="$(mktemp -d -p "$TMPDIR_ROOT")"
+  printf '#!/usr/bin/env bash\n%s\n' "$psql_body" > "${dir}/psql"
+  printf '#!/usr/bin/env bash\n%s\n' "$docker_body" > "${dir}/docker"
+  chmod +x "${dir}/psql" "${dir}/docker"
+  echo "$dir"
+}
+
+MATCHING_COUNTS="printf 'sessions|3\nusers|10\n'"
+
 # 6a. Matching row counts -> success
-MOCK_MATCH="$(mktemp -d -p "$TMPDIR_ROOT")"
-cat > "${MOCK_MATCH}/psql" <<'EOF'
-#!/usr/bin/env bash
-printf 'sessions|3\nusers|10\n'
-EOF
-chmod +x "${MOCK_MATCH}/psql"
-cat > "${MOCK_MATCH}/docker" <<'EOF'
-#!/usr/bin/env bash
-printf 'sessions|3\nusers|10\n'
-EOF
-chmod +x "${MOCK_MATCH}/docker"
+MOCK_MATCH="$(make_row_count_mocks "$MATCHING_COUNTS" "$MATCHING_COUNTS")"
 
 match_exit=0
 match_output=$(run_compare_row_counts "$MOCK_MATCH" 2>&1) || match_exit=$?
@@ -341,17 +346,7 @@ else
 fi
 
 # 6b. Non-empty diff -> refuses to proceed (non-zero exit, clear message)
-MOCK_MISMATCH="$(mktemp -d -p "$TMPDIR_ROOT")"
-cat > "${MOCK_MISMATCH}/psql" <<'EOF'
-#!/usr/bin/env bash
-printf 'sessions|3\nusers|10\n'
-EOF
-chmod +x "${MOCK_MISMATCH}/psql"
-cat > "${MOCK_MISMATCH}/docker" <<'EOF'
-#!/usr/bin/env bash
-printf 'sessions|3\nusers|9\n'
-EOF
-chmod +x "${MOCK_MISMATCH}/docker"
+MOCK_MISMATCH="$(make_row_count_mocks "$MATCHING_COUNTS" "printf 'sessions|3\nusers|9\n'")"
 
 mismatch_exit=0
 mismatch_output=$(run_compare_row_counts "$MOCK_MISMATCH" 2>&1) || mismatch_exit=$?
@@ -375,18 +370,8 @@ else
 fi
 
 # 6c. Empty result from either side -> fails closed
-MOCK_EMPTY="$(mktemp -d -p "$TMPDIR_ROOT")"
-cat > "${MOCK_EMPTY}/psql" <<'EOF'
-#!/usr/bin/env bash
-# prod query returns nothing
-true
-EOF
-chmod +x "${MOCK_EMPTY}/psql"
-cat > "${MOCK_EMPTY}/docker" <<'EOF'
-#!/usr/bin/env bash
-printf 'sessions|3\nusers|10\n'
-EOF
-chmod +x "${MOCK_EMPTY}/docker"
+MOCK_EMPTY="$(make_row_count_mocks "# prod query returns nothing
+true" "$MATCHING_COUNTS")"
 
 empty_exit=0
 empty_output=$(run_compare_row_counts "$MOCK_EMPTY" 2>&1) || empty_exit=$?
@@ -401,18 +386,8 @@ else
 fi
 
 # 6d. psql query failure (non-zero exit) on the prod side -> fails closed
-MOCK_QUERYFAIL="$(mktemp -d -p "$TMPDIR_ROOT")"
-cat > "${MOCK_QUERYFAIL}/psql" <<'EOF'
-#!/usr/bin/env bash
-echo "psql: error: connection refused" >&2
-exit 2
-EOF
-chmod +x "${MOCK_QUERYFAIL}/psql"
-cat > "${MOCK_QUERYFAIL}/docker" <<'EOF'
-#!/usr/bin/env bash
-printf 'sessions|3\nusers|10\n'
-EOF
-chmod +x "${MOCK_QUERYFAIL}/docker"
+MOCK_QUERYFAIL="$(make_row_count_mocks 'echo "psql: error: connection refused" >&2
+exit 2' "$MATCHING_COUNTS")"
 
 queryfail_exit=0
 queryfail_output=$(run_compare_row_counts "$MOCK_QUERYFAIL" 2>&1) || queryfail_exit=$?
@@ -448,16 +423,18 @@ assert_contains \
 #    wake-up the random_password resources are regenerated, so an archive
 #    that carries credentials or depends on roles the cloudsql module does
 #    not create would either leak old passwords or fail the restore.
-#    Operates on real gzip fixtures; no cloud tools involved.
+#    Operates on plain-SQL fixtures — verify_one_database inflates the
+#    archive once and passes the decompressed path down; no cloud tools
+#    involved.
 # ────────────────────────────────────────────────────────────────────────────
 
-# make_dump_fixture <content> -> path to a .sql.gz containing it
+# make_dump_fixture <content> -> path to a plain .sql file containing it
 make_dump_fixture() {
   local content="$1"
   local dir
   dir="$(mktemp -d -p "$TMPDIR_ROOT")"
-  printf '%s\n' "$content" | gzip -c > "${dir}/eval.sql.gz"
-  echo "${dir}/eval.sql.gz"
+  printf '%s\n' "$content" > "${dir}/eval.sql"
+  echo "${dir}/eval.sql"
 }
 
 run_check_dump_roles() {
