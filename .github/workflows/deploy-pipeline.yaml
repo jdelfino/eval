@@ -541,6 +541,7 @@ jobs:
     needs: [hibernation-check, build-push-go-api, build-push-executor, build-push-frontend, deploy-staging, ci]
     if: >-
       always() &&
+      needs.hibernation-check.result == 'success' &&
       needs.hibernation-check.outputs.hibernating != 'true' &&
       (needs.build-push-go-api.result == 'success' || needs.build-push-go-api.result == 'skipped') &&
       (needs.build-push-executor.result == 'success' || needs.build-push-executor.result == 'skipped') &&

@@ -138,6 +138,18 @@ def validate(workflow_path):
             f"{job_name}: if: does NOT reference hibernation-check (left alone)",
         )
 
+    # deploy-prod's condition starts with always(), which overrides GitHub's
+    # default of skipping a job whose `needs` failed. Without an explicit
+    # result check, a *failed* hibernation-check leaves `hibernating` empty,
+    # '' != 'true' evaluates true, and prod deploys against a nodeless
+    # cluster — the exact outcome the guard exists to prevent. The other
+    # gated jobs have no always() and so fail closed on their own.
+    prod_if = str(jobs.get("deploy-prod", {}).get("if", ""))
+    ok &= check(
+        "needs.hibernation-check.result == 'success'" in prod_if,
+        "deploy-prod: if: fails closed when hibernation-check itself fails",
+    )
+
     # ── build-push-executor: content-hash caching ─────────────────────────────
     executor_job = jobs.get("build-push-executor", {})
     executor_str = str(executor_job)
