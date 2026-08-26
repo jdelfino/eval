@@ -122,9 +122,14 @@ resource "google_container_node_pool" "default" {
   cluster        = google_container_cluster.main.name
   node_locations = length(var.node_locations) > 0 ? var.node_locations : null
 
-  autoscaling {
-    total_min_node_count = var.default_pool_min_nodes
-    total_max_node_count = var.default_pool_max_nodes
+  node_count = var.hibernate ? 0 : null
+
+  dynamic "autoscaling" {
+    for_each = var.hibernate ? [] : [1]
+    content {
+      total_min_node_count = var.default_pool_min_nodes
+      total_max_node_count = var.default_pool_max_nodes
+    }
   }
 
   node_config {
@@ -157,9 +162,14 @@ resource "google_container_node_pool" "executor" {
   cluster        = google_container_cluster.main.name
   node_locations = length(var.node_locations) > 0 ? var.node_locations : null
 
-  autoscaling {
-    total_min_node_count = var.executor_pool_min_nodes
-    total_max_node_count = var.executor_pool_max_nodes
+  node_count = var.hibernate ? 0 : null
+
+  dynamic "autoscaling" {
+    for_each = var.hibernate ? [] : [1]
+    content {
+      total_min_node_count = var.executor_pool_min_nodes
+      total_max_node_count = var.executor_pool_max_nodes
+    }
   }
 
   node_config {

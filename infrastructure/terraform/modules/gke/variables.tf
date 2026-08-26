@@ -235,3 +235,13 @@ variable "executor_pool_disk_size_gb" {
   type        = number
   default     = 30
 }
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+
+variable "hibernate" {
+  description = "Scale infrastructure to near-zero cost while preserving restorability"
+  type        = bool
+  default     = false
+}

@@ -72,11 +72,15 @@ gke_executor_pool_min_nodes = 1
 # Start small, scale up when needed.
 # -----------------------------------------------------------------------------
 
-database_name                = "eval"
-cloudsql_tier                = "db-g1-small"
-cloudsql_disk_size           = 20
-cloudsql_availability_type   = "ZONAL" # Use REGIONAL for HA when needed
-cloudsql_deletion_protection = true
+database_name              = "eval"
+cloudsql_tier              = "db-g1-small"
+cloudsql_disk_size         = 20
+cloudsql_availability_type = "ZONAL" # Use REGIONAL for HA when needed
+# Deletion protection must be off so hibernation can destroy the instance.
+# The provider refuses to destroy a protected instance, so this must be
+# applied on its own before the destroy (see eval-7qg.4 runbook step 3).
+# Restore to true after waking the instance back up.
+cloudsql_deletion_protection = false
 
 # -----------------------------------------------------------------------------
 # Identity Platform Configuration
@@ -130,3 +134,13 @@ domain_name = "eval.delquillan.com"
 # -----------------------------------------------------------------------------
 
 alert_email = "alerts@delquillan.com"
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+
+# When true, scales GKE to zero nodes, destroys the NAT module, destroys the
+# Cloud SQL instance and all in-cluster resources, releases both static IPs,
+# and silences monitoring alerts. See docs/HIBERNATION.md for the full
+# hibernate/wake runbook.
+hibernate = false

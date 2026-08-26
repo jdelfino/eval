@@ -33,3 +33,22 @@ jobs:
         run: terraform init -backend=false
       - name: Validate
         run: terraform validate
+
+  test-terraform-modules:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [secrets, monitoring, gke, nat, dns-ssl]
+    defaults:
+      run:
+        working-directory: infrastructure/terraform/modules/${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Init (no backend)
+        run: terraform init -backend=false
+      - name: Test
+        run: terraform test

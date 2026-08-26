@@ -22,6 +22,8 @@ resource "google_project_service" "dns" {
 # -----------------------------------------------------------------------------
 
 resource "google_compute_global_address" "ingress" {
+  count = var.hibernate ? 0 : 1
+
   name    = "${var.project_name}-${var.environment}-ingress-ip"
   project = var.project_id
 }
@@ -50,13 +52,15 @@ resource "google_dns_managed_zone" "this" {
 # -----------------------------------------------------------------------------
 
 resource "google_dns_record_set" "a" {
+  count = var.hibernate ? 0 : 1
+
   name         = "${var.domain_name}."
   managed_zone = google_dns_managed_zone.this.name
   project      = var.project_id
   type         = "A"
   ttl          = 300
 
-  rrdatas = [google_compute_global_address.ingress.address]
+  rrdatas = [google_compute_global_address.ingress[0].address]
 }
 
 # -----------------------------------------------------------------------------
@@ -64,11 +68,13 @@ resource "google_dns_record_set" "a" {
 # -----------------------------------------------------------------------------
 
 resource "google_dns_record_set" "staging_a" {
+  count = var.hibernate ? 0 : 1
+
   name         = "staging.${var.domain_name}."
   managed_zone = google_dns_managed_zone.this.name
   project      = var.project_id
   type         = "A"
   ttl          = 300
 
-  rrdatas = [google_compute_global_address.ingress.address]
+  rrdatas = [google_compute_global_address.ingress[0].address]
 }

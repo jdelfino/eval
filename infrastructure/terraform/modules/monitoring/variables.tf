@@ -50,3 +50,13 @@ variable "domain_name" {
   description = "Domain name for the application used for HTTPS uptime checks (e.g., eval.example.com)"
   type        = string
 }
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+
+variable "hibernate" {
+  description = "Scale infrastructure to near-zero cost while preserving restorability"
+  type        = bool
+  default     = false
+}

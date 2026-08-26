@@ -286,3 +286,13 @@ variable "alert_email" {
   description = "Email address for alert notification channel"
   type        = string
 }
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+
+variable "hibernate" {
+  description = "Scale infrastructure to near-zero cost while preserving restorability"
+  type        = bool
+  default     = false
+}
