@@ -116,3 +116,13 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+
+variable "hibernate" {
+  description = "Scale infrastructure to near-zero cost while preserving restorability"
+  type        = bool
+  default     = false
+}

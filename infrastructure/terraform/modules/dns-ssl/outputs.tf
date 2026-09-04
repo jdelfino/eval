@@ -5,12 +5,12 @@
 
 output "static_ip_name" {
   description = "Name of the static global IP resource (for kubernetes.io/ingress.global-static-ip-name annotation)"
-  value       = google_compute_global_address.ingress.name
+  value       = one(google_compute_global_address.ingress[*].name)
 }
 
 output "static_ip_address" {
   description = "The allocated static IP address for the ingress load balancer"
-  value       = google_compute_global_address.ingress.address
+  value       = one(google_compute_global_address.ingress[*].address)
 }
 
 output "dns_name_servers" {

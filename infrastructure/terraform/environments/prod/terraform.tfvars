@@ -72,10 +72,17 @@ gke_executor_pool_min_nodes = 1
 # Start small, scale up when needed.
 # -----------------------------------------------------------------------------
 
-database_name                = "eval"
-cloudsql_tier                = "db-g1-small"
-cloudsql_disk_size           = 20
-cloudsql_availability_type   = "ZONAL" # Use REGIONAL for HA when needed
+database_name              = "eval"
+cloudsql_tier              = "db-g1-small"
+cloudsql_disk_size         = 20
+cloudsql_availability_type = "ZONAL" # Use REGIONAL for HA when needed
+# Stays true in the committed baseline so prod is never left unprotected in
+# the normal running state. Hibernation needs it cleared — the provider
+# refuses to destroy a protected instance, and the cleared value must reach
+# state in its own apply before the destroy — but that is a one-off override
+# on the pre-destroy apply, not a checked-in value:
+#   terraform apply -target=module.cloudsql -var cloudsql_deletion_protection=false
+# See docs/HIBERNATION.md ("Before you hibernate").
 cloudsql_deletion_protection = true
 
 # -----------------------------------------------------------------------------
@@ -130,3 +137,13 @@ domain_name = "eval.delquillan.com"
 # -----------------------------------------------------------------------------
 
 alert_email = "alerts@delquillan.com"
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+
+# When true, scales GKE to zero nodes, destroys the NAT module, destroys the
+# Cloud SQL instance and all in-cluster resources, releases both static IPs,
+# and silences monitoring alerts. See docs/HIBERNATION.md for the full
+# hibernate/wake runbook.
+hibernate = false

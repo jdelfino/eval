@@ -94,6 +94,8 @@ module "nat" {
   # this tag to all node pools. The NAT VM itself must NOT match, or it creates
   # a routing loop (it would try to route its own outbound traffic through itself).
   route_tags = ["private"]
+
+  hibernate = var.hibernate
 }
 
 module "gke" {
@@ -128,9 +130,13 @@ module "gke" {
   executor_pool_spot         = var.gke_executor_pool_spot
   executor_pool_disk_size_gb = var.gke_executor_pool_disk_size_gb
   node_network_tags          = ["private"]
+
+  hibernate = var.hibernate
 }
 
 module "cloudsql" {
+  count = var.hibernate ? 0 : 1
+
   source = "../../modules/cloudsql"
 
   environment  = var.environment
@@ -192,6 +198,40 @@ module "artifact_registry" {
   admin_members = ["serviceAccount:${module.workload_identity_federation.service_account_email}"]
 }
 
+# -----------------------------------------------------------------------------
+# Database archive
+# -----------------------------------------------------------------------------
+# Durable export target for scripts/db-archive.sh. Holds gzip'd `pg_dump`
+# archives of the `eval` and `eval_staging` databases so the Cloud SQL
+# instance can be destroyed during hibernation without losing the real class
+# data it holds. Must NOT be gated by `hibernate` — it has to outlive
+# hibernation. See eval-7qg for the full archive/restore epic.
+
+resource "google_storage_bucket" "db_archive" {
+  name                        = "${var.project_id}-db-archive"
+  project                     = var.project_id
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  force_destroy               = false
+
+  versioning {
+    enabled = true
+  }
+}
+
+# gcloud sql export writes as the Cloud SQL instance's service agent. This
+# binding is gated with cloudsql: the service agent does not exist while
+# hibernating, so an ungated binding would fail at apply time with an index
+# error on a zero-count module.
+resource "google_storage_bucket_iam_member" "db_archive_sql" {
+  count = var.hibernate ? 0 : 1
+
+  bucket = google_storage_bucket.db_archive.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${module.cloudsql[0].instance_service_account_email}"
+}
+
 module "workload_identity_federation" {
   source = "../../modules/workload-identity-federation"
 
@@ -215,6 +255,8 @@ module "monitoring" {
 
   alert_email = var.alert_email
   domain_name = var.domain_name
+
+  hibernate = var.hibernate
 }
 
 module "dns_ssl" {
@@ -226,6 +268,8 @@ module "dns_ssl" {
   region       = var.region
 
   domain_name = var.domain_name
+
+  hibernate = var.hibernate
 }
 
 # -----------------------------------------------------------------------------
@@ -234,6 +278,8 @@ module "dns_ssl" {
 # Required for the executor ScaledObject CRD used in k8s/base/.
 
 resource "helm_release" "keda" {
+  count = var.hibernate ? 0 : 1
+
   name             = "keda"
   repository       = "https://kedacore.github.io/charts"
   chart            = "keda"
@@ -277,6 +323,8 @@ resource "helm_release" "keda" {
 # Apps read environment variables from ConfigMaps and Secrets.
 
 resource "kubernetes_config_map" "app_config" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "app-config"
     namespace = "default"
@@ -296,12 +344,12 @@ resource "kubernetes_config_map" "app_config" {
     OAUTH_CLIENT_ID               = module.identity_platform.oauth_client_id
 
     # Database Configuration (non-secret)
-    DATABASE_HOST = module.cloudsql.database_host
-    DATABASE_PORT = tostring(module.cloudsql.database_port)
-    DATABASE_NAME = module.cloudsql.database_name
+    DATABASE_HOST = module.cloudsql[0].database_host
+    DATABASE_PORT = tostring(module.cloudsql[0].database_port)
+    DATABASE_NAME = module.cloudsql[0].database_name
 
     # Cloud SQL Connection Name (for Cloud SQL Proxy)
-    CLOUDSQL_CONNECTION_NAME = module.cloudsql.instance_connection_name
+    CLOUDSQL_CONNECTION_NAME = module.cloudsql[0].instance_connection_name
 
     # Internal Service URLs
     CENTRIFUGO_URL = "http://centrifugo:8000"
@@ -320,6 +368,8 @@ resource "kubernetes_config_map" "app_config" {
 }
 
 resource "kubernetes_secret" "app_secrets" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "app-secrets"
     namespace = "default"
@@ -328,17 +378,17 @@ resource "kubernetes_secret" "app_secrets" {
   data = {
     OAUTH_CLIENT_SECRET = module.identity_platform.oauth_client_secret
     RESEND_API_KEY      = module.secrets.secret_values["resend-api-key"]
-    DATABASE_USER       = module.cloudsql.database_user
-    DATABASE_PASSWORD   = module.cloudsql.database_password
-    DATABASE_URL        = module.cloudsql.connection_string_full
+    DATABASE_USER       = module.cloudsql[0].database_user
+    DATABASE_PASSWORD   = module.cloudsql[0].database_password
+    DATABASE_URL        = module.cloudsql[0].connection_string_full
 
     # Read-only user for production debugging
-    READER_DATABASE_USER     = module.cloudsql.reader_user
-    READER_DATABASE_PASSWORD = module.cloudsql.reader_password
+    READER_DATABASE_USER     = module.cloudsql[0].reader_user
+    READER_DATABASE_PASSWORD = module.cloudsql[0].reader_password
 
     # Centrifugo Secrets (generated by centrifugo module)
-    CENTRIFUGO_API_KEY      = module.centrifugo.api_key
-    CENTRIFUGO_TOKEN_SECRET = module.centrifugo.token_secret
+    CENTRIFUGO_API_KEY      = module.centrifugo[0].api_key
+    CENTRIFUGO_TOKEN_SECRET = module.centrifugo[0].token_secret
 
     # AI (Gemini) — optional, server falls back to StubClient if empty
     GEMINI_API_KEY = module.secrets.secret_values["gemini-api-key"]
@@ -360,6 +410,8 @@ resource "random_password" "smoke_test" {
 }
 
 resource "kubernetes_secret" "smoke_test_secrets" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "smoke-test-secrets"
     namespace = "default"
@@ -375,6 +427,8 @@ resource "kubernetes_secret" "smoke_test_secrets" {
 }
 
 resource "kubernetes_config_map" "frontend_config" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "frontend-config"
     namespace = "default"
@@ -393,6 +447,8 @@ resource "kubernetes_config_map" "frontend_config" {
 }
 
 module "centrifugo" {
+  count = var.hibernate ? 0 : 1
+
   source = "../../modules/centrifugo"
 
   environment  = var.environment
@@ -413,8 +469,10 @@ module "centrifugo" {
 
 # Staging database on same Cloud SQL instance
 resource "google_sql_database" "staging" {
+  count = var.hibernate ? 0 : 1
+
   name     = "eval_staging"
-  instance = module.cloudsql.instance_name
+  instance = module.cloudsql[0].instance_name
 }
 
 # Staging Identity Platform tenant
@@ -426,6 +484,8 @@ resource "google_identity_platform_tenant" "staging" {
 
 # Staging namespace
 resource "kubernetes_namespace" "staging" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name = "staging"
   }
@@ -433,6 +493,8 @@ resource "kubernetes_namespace" "staging" {
 
 # Staging app ConfigMap
 resource "kubernetes_config_map" "staging_app_config" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "app-config"
     namespace = "staging"
@@ -445,11 +507,11 @@ resource "kubernetes_config_map" "staging_app_config" {
     IDENTITY_PLATFORM_API_KEY     = module.identity_platform.api_key
     IDENTITY_PLATFORM_AUTH_DOMAIN = module.identity_platform.auth_domain
     OAUTH_CLIENT_ID               = module.identity_platform.oauth_client_id
-    DATABASE_HOST                 = module.cloudsql.database_host
-    DATABASE_PORT                 = tostring(module.cloudsql.database_port)
+    DATABASE_HOST                 = module.cloudsql[0].database_host
+    DATABASE_PORT                 = tostring(module.cloudsql[0].database_port)
     DATABASE_NAME                 = "eval_staging"
     DATABASE_MAX_CONNS            = "5"
-    CLOUDSQL_CONNECTION_NAME      = module.cloudsql.instance_connection_name
+    CLOUDSQL_CONNECTION_NAME      = module.cloudsql[0].instance_connection_name
     CENTRIFUGO_URL                = "http://centrifugo:8000"
     EXECUTOR_URL                  = "http://executor:8081"
     REDIS_HOST                    = "redis.staging.svc.cluster.local"
@@ -465,6 +527,8 @@ resource "kubernetes_config_map" "staging_app_config" {
 
 # Staging app secrets (same credentials as prod)
 resource "kubernetes_secret" "staging_app_secrets" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "app-secrets"
     namespace = "staging"
@@ -472,13 +536,13 @@ resource "kubernetes_secret" "staging_app_secrets" {
 
   data = {
     OAUTH_CLIENT_SECRET      = module.identity_platform.oauth_client_secret
-    DATABASE_USER            = module.cloudsql.database_user
-    DATABASE_PASSWORD        = module.cloudsql.database_password
-    DATABASE_URL             = "postgresql://${urlencode(module.cloudsql.database_user)}:${urlencode(module.cloudsql.database_password)}@${module.cloudsql.database_host}:5432/eval_staging"
-    READER_DATABASE_USER     = module.cloudsql.reader_user
-    READER_DATABASE_PASSWORD = module.cloudsql.reader_password
-    CENTRIFUGO_API_KEY       = module.centrifugo_staging.api_key
-    CENTRIFUGO_TOKEN_SECRET  = module.centrifugo_staging.token_secret
+    DATABASE_USER            = module.cloudsql[0].database_user
+    DATABASE_PASSWORD        = module.cloudsql[0].database_password
+    DATABASE_URL             = "postgresql://${urlencode(module.cloudsql[0].database_user)}:${urlencode(module.cloudsql[0].database_password)}@${module.cloudsql[0].database_host}:5432/eval_staging"
+    READER_DATABASE_USER     = module.cloudsql[0].reader_user
+    READER_DATABASE_PASSWORD = module.cloudsql[0].reader_password
+    CENTRIFUGO_API_KEY       = module.centrifugo_staging[0].api_key
+    CENTRIFUGO_TOKEN_SECRET  = module.centrifugo_staging[0].token_secret
     GEMINI_API_KEY           = module.secrets.secret_values["gemini-api-key"]
     ANTHROPIC_API_KEY        = module.secrets.secret_values["anthropic-api-key"]
   }
@@ -490,6 +554,8 @@ resource "kubernetes_secret" "staging_app_secrets" {
 
 # Staging frontend ConfigMap
 resource "kubernetes_config_map" "staging_frontend_config" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "frontend-config"
     namespace = "staging"
@@ -510,6 +576,8 @@ resource "kubernetes_config_map" "staging_frontend_config" {
 
 # Staging Centrifugo config (namespace-relative Redis)
 module "centrifugo_staging" {
+  count = var.hibernate ? 0 : 1
+
   source = "../../modules/centrifugo"
 
   environment  = var.environment
@@ -547,6 +615,8 @@ resource "google_service_account_iam_member" "staging_workload_identity" {
 
 # Staging smoke-test secrets
 resource "kubernetes_secret" "staging_smoke_test_secrets" {
+  count = var.hibernate ? 0 : 1
+
   metadata {
     name      = "smoke-test-secrets"
     namespace = "staging"

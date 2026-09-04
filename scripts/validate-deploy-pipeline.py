@@ -8,6 +8,14 @@ Checks that:
 - The skip path produces a commit-SHA tag (so deploy-staging works unchanged)
 - The build path also produces commit-SHA and latest tags
 - deploy-staging runs executor sandbox validation via in-cluster K8s Job
+- The hibernation guard: a hibernation-check job exists and exposes a
+  `hibernating` output; the five gated jobs (build-push-go-api,
+  build-push-executor, build-push-frontend, deploy-staging, deploy-prod)
+  each list it in `needs` and reference its output in their `if:`; `ci` and
+  `notify-failure` do not; and no job has a duplicate `if:` key (a hard
+  parse error for GitHub Actions' own workflow parser) — enforced below by
+  a loader that raises on duplicate mapping keys, since plain
+  yaml.safe_load silently keeps the last value instead of rejecting it.
 
 Exit code 0 = valid, 1 = invalid.
 """
@@ -16,9 +24,35 @@ import sys
 import yaml
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that raises on duplicate mapping keys.
+
+    Plain yaml.safe_load silently keeps the last value for a duplicate key
+    (e.g. two `if:` entries under one job) instead of raising. A duplicate
+    job-level `if:` is exactly the mistake the hibernation guard's "AND it
+    into the existing if:" instruction exists to avoid, and GitHub Actions'
+    own workflow parser rejects it outright — so this loader makes the
+    local validator catch it too, rather than silently passing.
+    """
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"found duplicate key {key!r}",
+                    key_node.start_mark,
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep)
+
+
 def load_workflow(path):
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        return yaml.load(f, Loader=_UniqueKeyLoader)
 
 
 def check(condition, message):
@@ -57,6 +91,63 @@ def validate(workflow_path):
     ok &= check(
         "build-push-test-runner" not in jobs,
         "job removed: build-push-test-runner (replaced by public staging approach)",
+    )
+
+    # ── Hibernation guard ──────────────────────────────────────────────────────
+    # hibernation-check reads the same tfvars the `hibernate` flag lives in, so
+    # there is no second toggle to drift from the applied Terraform state. The
+    # five build/deploy jobs must gate on its output; ci keeps gating merges
+    # while hibernating, and notify-failure's failure-only condition already
+    # tolerates skipped upstreams — neither should reference the guard.
+    ok &= check("hibernation-check" in jobs, "job exists: hibernation-check")
+
+    hibernation_job = jobs.get("hibernation-check", {})
+    hibernation_outputs = hibernation_job.get("outputs", {})
+    ok &= check(
+        "hibernating" in hibernation_outputs,
+        "hibernation-check: exposes a 'hibernating' output",
+    )
+
+    gated_jobs = [
+        "build-push-go-api",
+        "build-push-executor",
+        "build-push-frontend",
+        "deploy-staging",
+        "deploy-prod",
+    ]
+    for job_name in gated_jobs:
+        job = jobs.get(job_name, {})
+        job_needs = job.get("needs", [])
+        if isinstance(job_needs, str):
+            job_needs = [job_needs]
+        ok &= check(
+            "hibernation-check" in job_needs,
+            f"{job_name}: needs hibernation-check",
+        )
+        job_if = str(job.get("if", ""))
+        ok &= check(
+            "needs.hibernation-check.outputs.hibernating" in job_if,
+            f"{job_name}: if: references needs.hibernation-check.outputs.hibernating",
+        )
+
+    for job_name in ["ci", "notify-failure"]:
+        job = jobs.get(job_name, {})
+        job_if = str(job.get("if", ""))
+        ok &= check(
+            "hibernation-check" not in job_if,
+            f"{job_name}: if: does NOT reference hibernation-check (left alone)",
+        )
+
+    # deploy-prod's condition starts with always(), which overrides GitHub's
+    # default of skipping a job whose `needs` failed. Without an explicit
+    # result check, a *failed* hibernation-check leaves `hibernating` empty,
+    # '' != 'true' evaluates true, and prod deploys against a nodeless
+    # cluster — the exact outcome the guard exists to prevent. The other
+    # gated jobs have no always() and so fail closed on their own.
+    prod_if = str(jobs.get("deploy-prod", {}).get("if", ""))
+    ok &= check(
+        "needs.hibernation-check.result == 'success'" in prod_if,
+        "deploy-prod: if: fails closed when hibernation-check itself fails",
     )
 
     # ── build-push-executor: content-hash caching ─────────────────────────────

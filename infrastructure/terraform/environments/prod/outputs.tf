@@ -66,28 +66,28 @@ output "gke_get_credentials_command" {
 
 output "cloudsql_instance_name" {
   description = "Cloud SQL instance name"
-  value       = module.cloudsql.instance_name
+  value       = one(module.cloudsql[*].instance_name)
 }
 
 output "cloudsql_connection_name" {
   description = "Cloud SQL instance connection name for Cloud SQL Proxy"
-  value       = module.cloudsql.instance_connection_name
+  value       = one(module.cloudsql[*].instance_connection_name)
 }
 
 output "cloudsql_private_ip" {
   description = "Cloud SQL instance private IP address"
-  value       = module.cloudsql.private_ip_address
+  value       = one(module.cloudsql[*].private_ip_address)
 }
 
 output "cloudsql_database_password" {
   description = "Cloud SQL database password (for proxy connections)"
-  value       = module.cloudsql.database_password
+  value       = one(module.cloudsql[*].database_password)
   sensitive   = true
 }
 
 output "cloudsql_reader_password" {
   description = "Cloud SQL reader password (for read-only debugging connections)"
-  value       = module.cloudsql.reader_password
+  value       = one(module.cloudsql[*].reader_password)
   sensitive   = true
 }
 

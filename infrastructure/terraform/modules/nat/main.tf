@@ -58,6 +58,8 @@ locals {
 # -----------------------------------------------------------------------------
 
 resource "google_compute_address" "nat" {
+  count = var.hibernate ? 0 : 1
+
   name         = "${local.nat_name}-ip"
   project      = var.project_id
   region       = var.region
@@ -72,6 +74,8 @@ resource "google_compute_address" "nat" {
 # -----------------------------------------------------------------------------
 
 resource "google_compute_instance" "nat" {
+  count = var.hibernate ? 0 : 1
+
   name         = local.nat_name
   project      = var.project_id
   zone         = var.zone
@@ -99,7 +103,7 @@ resource "google_compute_instance" "nat" {
     subnetwork = var.public_subnet_id
 
     access_config {
-      nat_ip       = google_compute_address.nat.address
+      nat_ip       = google_compute_address.nat[0].address
       network_tier = "STANDARD"
     }
   }
@@ -131,12 +135,14 @@ resource "google_compute_instance" "nat" {
 # -----------------------------------------------------------------------------
 
 resource "google_compute_route" "nat" {
+  count = var.hibernate ? 0 : 1
+
   name                   = "${local.nat_name}-route"
   project                = var.project_id
   network                = var.network_id
   dest_range             = "0.0.0.0/0"
   priority               = var.route_priority
-  next_hop_instance      = google_compute_instance.nat.self_link
+  next_hop_instance      = google_compute_instance.nat[0].self_link
   next_hop_instance_zone = var.zone
 
   # Only apply to instances with specified tags
@@ -150,6 +156,8 @@ resource "google_compute_route" "nat" {
 # -----------------------------------------------------------------------------
 
 resource "google_compute_firewall" "nat_egress" {
+  count = var.hibernate ? 0 : 1
+
   name    = "${local.nat_name}-allow-egress"
   project = var.project_id
   network = var.network_id

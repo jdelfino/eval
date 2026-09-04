@@ -27,6 +27,8 @@ resource "google_monitoring_notification_channel" "email" {
 # -----------------------------------------------------------------------------
 
 resource "google_monitoring_alert_policy" "error_rate_5xx" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} High 5xx Error Rate"
   combiner     = "OR"
@@ -49,6 +51,8 @@ resource "google_monitoring_alert_policy" "error_rate_5xx" {
 }
 
 resource "google_monitoring_alert_policy" "latency_p95" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} High p95 Latency"
   combiner     = "OR"
@@ -71,6 +75,8 @@ resource "google_monitoring_alert_policy" "latency_p95" {
 }
 
 resource "google_monitoring_alert_policy" "pod_crash_loop" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} Pod Crash Loop"
   combiner     = "OR"
@@ -92,6 +98,8 @@ resource "google_monitoring_alert_policy" "pod_crash_loop" {
 }
 
 resource "google_monitoring_alert_policy" "db_pool_exhaustion" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} DB Pool Exhaustion"
   combiner     = "OR"
@@ -114,6 +122,8 @@ resource "google_monitoring_alert_policy" "db_pool_exhaustion" {
 }
 
 resource "google_monitoring_alert_policy" "executor_failure_rate" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} High Executor Failure Rate"
   combiner     = "OR"
@@ -136,6 +146,8 @@ resource "google_monitoring_alert_policy" "executor_failure_rate" {
 }
 
 resource "google_monitoring_alert_policy" "zero_traffic" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} Zero Traffic"
   combiner     = "OR"
@@ -165,6 +177,8 @@ resource "google_monitoring_alert_policy" "zero_traffic" {
 # -----------------------------------------------------------------------------
 
 resource "google_monitoring_uptime_check_config" "healthz" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} /healthz"
   timeout      = "10s"
@@ -186,6 +200,8 @@ resource "google_monitoring_uptime_check_config" "healthz" {
 }
 
 resource "google_monitoring_alert_policy" "uptime_failure" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} Uptime Check Failure"
   combiner     = "OR"
@@ -194,7 +210,7 @@ resource "google_monitoring_alert_policy" "uptime_failure" {
     display_name = "Uptime check failing from 2+ regions for 5+ minutes"
 
     condition_threshold {
-      filter          = "resource.type = \"uptime_url\" AND metric.type = \"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.labels.check_id = \"${google_monitoring_uptime_check_config.healthz.uptime_check_id}\""
+      filter          = "resource.type = \"uptime_url\" AND metric.type = \"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.labels.check_id = \"${google_monitoring_uptime_check_config.healthz[0].uptime_check_id}\""
       comparison      = "COMPARISON_LT"
       threshold_value = 1
       duration        = "300s"
@@ -286,6 +302,8 @@ resource "google_logging_metric" "frontend_client_errors" {
 }
 
 resource "google_monitoring_alert_policy" "frontend_client_error_rate" {
+  count = var.hibernate ? 0 : 1
+
   project      = var.project_id
   display_name = "${var.project_name}-${var.environment} High Frontend Client Error Rate"
   combiner     = "OR"

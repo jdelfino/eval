@@ -17,6 +17,8 @@
 #       export PGPASSWORD=$(terraform output -raw cloudsql_database_password)
 #       # Or for the reader user:
 #       export PGPASSWORD=$(terraform output -raw cloudsql_reader_password)
+#     Both commands error on a null value while the infrastructure is
+#     hibernating (no Cloud SQL instance exists) — see docs/HIBERNATION.md.
 #
 # Usage:
 #   ./scripts/db-proxy.sh          # default port 5433

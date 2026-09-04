@@ -17,7 +17,7 @@ run "validates_uptime_check_configured" {
   command = plan
 
   assert {
-    condition     = google_monitoring_uptime_check_config.healthz.display_name == "testproject-test /healthz"
+    condition     = google_monitoring_uptime_check_config.healthz[0].display_name == "testproject-test /healthz"
     error_message = "Expected uptime check display name to match project and environment"
   }
 }
@@ -26,7 +26,7 @@ run "validates_uptime_check_path" {
   command = plan
 
   assert {
-    condition     = google_monitoring_uptime_check_config.healthz.http_check[0].path == "/healthz"
+    condition     = google_monitoring_uptime_check_config.healthz[0].http_check[0].path == "/healthz"
     error_message = "Expected uptime check path to be /healthz"
   }
 }
@@ -35,7 +35,7 @@ run "validates_uptime_check_https" {
   command = plan
 
   assert {
-    condition     = google_monitoring_uptime_check_config.healthz.http_check[0].use_ssl == true
+    condition     = google_monitoring_uptime_check_config.healthz[0].http_check[0].use_ssl == true
     error_message = "Expected uptime check to use SSL (HTTPS)"
   }
 }
@@ -44,7 +44,7 @@ run "validates_uptime_check_period" {
   command = plan
 
   assert {
-    condition     = google_monitoring_uptime_check_config.healthz.period == "300s"
+    condition     = google_monitoring_uptime_check_config.healthz[0].period == "300s"
     error_message = "Expected uptime check interval to be 300s (5 minutes)"
   }
 }
@@ -53,7 +53,7 @@ run "validates_uptime_check_timeout" {
   command = plan
 
   assert {
-    condition     = google_monitoring_uptime_check_config.healthz.timeout == "10s"
+    condition     = google_monitoring_uptime_check_config.healthz[0].timeout == "10s"
     error_message = "Expected uptime check timeout to be 10s"
   }
 }
@@ -62,7 +62,7 @@ run "validates_uptime_alert_policy_configured" {
   command = plan
 
   assert {
-    condition     = google_monitoring_alert_policy.uptime_failure.display_name == "testproject-test Uptime Check Failure"
+    condition     = google_monitoring_alert_policy.uptime_failure[0].display_name == "testproject-test Uptime Check Failure"
     error_message = "Expected uptime alert policy display name to match project and environment"
   }
 }
@@ -71,7 +71,7 @@ run "validates_uptime_alert_auto_close" {
   command = plan
 
   assert {
-    condition     = google_monitoring_alert_policy.uptime_failure.alert_strategy[0].auto_close == "1800s"
+    condition     = google_monitoring_alert_policy.uptime_failure[0].alert_strategy[0].auto_close == "1800s"
     error_message = "Expected uptime alert policy to auto-close after 1800s"
   }
 }
@@ -133,7 +133,7 @@ run "validates_frontend_error_alert_policy_configured" {
   command = plan
 
   assert {
-    condition     = google_monitoring_alert_policy.frontend_client_error_rate.display_name == "testproject-test High Frontend Client Error Rate"
+    condition     = google_monitoring_alert_policy.frontend_client_error_rate[0].display_name == "testproject-test High Frontend Client Error Rate"
     error_message = "Expected frontend client error rate alert policy display name to match project and environment"
   }
 }
@@ -142,7 +142,7 @@ run "validates_frontend_error_alert_auto_close" {
   command = plan
 
   assert {
-    condition     = google_monitoring_alert_policy.frontend_client_error_rate.alert_strategy[0].auto_close == "1800s"
+    condition     = google_monitoring_alert_policy.frontend_client_error_rate[0].alert_strategy[0].auto_close == "1800s"
     error_message = "Expected frontend client error rate alert policy to auto-close after 1800s"
   }
 }
@@ -152,7 +152,7 @@ run "validates_frontend_error_alert_uses_log_metric" {
 
   assert {
     condition = anytrue([
-      for cond in google_monitoring_alert_policy.frontend_client_error_rate.conditions :
+      for cond in google_monitoring_alert_policy.frontend_client_error_rate[0].conditions :
       can(cond.condition_threshold) && strcontains(cond.condition_threshold[0].filter, "frontend-client-errors")
     ])
     error_message = "Frontend client error alert must use the frontend-client-errors log-based metric in its condition filter"
@@ -165,5 +165,90 @@ run "validates_frontend_error_log_metric_filter_has_severity" {
   assert {
     condition     = strcontains(google_logging_metric.frontend_client_errors.filter, "severity>=ERROR")
     error_message = "Frontend client errors log metric filter must include severity>=ERROR to count only error-level entries"
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+# Verifies that hibernate = true silences alerting entirely — including the
+# uptime check and its failure alert, and the zero-traffic alert — so the
+# inbox isn't filled with "zero traffic" / "uptime check failed" emails for
+# the entire hibernation, both of which fire by design when the site goes
+# dark.
+
+run "hibernate_silences_alerting" {
+  command = plan
+
+  variables {
+    hibernate = true
+  }
+
+  assert {
+    condition     = length(google_monitoring_uptime_check_config.healthz) == 0
+    error_message = "Expected the uptime check to be absent when hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.zero_traffic) == 0
+    error_message = "Expected the zero-traffic alert policy to be absent when hibernating — it fires by design when the site goes dark"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.uptime_failure) == 0
+    error_message = "Expected the uptime-failure alert policy to be absent when hibernating — it fires by design when the site goes dark"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.error_rate_5xx) == 0
+    error_message = "Expected the 5xx error rate alert policy to be absent when hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.latency_p95) == 0
+    error_message = "Expected the p95 latency alert policy to be absent when hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.pod_crash_loop) == 0
+    error_message = "Expected the pod crash loop alert policy to be absent when hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.db_pool_exhaustion) == 0
+    error_message = "Expected the DB pool exhaustion alert policy to be absent when hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.executor_failure_rate) == 0
+    error_message = "Expected the executor failure rate alert policy to be absent when hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.frontend_client_error_rate) == 0
+    error_message = "Expected the frontend client error rate alert policy to be absent when hibernating"
+  }
+}
+
+run "normal_mode_keeps_alerting" {
+  command = plan
+
+  variables {
+    hibernate = false
+  }
+
+  assert {
+    condition     = length(google_monitoring_uptime_check_config.healthz) == 1
+    error_message = "Expected the uptime check to be present when not hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.zero_traffic) == 1
+    error_message = "Expected the zero-traffic alert policy to be present when not hibernating"
+  }
+
+  assert {
+    condition     = length(google_monitoring_alert_policy.uptime_failure) == 1
+    error_message = "Expected the uptime-failure alert policy to be present when not hibernating"
   }
 }

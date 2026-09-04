@@ -35,3 +35,13 @@ variable "domain_name" {
   description = "Domain name for DNS zone and A record (e.g. \"eval.delquillan.com\")"
   type        = string
 }
+
+# -----------------------------------------------------------------------------
+# Hibernation
+# -----------------------------------------------------------------------------
+
+variable "hibernate" {
+  description = "Scale infrastructure to near-zero cost while preserving restorability"
+  type        = bool
+  default     = false
+}
