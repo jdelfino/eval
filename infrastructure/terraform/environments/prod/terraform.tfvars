@@ -146,4 +146,4 @@ alert_email = "alerts@delquillan.com"
 # Cloud SQL instance and all in-cluster resources, releases both static IPs,
 # and silences monitoring alerts. See docs/HIBERNATION.md for the full
 # hibernate/wake runbook.
-hibernate = false
+hibernate = true

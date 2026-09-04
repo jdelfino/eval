@@ -124,6 +124,45 @@ Do not skip straight to `hibernate = true` + `terraform apply`. Several of these
    kubectl get nodes                      # "No resources found"
    ```
 
+## Restoring the archive later
+
+The dumps in `gs://eval-prod-485520-db-archive/<STAMP>/` are single-database
+`pg_dump` output. Postgres roles are cluster-level, so they are **not** in the
+dump — but the dumps contain ~100 `GRANT ... TO <role>` statements. Create the
+grantee roles before restoring or `psql` aborts on the first grant:
+
+```sql
+CREATE ROLE app; CREATE ROLE reader; CREATE ROLE eval_app; CREATE ROLE cloudsqlsuperuser;
+```
+
+For a throwaway local copy (testing against real data), `NOLOGIN` roles are fine:
+
+```bash
+gcloud storage cp gs://eval-prod-485520-db-archive/<STAMP>/eval.sql.gz .
+gunzip -k eval.sql.gz
+docker run -d --name pg -e POSTGRES_PASSWORD=x -p 5432:5432 postgres:15
+docker exec pg psql -U postgres -c "CREATE ROLE app; CREATE ROLE reader; CREATE ROLE eval_app; CREATE ROLE cloudsqlsuperuser;"
+docker exec pg createdb -U postgres eval
+docker exec -i pg psql -v ON_ERROR_STOP=1 -U postgres -d eval < eval.sql
+```
+
+Restoring into a **woken prod** instance additionally needs `eval_app` to be a
+real role with `GRANT eval_app TO app`, because `rls.go` issues
+`SET ROLE eval_app` on every request. Terraform creates only `app` and `reader`;
+`eval_app` comes from `migrations/008_eval_app_role.up.sql`, which golang-migrate
+will **skip** because the restored `schema_migrations` marks it applied. Run it
+by hand against the fresh instance before importing:
+
+```bash
+psql "host=127.0.0.1 port=5433 dbname=eval user=app sslmode=require" \
+  -f migrations/008_eval_app_role.up.sql
+```
+
+`scripts/db-archive.sh --verify` does not do any of this and fails against a
+real dump — see eval-aln. The archive taken at stamp `20260904T151406Z` was
+verified by hand instead: restored clean with zero errors, and all 16 tables'
+row counts matched live prod exactly.
+
 ## Wake-up runbook
 
 Order matters throughout, in two places especially.
